@@ -1,6 +1,9 @@
 export type CustomerStatus = 'prospect' | 'actief' | 'afgerond' | 'on-hold'
 export type ApplianceCategory = 'budget' | 'midden' | 'premium'
-export type ApplianceType = 'kookplaat' | 'oven' | 'vaatwasser' | 'afzuigkap' | 'koelkast' | 'koelvries' | 'combi-oven' | 'kokendwaterkraan' | 'kraan' | 'spoelbak' | 'anders'
+export type ApplianceType = 'kookplaat' | 'oven' | 'vaatwasser' | 'afzuigkap' | 'koelkast' | 'koelvries' | 'vriezer' | 'wijnklimaatkast' | 'combi-oven' | 'magnetron' | 'kokendwaterkraan' | 'kraan' | 'spoelbak' | 'anders'
+export type OvenSubtype = 'solo' | 'combi-magnetron' | 'stoom'
+// Huidige EU-energielabelschaal (A = zuinigst, G = minst zuinig).
+export type EnergyLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'
 export type EmailStatus = 'pending' | 'processing' | 'processed' | 'skipped'
 
 export interface Customer {
@@ -56,10 +59,11 @@ export interface ApplianceSpecs {
   energy_type?: 'inductie' | 'gas' | 'keramisch'
   zones?: number
   watt?: number
-  // Oven / Combi-oven
+  // Oven / Combi-oven / Magnetron
   pyrolysis?: boolean
   steam?: boolean
   capacity_liters?: number
+  oven_subtype?: OvenSubtype
   // Vaatwasser
   integration?: 'volledig' | 'half'
   db_sound?: number
@@ -81,6 +85,7 @@ export interface ApplianceSpecs {
   // Algemeen
   color?: string
   width_cm?: number
+  energy_label?: EnergyLabel
   [key: string]: unknown
 }
 

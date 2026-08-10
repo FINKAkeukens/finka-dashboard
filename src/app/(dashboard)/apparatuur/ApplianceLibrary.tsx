@@ -1,11 +1,16 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Appliance } from '@/lib/types'
 import {
+  APPLIANCE_GROUPS,
   CATEGORY_COLORS,
+  COOLING_GROUP,
+  ENERGY_LABELS,
+  OVEN_GROUP,
+  OVEN_SUBTYPE_LABELS,
   TYPE_LABELS,
   TYPE_ORDER,
   countByType,
@@ -20,7 +25,72 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { Search, X, ShoppingCart, Trash2, ChevronRight, ExternalLink } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Search, X, ShoppingCart, Trash2, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
+
+// Meerkeuze-dropdown voor energielabel — eigen implementatie (i.p.v. de
+// shadcn DropdownMenu) omdat deze app geen --popover/--accent hover-tokens
+// definieert; met expliciete kleuren blijft dit consistent met de rest van
+// de bibliotheekfilters.
+function EnergyLabelFilter({ selected, onChange }: { selected: Set<string>; onChange: (next: Set<string>) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function toggle(label: string) {
+    const next = new Set(selected)
+    if (next.has(label)) next.delete(label)
+    else next.add(label)
+    onChange(next)
+  }
+
+  const buttonLabel = selected.size === 0
+    ? 'Energielabel: alle'
+    : `Energielabel: ${Array.from(selected).sort().join(', ')}`
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+          selected.size > 0
+            ? 'border-[#1C1B19] bg-[#1C1B19] text-white'
+            : 'border-[#DDD8D2] bg-white text-[#6B6560] hover:border-[#1C1B19]'
+        }`}
+      >
+        {buttonLabel}
+        <ChevronDown size={12} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-[#DDD8D2] bg-white p-1.5 shadow-lg">
+          {ENERGY_LABELS.map(l => (
+            <label key={l} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-[#1C1B19] hover:bg-[#F7F5F2]">
+              <Checkbox checked={selected.has(l)} onCheckedChange={() => toggle(l)} />
+              Energielabel {l}
+            </label>
+          ))}
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange(new Set())}
+              className="mt-1 w-full rounded px-2 py-1.5 text-left text-xs text-[#6B6560] hover:bg-[#F7F5F2]"
+            >
+              Wis selectie
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 type SortKey = 'brand' | 'price' | 'category'
 type ActiveView = 'overview' | string
@@ -196,6 +266,11 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   const [appliances, setAppliances] = useState(initialAppliances)
   const [activeView, setActiveView] = useState<ActiveView>('overview')
   const [activeCategory, setActiveCategory] = useState('alle')
+  // Energielabel is generiek (geldt voor vrijwel elk type) en blijft daarom,
+  // net als activeCategory, staan wanneer je van categorie wisselt — anders
+  // dan specFilters, die per type-specifiek en wél gereset worden. Meerdere
+  // labels tegelijk selecteren kan (bv. A + B), leeg = geen filter.
+  const [energyLabelFilters, setEnergyLabelFilters] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('brand')
   const [sortAsc, setSortAsc] = useState(true)
@@ -206,16 +281,58 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   const typeCounts = useMemo(() => countByType(appliances), [appliances])
   const detailAppliance = appliances.find(a => a.id === detailId) ?? null
 
+  // Groep waar een type bij hoort (indien van toepassing) — oven/combi-oven/
+  // magnetron vallen bijv. samen onder "Oven en magnetron".
+  const groupForType = (type: string) => APPLIANCE_GROUPS.find(g => (g.types as readonly string[]).includes(type))
+
+  // Navigatie-items voor sidebar/mobiel-dropdown/overzicht: verwante types
+  // worden hier samengevoegd tot één groepsitem (zie APPLIANCE_GROUPS) — de
+  // onderliggende data blijft gewoon per apparaat het eigen `type` houden.
+  const navEntries = useMemo(() => {
+    const entries: { key: string; label: string; count: number }[] = []
+    const addedGroups = new Set<string>()
+    for (const type of TYPE_ORDER) {
+      const group = groupForType(type)
+      if (group) {
+        if (addedGroups.has(group.key)) continue
+        addedGroups.add(group.key)
+        const count = group.types.reduce((sum, t) => sum + (typeCounts[t] ?? 0), 0)
+        if (count) entries.push({ key: group.key, label: group.label, count })
+        continue
+      }
+      const count = typeCounts[type] ?? 0
+      if (count) entries.push({ key: type, label: TYPE_LABELS[type], count })
+    }
+    return entries
+  }, [typeCounts])
+
+  function itemsForNavKey(key: string) {
+    const group = APPLIANCE_GROUPS.find(g => g.key === key)
+    return group
+      ? appliances.filter(a => (group.types as readonly string[]).includes(a.type))
+      : appliances.filter(a => a.type === key)
+  }
+
   const filtered = useMemo(() => {
     return appliances.filter(a => {
-      if (activeView !== 'overview' && a.type !== activeView) return false
+      if (activeView !== 'overview') {
+        const group = APPLIANCE_GROUPS.find(g => g.key === activeView)
+        if (group) {
+          if (!(group.types as readonly string[]).includes(a.type)) return false
+        } else if (a.type !== activeView) return false
+      }
       if (activeCategory !== 'alle' && a.category !== activeCategory) return false
+      if (energyLabelFilters.size > 0 && !(a.specs?.energy_label && energyLabelFilters.has(a.specs.energy_label))) return false
       if (q) {
         const s = q.toLowerCase()
-        if (!a.brand?.toLowerCase().includes(s) && !a.model?.toLowerCase().includes(s)) return false
+        const matchesType = TYPE_LABELS[a.type]?.toLowerCase().includes(s)
+        if (!a.brand?.toLowerCase().includes(s) && !a.model?.toLowerCase().includes(s) && !matchesType) return false
       }
       const specs = a.specs ?? {}
+      if (specFilters.cooling_type && a.type !== specFilters.cooling_type) return false
       if (specFilters.energy_type && specs.energy_type !== specFilters.energy_type) return false
+      if (specFilters.oven_subtype && specs.oven_subtype !== specFilters.oven_subtype) return false
+      if (specFilters.width_cm && String(specs.width_cm) !== specFilters.width_cm) return false
       if (specFilters.pyrolysis && String(specs.pyrolysis) !== specFilters.pyrolysis) return false
       if (specFilters.steam && String(specs.steam) !== specFilters.steam) return false
       if (specFilters.integration && specs.integration !== specFilters.integration) return false
@@ -223,7 +340,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (specFilters.bowls && specs.bowls !== specFilters.bowls) return false
       return true
     })
-  }, [appliances, activeView, activeCategory, q, specFilters])
+  }, [appliances, activeView, activeCategory, energyLabelFilters, q, specFilters])
 
   const sorted = useMemo(() => {
     const items = [...filtered]
@@ -295,12 +412,24 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
         {activeView === 'kookplaat' && chip('Energie', 'energy_type', [
           { v: 'inductie', l: 'Inductie' }, { v: 'gas', l: 'Gas' }, { v: 'keramisch', l: 'Keramisch' },
         ])}
-        {(activeView === 'oven' || activeView === 'combi-oven') && (
+        {activeView === OVEN_GROUP.key && (
           <>
+            {chip('Ovensoort', 'oven_subtype', [
+              { v: 'solo', l: OVEN_SUBTYPE_LABELS.solo },
+              { v: 'combi-magnetron', l: OVEN_SUBTYPE_LABELS['combi-magnetron'] },
+              { v: 'stoom', l: OVEN_SUBTYPE_LABELS.stoom },
+            ])}
+            {chip('Nis', 'width_cm', [{ v: '45', l: '45 cm' }, { v: '60', l: '60 cm' }])}
             {chip('Pyrolyse', 'pyrolysis', [{ v: 'true', l: 'Ja' }, { v: 'false', l: 'Nee' }])}
-            {chip('Stoom', 'steam', [{ v: 'true', l: 'Ja' }, { v: 'false', l: 'Nee' }])}
+            {chip('Stoomfunctie', 'steam', [{ v: 'true', l: 'Ja' }, { v: 'false', l: 'Nee' }])}
           </>
         )}
+        {activeView === COOLING_GROUP.key && chip('Soort', 'cooling_type', [
+          { v: 'koelvries', l: 'Koel/vries combinatie' },
+          { v: 'vriezer', l: 'Vriezer' },
+          { v: 'koelkast', l: 'Koelkast' },
+          { v: 'wijnklimaatkast', l: 'Wijnklimaatkast' },
+        ])}
         {activeView === 'vaatwasser' && chip('Integratie', 'integration', [
           { v: 'volledig', l: 'Volledig' }, { v: 'half', l: 'Half' },
         ])}
@@ -331,24 +460,20 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
             Overzicht
             <span className="text-xs opacity-70">{appliances.length}</span>
           </button>
-          {TYPE_ORDER.map(type => {
-            const count = typeCounts[type] ?? 0
-            if (!count) return null
-            return (
-              <button
-                key={type}
-                onClick={() => selectType(type)}
-                className={`mb-0.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
-                  activeView === type
-                    ? 'bg-[#1C1B19] text-white'
-                    : 'text-[#6B6560] hover:bg-white hover:text-[#1C1B19]'
-                }`}
-              >
-                <span className="truncate">{TYPE_LABELS[type]}</span>
-                <span className="ml-1 shrink-0 text-xs opacity-70">{count}</span>
-              </button>
-            )
-          })}
+          {navEntries.map(({ key, label, count }) => (
+            <button
+              key={key}
+              onClick={() => selectType(key)}
+              className={`mb-0.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                activeView === key
+                  ? 'bg-[#1C1B19] text-white'
+                  : 'text-[#6B6560] hover:bg-white hover:text-[#1C1B19]'
+              }`}
+            >
+              <span className="truncate">{label}</span>
+              <span className="ml-1 shrink-0 text-xs opacity-70">{count}</span>
+            </button>
+          ))}
         </nav>
 
         <div className="min-w-0 flex-1">
@@ -364,9 +489,9 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
               className="w-full rounded-lg border border-[#DDD8D2] bg-white px-3 py-2 text-sm"
             >
               <option value="overview">Overzicht ({appliances.length})</option>
-              {TYPE_ORDER.filter(t => typeCounts[t]).map(type => (
-                <option key={type} value={type}>
-                  {TYPE_LABELS[type]} ({typeCounts[type]})
+              {navEntries.map(({ key, label, count }) => (
+                <option key={key} value={key}>
+                  {label} ({count})
                 </option>
               ))}
             </select>
@@ -399,26 +524,29 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                   </button>
                 ))}
               </div>
+              <EnergyLabelFilter selected={energyLabelFilters} onChange={setEnergyLabelFilters} />
             </div>
             {SpecFilterRow()}
           </div>
 
-          {/* Overzicht: type-kaarten, geen lange lijst */}
-          {activeView === 'overview' ? (
+          {/* Overzicht: type-kaarten, geen lange lijst — behalve tijdens het
+              zoeken, dan tonen we direct de resultatenlijst hieronder,
+              anders leek zoeken vanuit Overzicht niets te doen. */}
+          {activeView === 'overview' && !q ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {TYPE_ORDER.filter(t => typeCounts[t]).map(type => {
-                const items = appliances.filter(a => a.type === type)
+              {navEntries.map(({ key, label, count }) => {
+                const items = itemsForNavKey(key)
                 const range = priceRange(items)
                 return (
                   <button
-                    key={type}
-                    onClick={() => selectType(type)}
+                    key={key}
+                    onClick={() => selectType(key)}
                     className="group rounded-xl border border-[#DDD8D2] bg-white p-4 text-left transition-colors hover:border-[#C9A96E]"
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-[#1C1B19]">{TYPE_LABELS[type]}</p>
-                        <p className="mt-0.5 text-sm text-[#6B6560]">{typeCounts[type]} producten</p>
+                        <p className="font-medium text-[#1C1B19]">{label}</p>
+                        <p className="mt-0.5 text-sm text-[#6B6560]">{count} producten</p>
                       </div>
                       <ChevronRight size={16} className="text-[#DDD8D2] group-hover:text-[#C9A96E]" />
                     </div>

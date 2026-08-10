@@ -9,15 +9,19 @@ import { Label } from '@/components/ui/label'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { ApplianceType } from '@/lib/types'
+import { ENERGY_LABELS } from '@/lib/appliance-utils'
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
   { value: 'kookplaat', label: 'Kookplaat' },
   { value: 'oven', label: 'Oven' },
   { value: 'combi-oven', label: 'Combi-oven' },
+  { value: 'magnetron', label: 'Magnetron' },
   { value: 'vaatwasser', label: 'Vaatwasser' },
   { value: 'afzuigkap', label: 'Afzuigkap' },
   { value: 'koelkast', label: 'Koelkast' },
   { value: 'koelvries', label: 'Koel-vriescombinatie' },
+  { value: 'vriezer', label: 'Vriezer' },
+  { value: 'wijnklimaatkast', label: 'Wijnklimaatkast' },
   { value: 'kokendwaterkraan', label: 'Kokendwaterkraan' },
   { value: 'kraan', label: 'Kraan' },
   { value: 'spoelbak', label: 'Spoelbak' },
@@ -38,13 +42,16 @@ export default function NieuweApparatuurPage() {
     const form = new FormData(e.currentTarget)
 
     const specs: Record<string, unknown> = {}
+    if (form.get('energy_label')) specs.energy_label = form.get('energy_label')
     if (type === 'kookplaat') {
       if (form.get('energy_type')) specs.energy_type = form.get('energy_type')
       if (form.get('zones')) specs.zones = Number(form.get('zones'))
       if (form.get('watt')) specs.watt = Number(form.get('watt'))
       if (form.get('width_cm')) specs.width_cm = Number(form.get('width_cm'))
     }
-    if (type === 'oven' || type === 'combi-oven') {
+    if (type === 'oven' || type === 'combi-oven' || type === 'magnetron') {
+      if (form.get('oven_subtype')) specs.oven_subtype = form.get('oven_subtype')
+      if (form.get('width_cm')) specs.width_cm = Number(form.get('width_cm'))
       specs.pyrolysis = form.get('pyrolysis') === 'ja'
       specs.steam = form.get('steam') === 'ja'
       if (form.get('capacity_liters')) specs.capacity_liters = Number(form.get('capacity_liters'))
@@ -58,7 +65,7 @@ export default function NieuweApparatuurPage() {
       if (form.get('afzuig_type')) specs.afzuig_type = form.get('afzuig_type')
       if (form.get('capacity_m3h')) specs.capacity_m3h = Number(form.get('capacity_m3h'))
     }
-    if (type === 'koelkast') {
+    if (type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') {
       if (form.get('fridge_liters')) specs.fridge_liters = Number(form.get('fridge_liters'))
       specs.freezer = form.get('freezer') === 'ja'
     }
@@ -163,6 +170,15 @@ export default function NieuweApparatuurPage() {
           </div>
         </div>
 
+        <div className="space-y-1.5">
+          <Label>Energielabel</Label>
+          <select name="energy_label"
+            className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+            <option value="">— Geen —</option>
+            {ENERGY_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+
         {/* Type-specifieke specs */}
         <div className="border-t border-[#F0EDE9] pt-4">
           <p className="text-xs font-medium text-[#6B6560] uppercase tracking-wider mb-3">Specificaties</p>
@@ -184,8 +200,25 @@ export default function NieuweApparatuurPage() {
             </div>
           )}
 
-          {(type === 'oven' || type === 'combi-oven') && (
+          {(type === 'oven' || type === 'combi-oven' || type === 'magnetron') && (
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Ovensoort</Label>
+                <select name="oven_subtype" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+                  <option value="">—</option>
+                  <option value="solo">Solo-oven</option>
+                  <option value="combi-magnetron">Combi magnetron/oven</option>
+                  <option value="stoom">Stoomoven</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nis-breedte</Label>
+                <select name="width_cm" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+                  <option value="">—</option>
+                  <option value="45">45 cm</option>
+                  <option value="60">60 cm</option>
+                </select>
+              </div>
               <div className="space-y-1.5">
                 <Label>Pyrolyse</Label>
                 <select name="pyrolysis" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
@@ -193,7 +226,7 @@ export default function NieuweApparatuurPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>Stoom</Label>
+                <Label>Stoomfunctie</Label>
                 <select name="steam" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
                   <option value="nee">Nee</option><option value="ja">Ja</option>
                 </select>
@@ -227,7 +260,7 @@ export default function NieuweApparatuurPage() {
             </div>
           )}
 
-          {type === 'koelkast' && (
+          {(type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Inhoud (L)</Label><Input name="fridge_liters" type="number" /></div>
               <div className="space-y-1.5">

@@ -7,16 +7,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApplianceType } from '@/lib/types'
+import { ENERGY_LABELS } from '@/lib/appliance-utils'
 import { Trash2 } from 'lucide-react'
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
   { value: 'kookplaat', label: 'Kookplaat' },
   { value: 'oven', label: 'Oven' },
   { value: 'combi-oven', label: 'Combi-oven' },
+  { value: 'magnetron', label: 'Magnetron' },
   { value: 'vaatwasser', label: 'Vaatwasser' },
   { value: 'afzuigkap', label: 'Afzuigkap' },
   { value: 'koelkast', label: 'Koelkast' },
   { value: 'koelvries', label: 'Koel-vriescombinatie' },
+  { value: 'vriezer', label: 'Vriezer' },
+  { value: 'wijnklimaatkast', label: 'Wijnklimaatkast' },
   { value: 'kokendwaterkraan', label: 'Kokendwaterkraan' },
   { value: 'kraan', label: 'Kraan' },
   { value: 'spoelbak', label: 'Spoelbak' },
@@ -131,12 +135,20 @@ export default function EditApplianceForm({
         </Field>
       </div>
 
-      <Field label="Leverancier">
-        <Select value={supplierId} onChange={setSupplierId} options={[
-          { value: '', label: '— Geen —' },
-          ...suppliers.map(s => ({ value: s.id, label: s.name })),
-        ]} />
-      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Leverancier">
+          <Select value={supplierId} onChange={setSupplierId} options={[
+            { value: '', label: '— Geen —' },
+            ...suppliers.map(s => ({ value: s.id, label: s.name })),
+          ]} />
+        </Field>
+        <Field label="Energielabel">
+          <Select value={String(specs.energy_label ?? '')} onChange={v => updateSpec('energy_label', v || undefined)} options={[
+            { value: '', label: '— Geen —' },
+            ...ENERGY_LABELS.map(l => ({ value: l, label: l })),
+          ]} />
+        </Field>
+      </div>
 
       {/* Specs */}
       <div className="border-t border-[#F0EDE9] pt-4 space-y-3">
@@ -154,13 +166,21 @@ export default function EditApplianceForm({
           </div>
         </>}
 
-        {(type === 'oven' || type === 'combi-oven') && <>
+        {(type === 'oven' || type === 'combi-oven' || type === 'magnetron') && <>
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Ovensoort">
+              <Select value={String(specs.oven_subtype ?? '')} onChange={v => updateSpec('oven_subtype', v || undefined)}
+                options={[{value:'',label:'—'},{value:'solo',label:'Solo-oven'},{value:'combi-magnetron',label:'Combi magnetron/oven'},{value:'stoom',label:'Stoomoven'}]} />
+            </Field>
+            <Field label="Nis-breedte">
+              <Select value={String(specs.width_cm ?? '')} onChange={v => updateSpec('width_cm', v ? Number(v) : undefined)}
+                options={[{value:'',label:'—'},{value:'45',label:'45 cm'},{value:'60',label:'60 cm'}]} />
+            </Field>
             <Field label="Pyrolyse">
               <Select value={specs.pyrolysis === true ? 'ja' : specs.pyrolysis === false ? 'nee' : ''} onChange={v => updateSpec('pyrolysis', v === 'ja')}
                 options={[{value:'',label:'—'},{value:'ja',label:'Ja'},{value:'nee',label:'Nee'}]} />
             </Field>
-            <Field label="Stoom">
+            <Field label="Stoomfunctie">
               <Select value={specs.steam === true ? 'ja' : specs.steam === false ? 'nee' : ''} onChange={v => updateSpec('steam', v === 'ja')}
                 options={[{value:'',label:'—'},{value:'ja',label:'Ja'},{value:'nee',label:'Nee'}]} />
             </Field>
@@ -190,7 +210,7 @@ export default function EditApplianceForm({
           </div>
         </>}
 
-        {type === 'koelkast' && <>
+        {(type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') && <>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Inhoud (L)"><Input type="number" value={String(specs.fridge_liters ?? '')} onChange={e => updateSpec('fridge_liters', Number(e.target.value))} /></Field>
             <Field label="Vriezer">
@@ -237,7 +257,7 @@ export default function EditApplianceForm({
         )}
 
         {/* Geluid voor alle types */}
-        {!['vaatwasser','afzuigkap','koelkast','kraan','spoelbak'].includes(type) && (
+        {!['vaatwasser','afzuigkap','koelkast','koelvries','vriezer','wijnklimaatkast','kraan','spoelbak'].includes(type) && (
           <Field label="Geluid (dB) — indien van toepassing">
             <Input type="number" step="0.1" value={String(specs.db_sound ?? '')} onChange={e => updateSpec('db_sound', e.target.value ? Number(e.target.value) : '')} />
           </Field>

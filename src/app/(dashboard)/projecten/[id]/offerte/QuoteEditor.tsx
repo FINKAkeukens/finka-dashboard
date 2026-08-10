@@ -398,6 +398,9 @@ export default function QuoteEditor({
   // Sleepstatus voor het herordenen van regels binnen een sectie (native
   // HTML5 drag-and-drop — geen extra library nodig voor iets dit simpels).
   const [draggedLine, setDraggedLine] = useState<{ sectionIdx: number; lineIdx: number } | null>(null)
+  // Sleepstatus voor het herordenen van hele secties (zelfde aanpak als
+  // draggedLine hierboven, maar dan op sectieniveau).
+  const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null)
 
   useEffect(() => {
     if (pendingScrollSectionIdx === null) return
@@ -954,6 +957,32 @@ export default function QuoteEditor({
         return { ...s, lines }
       })
     )
+  }
+
+  // Hele sectie verslepen om de volgorde in "Wat zit erin" aan te passen —
+  // deze volgorde bepaalt ook in welke volgorde de secties in de
+  // klantversie/PDF verschijnen. collapsedSections verwijst naar indexen,
+  // dus die verschuiven we mee zodat een sectie niet onbedoeld in/uitklapt
+  // na het slepen.
+  function moveSection(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return
+    setCustomerSections((prev) => {
+      const sections = [...prev]
+      const [moved] = sections.splice(fromIndex, 1)
+      sections.splice(toIndex, 0, moved)
+      return sections
+    })
+    setCollapsedSections((prev) => {
+      const wasCollapsed = (index: number) => prev.has(index)
+      const order = customerSections.map((_, i) => i)
+      const [moved] = order.splice(fromIndex, 1)
+      order.splice(toIndex, 0, moved)
+      const next = new Set<number>()
+      order.forEach((originalIndex, newIndex) => {
+        if (wasCollapsed(originalIndex)) next.add(newIndex)
+      })
+      return next
+    })
   }
 
   async function handleSectionImageUpload(index: number, e: React.ChangeEvent<HTMLInputElement>) {
@@ -1960,14 +1989,38 @@ export default function QuoteEditor({
           <div>
             <Label>Wat zit erin</Label>
             <p className="text-xs text-[#6B6560] mt-0.5">
-              Klik op het bolletje om een regel uit te sluiten van de klantofferte (rood) — de regel blijft hier gewoon staan, maar wordt niet meegeprint. Elke sectie krijgt straks zijn eigen pagina, gegroepeerd op categorie (Kasten/Werkblad/Apparatuur/Overig). Sleep aan het grijpicoontje om regels binnen een sectie te herordenen. Typ <code className="px-1 bg-[#F0EDE9] rounded">==tekst==</code> om jezelf te herinneren dat iets nog niet af is — dat veld krijgt een rode rand, en in de klantversie wordt het knalrood getoond zodat je het niet per ongeluk laat staan. Elke sectie heeft onderaan een eigen "Disclaimer toevoegen"-knopje.
+              Klik op het bolletje om een regel uit te sluiten van de klantofferte (rood) — de regel blijft hier gewoon staan, maar wordt niet meegeprint. Elke sectie krijgt straks zijn eigen pagina, gegroepeerd op categorie (Kasten/Werkblad/Apparatuur/Overig). Sleep aan het grijpicoontje om regels binnen een sectie te herordenen, of sleep aan het grijpicoontje links van een sectiekop om de volgorde van hele secties aan te passen. Typ <code className="px-1 bg-[#F0EDE9] rounded">==tekst==</code> om jezelf te herinneren dat iets nog niet af is — dat veld krijgt een rode rand, en in de klantversie wordt het knalrood getoond zodat je het niet per ongeluk laat staan. Elke sectie heeft onderaan een eigen "Disclaimer toevoegen"-knopje.
             </p>
           </div>
           {customerSections.map((section, sIdx) => {
             const collapsed = collapsedSections.has(sIdx)
             return (
-            <div key={sIdx} id={`customer-section-${sIdx}`} className="bg-white rounded-lg border border-[#DDD8D2] p-4 space-y-2">
+            <div
+              key={sIdx}
+              id={`customer-section-${sIdx}`}
+              className={`bg-white rounded-lg border border-[#DDD8D2] p-4 space-y-2 ${
+                draggedSectionIdx === sIdx ? 'opacity-40' : ''
+              }`}
+              onDragOver={(e) => {
+                if (draggedSectionIdx !== null) e.preventDefault()
+              }}
+              onDrop={(e) => {
+                if (draggedSectionIdx === null) return
+                e.preventDefault()
+                moveSection(draggedSectionIdx, sIdx)
+                setDraggedSectionIdx(null)
+              }}
+            >
               <div className="flex items-center gap-2">
+                <span
+                  draggable
+                  onDragStart={() => setDraggedSectionIdx(sIdx)}
+                  onDragEnd={() => setDraggedSectionIdx(null)}
+                  title="Sleep om secties te herordenen"
+                  className="shrink-0 cursor-grab text-[#C7C2BB] hover:text-[#6B6560] active:cursor-grabbing"
+                >
+                  <GripVertical size={15} />
+                </span>
                 <button
                   type="button"
                   onClick={() => toggleSectionCollapsed(sIdx)}
