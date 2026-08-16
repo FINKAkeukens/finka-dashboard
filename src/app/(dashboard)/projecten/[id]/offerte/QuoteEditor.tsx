@@ -1197,25 +1197,55 @@ export default function QuoteEditor({
     if (toDelete.length) {
       await supabase.from('finka_quote_items').delete().in('id', toDelete)
     }
+    let insertedRows: QuoteItem[] = []
     if (toInsert.length) {
-      await supabase.from('finka_quote_items').insert(
-        toInsert.map(({ id: _id, isNew: _isNew, ...rest }, idx) => ({
-          ...rest,
-          line_total: lineTotal(rest),
-          quote_id: quote.id,
-          sort_order: idx,
-        }))
-      )
-    }
-    for (const item of toUpdate) {
-      const { id, isNew: _isNew, ...rest } = item
-      await supabase
+      const { data: insertedData, error: insError } = await supabase
         .from('finka_quote_items')
-        .update({ ...rest, line_total: lineTotal(item) })
-        .eq('id', id)
+        .insert(
+          toInsert.map(({ id: _id, isNew: _isNew, ...rest }, idx) => ({
+            ...rest,
+            line_total: lineTotal(rest),
+            quote_id: quote.id,
+            sort_order: idx,
+          }))
+        )
+        .select()
+      if (insError) {
+        setError(insError.message)
+        setSaving(false)
+        return
+      }
+      insertedRows = (insertedData ?? []) as QuoteItem[]
     }
+    await Promise.all(
+      toUpdate.map((item) => {
+        const { id, isNew: _isNew, ...rest } = item
+        return supabase.from('finka_quote_items').update({ ...rest, line_total: lineTotal(item) }).eq('id', id)
+      })
+    )
 
-    originalItemIds.current = new Set(items.map((i) => i.id))
+    // Koppelt elke tijdelijke id aan zijn echte, door Supabase gegenereerde
+    // rij via een id-map + functionele setItems, i.p.v. de state te
+    // overschrijven met de `items`-snapshot van bij de start van handleSave.
+    // Die snapshot kan intussen verouderd zijn — deze loop deed voorheen een
+    // los request per regel en kon dus meerdere seconden duren, tijd genoeg
+    // om ondertussen een regel toe te voegen of te verwijderen. Overschrijven
+    // met de oude snapshot maakte die tussentijdse wijziging dan ongedaan:
+    // de oorzaak van zowel spontaan verdwenen als spontaan terugkerende
+    // ("dubbele") regels.
+    const idMap = new Map(toInsert.map((item, idx) => [item.id, insertedRows[idx]]))
+    const deletedSet = new Set(toDelete)
+    setItems((prev) =>
+      prev
+        .filter((i) => !deletedSet.has(i.id))
+        .map((i) => {
+          const inserted = idMap.get(i.id)
+          return inserted ? { ...inserted, isNew: false } : i
+        })
+    )
+    originalItemIds.current = new Set(
+      [...originalItemIds.current].filter((id) => !deletedSet.has(id)).concat(insertedRows.map((r) => r.id))
+    )
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
