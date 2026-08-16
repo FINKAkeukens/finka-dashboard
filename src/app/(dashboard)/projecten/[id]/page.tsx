@@ -12,7 +12,7 @@ import QuoteEditor from './offerte/QuoteEditor'
 import PlanningTab from './PlanningTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
-import { Appliance, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteItem, WerkbladRates } from '@/lib/types'
+import { Appliance, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -66,6 +66,7 @@ export default async function ProjectDetailPage({
 
   let quote: Quote | null = null
   let quoteItems: QuoteItem[] = []
+  let quoteDownloads: QuoteDownload[] = []
   let appliances: Appliance[] = []
   let eurolineRates: EurolineRates | null = null
   let werkbladRates: WerkbladRates | null = null
@@ -89,12 +90,12 @@ export default async function ProjectDetailPage({
     werkbladRates = werkbladRatesData as WerkbladRates | null
 
     if (quote) {
-      const { data: itemsData } = await supabase
-        .from('finka_quote_items')
-        .select('*')
-        .eq('quote_id', quote.id)
-        .order('sort_order')
+      const [{ data: itemsData }, { data: downloadsData }] = await Promise.all([
+        supabase.from('finka_quote_items').select('*').eq('quote_id', quote.id).order('sort_order'),
+        supabase.from('finka_quote_downloads').select('*').eq('quote_id', quote.id).order('downloaded_at', { ascending: false }),
+      ])
       quoteItems = (itemsData ?? []) as QuoteItem[]
+      quoteDownloads = (downloadsData ?? []) as QuoteDownload[]
     }
   }
 
@@ -134,7 +135,7 @@ export default async function ProjectDetailPage({
       {tab === 'historie' ? (
         <HistoryTab entries={historyEntries} />
       ) : tab === 'offerte' ? (
-        <QuoteEditor projectId={id} quote={quote} items={quoteItems} appliances={appliances} eurolineRates={eurolineRates} werkbladRates={werkbladRates} />
+        <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} eurolineRates={eurolineRates} werkbladRates={werkbladRates} />
       ) : tab === 'planning' ? (
         <PlanningTab projectId={id} milestones={milestones} />
       ) : tab === 'notities' ? (

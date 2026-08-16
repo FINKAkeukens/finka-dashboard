@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, EurolineInputs, EurolineRates, FieldSource, OfferAttachment, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize, WerkbladCalcInputs, WerkbladRates } from '@/lib/types'
+import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, EurolineInputs, EurolineRates, FieldSource, OfferAttachment, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize, WerkbladCalcInputs, WerkbladRates } from '@/lib/types'
 import { ArrowRight, Calculator, ChevronDown, FileText, GripVertical, Info, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -297,6 +297,7 @@ export default function QuoteEditor({
   projectId,
   quote: initialQuote,
   items: initialItems,
+  downloads,
   appliances,
   eurolineRates,
   werkbladRates,
@@ -304,6 +305,7 @@ export default function QuoteEditor({
   projectId: string
   quote: Quote | null
   items: QuoteItem[]
+  downloads: QuoteDownload[]
   appliances: Appliance[]
   eurolineRates: EurolineRates | null
   werkbladRates: WerkbladRates | null
@@ -390,6 +392,7 @@ export default function QuoteEditor({
     () => new Set(customerSections.map((_, i) => i))
   )
   const [kostenCollapsed, setKostenCollapsed] = useState(true)
+  const [downloadsCollapsed, setDownloadsCollapsed] = useState(true)
   const [connectionsCollapsed, setConnectionsCollapsed] = useState(true)
   // Sectie waar na toevoegen van een regel (bv. handmatige werkblad-regel)
   // naartoe gescrold moet worden — anders verschijnt de nieuwe/uitgeklapte
@@ -1309,6 +1312,58 @@ export default function QuoteEditor({
       </div>
 
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
+
+      {/* Downloadgeschiedenis — elke klik op "Download PDF" (op de
+         klantversie-pagina) komt hier automatisch bij te staan, incl. wat er
+         t.o.v. de vorige download is gewijzigd. Zie src/lib/quote-download-diff.ts. */}
+      <div className="bg-white rounded-lg border border-[#DDD8D2] p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDownloadsCollapsed((v) => !v)}
+            title={downloadsCollapsed ? 'Uitklappen' : 'Inklappen'}
+            className="shrink-0 text-[#9A948D] hover:text-[#1C1B19]"
+          >
+            <ChevronDown size={15} className={downloadsCollapsed ? '-rotate-90 transition-transform' : 'transition-transform'} />
+          </button>
+          <span className="flex-1 text-sm font-medium text-[#1C1B19]">Downloadgeschiedenis</span>
+          <span className="text-xs text-[#9A948D]">
+            {downloads.length === 0 ? 'nog niet gedownload' : `${downloads.length}× gedownload`}
+          </span>
+        </div>
+        {!downloadsCollapsed && (
+          downloads.length === 0 ? (
+            <p className="text-xs text-[#6B6560]">Deze offerte is nog niet als PDF gedownload.</p>
+          ) : (
+            <div className="divide-y divide-[#DDD8D2]">
+              {downloads.map((d, idx) => {
+                const isFirst = idx === downloads.length - 1
+                return (
+                  <div key={d.id} className="py-2.5 flex items-start justify-between gap-4">
+                    <div>
+                      {isFirst ? (
+                        <p className="text-xs text-[#9A948D]">Eerste download</p>
+                      ) : d.changes.length === 0 ? (
+                        <p className="text-xs text-[#9A948D]">Geen inhoudelijke wijzigingen t.o.v. vorige download</p>
+                      ) : (
+                        <ul className="text-xs text-[#6B6560] space-y-0.5 list-disc list-inside">
+                          {d.changes.map((c, i) => <li key={i}>{c}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-[#1C1B19]">
+                        {new Date(d.downloaded_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <p className="text-xs text-[#9A948D]">{d.downloaded_by ?? 'Onbekend'}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+      </div>
 
       {/* Afbeeldingen — gedeelde assets, komen terug in de klantversie */}
       <div className="grid grid-cols-3 gap-4">
