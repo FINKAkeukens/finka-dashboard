@@ -606,3 +606,31 @@ ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS levering_verhuislift D
 -- =========================================================
 
 ALTER TABLE finka_quotes ADD COLUMN IF NOT EXISTS page_disclaimers JSONB DEFAULT '{}'::jsonb;
+
+-- =========================================================
+-- 28. Downloadgeschiedenis van de klant-offerte-PDF — elke keer dat iemand
+--    op "Download PDF" klikt (src/app/api/offerte/[projectId]/pdf/route.ts)
+--    komt hier een rij bij. snapshot bewaart zowel de klant-zichtbare velden
+--    van dat moment (zelfde selectie als wat er daadwerkelijk op de PDF
+--    staat) als de interne kostprijs-opbouw (cost_breakdown + de losse
+--    regels uit finka_quote_items + de interne totalen), zodat een volgende
+--    download daartegen kan diffen (zie src/lib/quote-download-diff.ts) —
+--    changes bevat die leesbare diff al kant-en-klaar, zodat de UI niet
+--    elke keer opnieuw hoeft te vergelijken.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_quote_downloads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id UUID NOT NULL REFERENCES finka_quotes(id) ON DELETE CASCADE,
+  downloaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  downloaded_by TEXT,
+  snapshot JSONB NOT NULL,
+  changes JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS finka_quote_downloads_quote_id_idx ON finka_quote_downloads (quote_id, downloaded_at DESC);
+
+ALTER TABLE finka_quote_downloads ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_quote_downloads FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_quote_downloads TO anon, authenticated, service_role;

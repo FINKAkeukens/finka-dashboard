@@ -360,6 +360,60 @@ export interface Quote {
   items?: QuoteItem[]
 }
 
+// Eén rij per keer dat de klant-PDF is gedownload (zie
+// src/app/api/offerte/[projectId]/pdf/route.ts + src/lib/quote-download-diff.ts).
+export interface QuoteDownload {
+  id: string
+  quote_id: string
+  downloaded_at: string
+  downloaded_by: string | null
+  snapshot: QuoteDownloadSnapshot
+  changes: string[]
+}
+
+// Compacte kopie van een interne regel (finka_quote_items), alleen de velden
+// die relevant zijn om een kostprijs-wijziging tussen twee downloads te
+// herkennen — geen quote_id/sort_order/etc.
+export interface QuoteDownloadItemSnapshot {
+  id: string
+  description: string
+  quantity: number
+  unit_price: number
+  line_total: number
+}
+
+// De klant-zichtbare velden van een Quote (de subset die daadwerkelijk op de
+// PDF/klantpagina verschijnt) plus de interne kostprijs-opbouw (cost_breakdown,
+// de losse regels en de interne totalen) — samen gebruikt om twee downloads
+// te vergelijken, zowel wat de klant ziet als wat het intern kost.
+export interface QuoteDownloadSnapshot {
+  status: QuoteStatus
+  customer_document_label: string
+  customer_headline: string | null
+  customer_subtitle: string | null
+  customer_intro_text: string | null
+  customer_sections: QuoteCustomerSection[]
+  customer_cost_lines: CustomerCostLine[]
+  customer_connections_intro: string | null
+  customer_connections_disclaimer: string | null
+  customer_connections: ConnectionRow[]
+  customer_closing_heading: string | null
+  customer_closing_text: string | null
+  customer_closing_quote: string | null
+  customer_disclaimer_text: string | null
+  page_disclaimers: Partial<Record<PageDisclaimerKey, string>> | null
+  price: number
+  cost_breakdown: CostBreakdownItem[]
+  internal_subtotal: number
+  internal_total_price: number
+  items: QuoteDownloadItemSnapshot[]
+  plattegrond_url: string | null
+  render_urls: string[]
+  standaard_afbeeldingen: string[]
+  cover_image_url: string | null
+  connections_image_url: string | null
+}
+
 export type QuoteCustomerCategory = 'kasten' | 'werkblad' | 'apparatuur' | 'accessoires' | 'overig'
 
 export interface QuoteCustomerLine {
