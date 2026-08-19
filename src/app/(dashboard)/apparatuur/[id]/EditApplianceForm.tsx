@@ -194,6 +194,10 @@ export default function EditApplianceForm({
               <Select value={String(specs.integration ?? '')} onChange={v => updateSpec('integration', v)}
                 options={[{value:'',label:'—'},{value:'volledig',label:'Volledig'},{value:'half',label:'Half'}]} />
             </Field>
+            <Field label="Nishoogte">
+              <Select value={String(specs.niche_height_cm ?? '')} onChange={v => updateSpec('niche_height_cm', v ? Number(v) : undefined)}
+                options={[{value:'',label:'—'},{value:'81.5',label:'81,5 cm'},{value:'86.5',label:'86,5 cm'}]} />
+            </Field>
             <Field label="Geluid (dB)"><Input type="number" step="0.1" value={String(specs.db_sound ?? '')} onChange={e => updateSpec('db_sound', Number(e.target.value))} /></Field>
             <Field label="Couverts"><Input type="number" value={String(specs.capacity_sets ?? '')} onChange={e => updateSpec('capacity_sets', Number(e.target.value))} /></Field>
           </div>

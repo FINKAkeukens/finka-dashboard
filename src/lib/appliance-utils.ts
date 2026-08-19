@@ -91,6 +91,7 @@ export function getSpecSummary(appliance: Appliance): string {
       break
     case 'vaatwasser':
       if (s.integration) parts.push(String(s.integration))
+      if (s.niche_height_cm) parts.push(`${s.niche_height_cm} cm nis`)
       if (s.db_sound) parts.push(`${s.db_sound} dB`)
       if (s.capacity_sets) parts.push(`${s.capacity_sets} couverts`)
       break
@@ -176,6 +177,7 @@ export function specEntries(type: string, specs: ApplianceSpecs): { label: strin
     case 'vaatwasser':
       entries.push(
         { label: 'Integreerbaar', value: fmt(specs.integration) },
+        { label: 'Nishoogte', value: specs.niche_height_cm ? `${specs.niche_height_cm} cm` : null },
         { label: 'Geluid', value: specs.db_sound ? `${specs.db_sound} dB` : null },
         { label: 'Couverts', value: fmt(specs.capacity_sets) },
       )

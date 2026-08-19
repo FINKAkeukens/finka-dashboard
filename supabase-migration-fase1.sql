@@ -59,12 +59,14 @@ CREATE TABLE IF NOT EXISTS finka_projects (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Format: FP-2026-0105 (4 cijfers, sluit aan op de foldernummering die al
+-- buiten het dashboard in gebruik was — zie migratie die de seq ophoogt).
 CREATE SEQUENCE IF NOT EXISTS finka_project_seq START 1;
 
 CREATE OR REPLACE FUNCTION generate_project_reference()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.reference_number := 'FP-' || EXTRACT(YEAR FROM NOW()) || '-' || LPAD(nextval('finka_project_seq')::TEXT, 3, '0');
+  NEW.reference_number := 'FP-' || EXTRACT(YEAR FROM NOW()) || '-' || LPAD(nextval('finka_project_seq')::TEXT, 4, '0');
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

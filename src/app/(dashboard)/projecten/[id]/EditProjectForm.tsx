@@ -31,11 +31,17 @@ export default function EditProjectForm({
     const form = new FormData(e.currentTarget)
     const { data: { user } } = await supabase.auth.getUser()
 
-    const before = { title: project.title, status_id: project.status_id, customer_id: project.customer_id }
+    const before = {
+      title: project.title,
+      status_id: project.status_id,
+      customer_id: project.customer_id,
+      reference_number: project.reference_number,
+    }
     const after = {
       title: form.get('title') as string,
       status_id: form.get('status_id') as string,
       customer_id: form.get('customer_id') as string,
+      reference_number: (form.get('reference_number') as string).trim(),
     }
 
     const { error } = await supabase
@@ -44,7 +50,8 @@ export default function EditProjectForm({
       .eq('id', project.id)
 
     if (error) {
-      setError(error.message)
+      // 23505 = unique_violation — dit projectnummer bestaat al bij een ander project.
+      setError(error.code === '23505' ? 'Dit projectnummer is al in gebruik bij een ander project.' : error.message)
       setLoading(false)
       return
     }
@@ -96,6 +103,11 @@ export default function EditProjectForm({
       <div className="space-y-1.5">
         <Label>Projectnaam</Label>
         <Input name="title" defaultValue={project.title} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Projectnummer</Label>
+        <Input name="reference_number" defaultValue={project.reference_number} required className="font-mono" />
+        <p className="text-xs text-[#9A948D]">Wordt normaal automatisch gegenereerd (FP-jaar-volgnummer) — pas hier alleen aan als dat echt nodig is, moet uniek blijven.</p>
       </div>
       <div className="space-y-1.5">
         <Label>Klant</Label>

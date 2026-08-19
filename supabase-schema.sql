@@ -17,13 +17,13 @@ CREATE TABLE IF NOT EXISTS finka_customers (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Auto-increment referentienummer: FK-2026-001
+-- Auto-increment referentienummer: 2026-001-FK
 CREATE SEQUENCE IF NOT EXISTS finka_customer_seq START 1;
 
 CREATE OR REPLACE FUNCTION generate_customer_reference()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.reference_number := 'FK-' || EXTRACT(YEAR FROM NOW()) || '-' || LPAD(nextval('finka_customer_seq')::TEXT, 3, '0');
+  NEW.reference_number := EXTRACT(YEAR FROM NOW()) || '-' || LPAD(nextval('finka_customer_seq')::TEXT, 3, '0') || '-FK';
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

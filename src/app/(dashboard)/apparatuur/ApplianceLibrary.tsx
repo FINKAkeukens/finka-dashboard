@@ -336,6 +336,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (specFilters.pyrolysis && String(specs.pyrolysis) !== specFilters.pyrolysis) return false
       if (specFilters.steam && String(specs.steam) !== specFilters.steam) return false
       if (specFilters.integration && specs.integration !== specFilters.integration) return false
+      if (specFilters.niche_height_cm && String(specs.niche_height_cm) !== specFilters.niche_height_cm) return false
       if (specFilters.afzuig_type && specs.afzuig_type !== specFilters.afzuig_type) return false
       if (specFilters.bowls && specs.bowls !== specFilters.bowls) return false
       return true
@@ -430,9 +431,16 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
           { v: 'koelkast', l: 'Koelkast' },
           { v: 'wijnklimaatkast', l: 'Wijnklimaatkast' },
         ])}
-        {activeView === 'vaatwasser' && chip('Integratie', 'integration', [
-          { v: 'volledig', l: 'Volledig' }, { v: 'half', l: 'Half' },
-        ])}
+        {activeView === 'vaatwasser' && (
+          <>
+            {chip('Integratie', 'integration', [
+              { v: 'volledig', l: 'Volledig' }, { v: 'half', l: 'Half' },
+            ])}
+            {chip('Nishoogte', 'niche_height_cm', [
+              { v: '81.5', l: '81,5 cm' }, { v: '86.5', l: '86,5 cm' },
+            ])}
+          </>
+        )}
         {activeView === 'afzuigkap' && chip('Type', 'afzuig_type', [
           { v: 'wand', l: 'Wand' }, { v: 'eiland', l: 'Eiland' }, { v: 'inbouw', l: 'Inbouw' }, { v: 'plafond', l: 'Plafond' },
         ])}

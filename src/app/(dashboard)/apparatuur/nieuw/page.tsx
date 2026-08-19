@@ -58,6 +58,7 @@ export default function NieuweApparatuurPage() {
     }
     if (type === 'vaatwasser') {
       if (form.get('integration')) specs.integration = form.get('integration')
+      if (form.get('niche_height_cm')) specs.niche_height_cm = Number(form.get('niche_height_cm'))
       if (form.get('db_sound')) specs.db_sound = Number(form.get('db_sound'))
       if (form.get('capacity_sets')) specs.capacity_sets = Number(form.get('capacity_sets'))
     }
@@ -241,6 +242,14 @@ export default function NieuweApparatuurPage() {
                 <Label>Integreerbaar</Label>
                 <select name="integration" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
                   <option value="">—</option><option value="volledig">Volledig</option><option value="half">Half</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nishoogte</Label>
+                <select name="niche_height_cm" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+                  <option value="">—</option>
+                  <option value="81.5">81,5 cm</option>
+                  <option value="86.5">86,5 cm</option>
                 </select>
               </div>
               <div className="space-y-1.5"><Label>Geluid (dB)</Label><Input name="db_sound" type="number" step="0.1" /></div>

@@ -68,6 +68,7 @@ export interface ApplianceSpecs {
   integration?: 'volledig' | 'half'
   db_sound?: number
   capacity_sets?: number
+  niche_height_cm?: number
   // Afzuigkap
   capacity_m3h?: number
   afzuig_type?: 'wand' | 'eiland' | 'inbouw' | 'plafond'
