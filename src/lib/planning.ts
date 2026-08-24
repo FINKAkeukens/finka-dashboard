@@ -1,5 +1,9 @@
 import { differenceInCalendarDays } from 'date-fns'
-import { MilestoneKey, MilestoneStatus, ProjectMilestone } from './types'
+import { MilestoneAssignee, MilestoneKey, MilestoneStatus, ProjectMilestone } from './types'
+
+// Vaste toewijs-opties — team is klein genoeg om dit hard te coderen i.p.v.
+// een aparte gebruikerslijst op te tuigen.
+export const ASSIGNEE_OPTIONS: MilestoneAssignee[] = ['Kieke', 'Merel', 'Leverancier']
 
 // Vaste volgorde van de 5 standaardmijlpalen — 'custom'-items staan hier
 // bewust niet in, die worden los toegevoegd/verwijderd per project.
@@ -19,26 +23,32 @@ export const MILESTONE_LABELS: Record<Exclude<MilestoneKey, 'custom'>, string> =
   oplevering: 'Oplevering',
 }
 
-// Vaste mijlpalen hebben een vast label; 'custom'-items dragen hun eigen,
-// vrij getypte label mee.
+// Vaste mijlpalen hebben een standaardlabel, maar zijn per project alsnog
+// hernoembaar via het losse `label`-veld (bv. "Meting" -> "Inmeten keuken").
+// 'custom'-items dragen sowieso hun eigen, vrij getypte label mee.
 export function milestoneLabel(m: Pick<ProjectMilestone, 'milestone_key' | 'label'>): string {
   if (m.milestone_key === 'custom') return m.label?.trim() || 'Aangepast item'
-  return MILESTONE_LABELS[m.milestone_key]
+  return m.label?.trim() || MILESTONE_LABELS[m.milestone_key]
 }
 
+// Vaste volgorde voor dropdowns — vroegste naar laatste stadium.
+export const MILESTONE_STATUS_ORDER: MilestoneStatus[] = ['nog_doen', 'gepland', 'bevestigd', 'klaar']
+
 export const MILESTONE_STATUS_LABELS: Record<MilestoneStatus, string> = {
-  gepland: 'Gepland',
+  nog_doen: 'Nog doen',
+  gepland: 'Pending',
   bevestigd: 'Bevestigd',
   klaar: 'Klaar',
 }
 
-// Zelfde kleurtaal als de bestaande project-statussen (finka_project_statuses:
-// Lead #9CA3AF, Gepland #3B82F6, Akkoord #22C55E) — geen nieuwe kleurcode
-// erbij verzinnen voor hetzelfde soort "voortgang"-signaal.
+// Volle, verzadigde kleuren (geen pastels) zodat de statustekst even goed
+// leesbaar is als gewone tekst — een lichte tint zoals voorheen bij "Nog
+// doen" oogde op wit al snel doorzichtig/onleesbaar.
 export const MILESTONE_STATUS_COLORS: Record<MilestoneStatus, string> = {
-  gepland: '#9CA3AF',
-  bevestigd: '#3B82F6',
-  klaar: '#22C55E',
+  nog_doen: '#6B6560',
+  gepland: '#D97706',
+  bevestigd: '#22C55E',
+  klaar: '#166534',
 }
 
 // Gedeelde urgentie-kleur: verlopen = rood, binnen een week = goud, verder

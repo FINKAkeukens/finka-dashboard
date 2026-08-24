@@ -26,6 +26,14 @@ export default async function PlanningOverviewPage() {
     milestones = (data ?? []) as ProjectMilestone[]
   }
 
+  // Algemene taken — niet aan een project gekoppeld, eigen sectie op de pagina.
+  const { data: generalData } = await supabase
+    .from('finka_project_milestones')
+    .select('*')
+    .is('project_id', null)
+    .order('sort_order')
+  const generalTasks = (generalData ?? []) as ProjectMilestone[]
+
   const planningProjects: PlanningProject[] = projects.map((p) => ({
     id: p.id,
     title: p.title,
@@ -37,14 +45,14 @@ export default async function PlanningOverviewPage() {
   }))
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Planning</h1>
         <p className="text-sm text-[#6B6560] mt-1">
-          Aankomende mijlpalen van alle lopende projecten, op volgorde van datum. Datums pas je aan bij de Planning-tab van een project.
+          Aankomende mijlpalen van alle lopende projecten, op volgorde van datum. Status, toewijzing en notities pas je hier direct aan — datums wijzig je bij de Planning-tab van een project.
         </p>
       </div>
-      <PlanningAgenda projects={planningProjects} />
+      <PlanningAgenda projects={planningProjects} generalTasks={generalTasks} />
     </div>
   )
 }

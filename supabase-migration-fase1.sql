@@ -452,7 +452,7 @@ CREATE TABLE IF NOT EXISTS finka_project_milestones (
   milestone_key TEXT NOT NULL CHECK (milestone_key IN ('meting', 'bestelling', 'levering', 'montage_start', 'oplevering')),
   sort_order INTEGER NOT NULL DEFAULT 0,
   date DATE,
-  status TEXT NOT NULL DEFAULT 'gepland' CHECK (status IN ('gepland', 'bevestigd', 'klaar')),
+  status TEXT NOT NULL DEFAULT 'gepland' CHECK (status IN ('nog_doen', 'gepland', 'bevestigd', 'klaar')),
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -634,3 +634,31 @@ ALTER TABLE finka_quote_downloads ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated users only" ON finka_quote_downloads FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 GRANT ALL ON TABLE finka_quote_downloads TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 29. Planning — extra mijlpaal-status 'nog_doen' vóór 'gepland', voor items
+--    die nog niet eens ingepland zijn (puur een to-do, nog geen datum/plan).
+-- =========================================================
+
+ALTER TABLE finka_project_milestones DROP CONSTRAINT IF EXISTS finka_project_milestones_status_check;
+ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_status_check
+  CHECK (status IN ('nog_doen', 'gepland', 'bevestigd', 'klaar'));
+
+-- =========================================================
+-- 30. Planning — mijlpaal toewijzen aan Kieke of Merel, en status/notities
+--    ook rechtstreeks bewerkbaar maken vanuit het bedrijfsbrede overzicht
+--    (/planning), niet alleen via de Planning-tab van een los project.
+-- =========================================================
+
+ALTER TABLE finka_project_milestones ADD COLUMN IF NOT EXISTS assigned_to TEXT;
+ALTER TABLE finka_project_milestones DROP CONSTRAINT IF EXISTS finka_project_milestones_assigned_to_check;
+ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_assigned_to_check
+  CHECK (assigned_to IS NULL OR assigned_to IN ('Kieke', 'Merel', 'Leverancier'));
+
+-- =========================================================
+-- 31. Planning — algemene taken die aan geen enkel project hangen (bv.
+--    interne to-do's). project_id mag nu NULL zijn; NULL = algemene taak.
+--    Verschijnt in een eigen sectie op /planning, los van de projectenlijst.
+-- =========================================================
+
+ALTER TABLE finka_project_milestones ALTER COLUMN project_id DROP NOT NULL;

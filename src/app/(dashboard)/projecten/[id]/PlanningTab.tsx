@@ -8,12 +8,14 @@ import { nl } from 'date-fns/locale'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Plus, Trash2 } from 'lucide-react'
-import { MilestoneStatus, ProjectMilestone } from '@/lib/types'
+import { MilestoneAssignee, MilestoneStatus, ProjectMilestone } from '@/lib/types'
 import {
+  ASSIGNEE_OPTIONS,
   MILESTONE_LABELS,
   MILESTONE_ORDER,
   MILESTONE_STATUS_COLORS,
   MILESTONE_STATUS_LABELS,
+  MILESTONE_STATUS_ORDER,
   milestoneLabel,
   urgencyClass,
 } from '@/lib/planning'
@@ -70,6 +72,7 @@ export default function PlanningTab({
         status: 'gepland',
         label: '',
         notes: null,
+        assigned_to: null,
         created_at: '',
         updated_at: '',
         isNew: true,
@@ -116,7 +119,7 @@ export default function PlanningTab({
     for (const m of toUpdate) {
       const { error: updError } = await supabase
         .from('finka_project_milestones')
-        .update({ date: m.date, status: m.status, notes: m.notes, label: m.label, updated_at: new Date().toISOString() })
+        .update({ date: m.date, status: m.status, notes: m.notes, label: m.label, assigned_to: m.assigned_to, updated_at: new Date().toISOString() })
         .eq('id', m.id)
       if (updError) {
         setError(updError.message)
@@ -172,7 +175,12 @@ export default function PlanningTab({
         {fixedRows.map((m, i) => (
           <div key={m.id} className={`flex items-center gap-4 px-5 py-4 ${i > 0 ? 'border-t border-[#DDD8D2]' : ''}`}>
             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: MILESTONE_STATUS_COLORS[m.status] }} />
-            <div className="w-56 shrink-0 text-sm font-medium text-[#1C1B19]">{MILESTONE_LABELS[m.milestone_key as keyof typeof MILESTONE_LABELS]}</div>
+            <Input
+              placeholder={MILESTONE_LABELS[m.milestone_key as keyof typeof MILESTONE_LABELS]}
+              className="h-9 w-56 shrink-0 font-medium"
+              value={m.label ?? ''}
+              onChange={(e) => update(m.id, { label: e.target.value })}
+            />
             <Input
               type="date"
               className="h-9 w-40"
@@ -184,8 +192,18 @@ export default function PlanningTab({
               onChange={(e) => update(m.id, { status: e.target.value as MilestoneStatus })}
               className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
-              {(['gepland', 'bevestigd', 'klaar'] as const).map((s) => (
+              {MILESTONE_STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>{MILESTONE_STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+            <select
+              value={m.assigned_to ?? ''}
+              onChange={(e) => update(m.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })}
+              className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+            >
+              <option value="">— Niemand —</option>
+              {ASSIGNEE_OPTIONS.map((a) => (
+                <option key={a} value={a}>{a}</option>
               ))}
             </select>
             <Input
@@ -220,8 +238,18 @@ export default function PlanningTab({
               onChange={(e) => update(m.id, { status: e.target.value as MilestoneStatus })}
               className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
-              {(['gepland', 'bevestigd', 'klaar'] as const).map((s) => (
+              {MILESTONE_STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>{MILESTONE_STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+            <select
+              value={m.assigned_to ?? ''}
+              onChange={(e) => update(m.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })}
+              className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+            >
+              <option value="">— Niemand —</option>
+              {ASSIGNEE_OPTIONS.map((a) => (
+                <option key={a} value={a}>{a}</option>
               ))}
             </select>
             <Input

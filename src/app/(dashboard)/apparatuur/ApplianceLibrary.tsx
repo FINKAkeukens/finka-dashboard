@@ -272,7 +272,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   // labels tegelijk selecteren kan (bv. A + B), leeg = geen filter.
   const [energyLabelFilters, setEnergyLabelFilters] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('brand')
+  const [sortKey, setSortKey] = useState<SortKey>('price')
   const [sortAsc, setSortAsc] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [detailId, setDetailId] = useState<string | null>(null)

@@ -47,6 +47,7 @@ export default async function ProjectenPage({
       .select('*')
       .in('project_id', projects.map((p) => p.id))
     for (const m of (milestonesData ?? []) as ProjectMilestone[]) {
+      if (!m.project_id) continue // algemene taken (geen project) horen hier niet
       const list = milestonesByProject.get(m.project_id) ?? []
       list.push(m)
       milestonesByProject.set(m.project_id, list)

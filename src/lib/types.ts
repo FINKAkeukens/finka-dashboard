@@ -538,7 +538,8 @@ export type MilestoneKey =
   | 'montage_start'
   | 'oplevering'
   | 'custom'
-export type MilestoneStatus = 'gepland' | 'bevestigd' | 'klaar'
+export type MilestoneStatus = 'nog_doen' | 'gepland' | 'bevestigd' | 'klaar'
+export type MilestoneAssignee = 'Kieke' | 'Merel' | 'Leverancier'
 
 // Planning-mijlpalen — elk project krijgt automatisch 5 vaste (zie
 // migratie-trigger create_default_milestones), zodat de projecttab en de
@@ -546,13 +547,15 @@ export type MilestoneStatus = 'gepland' | 'bevestigd' | 'klaar'
 // Staff kan daarnaast losse 'custom'-items toevoegen per project.
 export interface ProjectMilestone {
   id: string
-  project_id: string
+  // NULL = algemene taak, niet gekoppeld aan een project (zie /planning).
+  project_id: string | null
   milestone_key: MilestoneKey
   sort_order: number
   date: string | null
   status: MilestoneStatus
   label: string | null
   notes: string | null
+  assigned_to: MilestoneAssignee | null
   created_at: string
   updated_at: string
 }
