@@ -17,9 +17,6 @@ export interface Customer {
   city: string | null
   notes: string | null
   status: CustomerStatus
-  approved: boolean
-  paid: boolean
-  ordered: boolean
   created_at: string
   updated_at: string
 }
