@@ -372,7 +372,7 @@ export default function PlanningAgenda({
   )
 
   const generalTasksSection = (
-    <div className="space-y-3">
+    <div className="w-full lg:w-1/3 shrink-0 space-y-3">
       <h2 className="text-sm font-medium text-[#1C1B19]">Algemene taken</h2>
       {!generalTasks.length ? (
         <p className="text-xs text-[#9A948D]">Geen algemene taken — gebruik &quot;Nieuwe taak&quot; hierboven met &quot;Algemeen&quot; als project.</p>
@@ -383,54 +383,58 @@ export default function PlanningAgenda({
             const titleValue = titleDrafts[m.id] ?? m.label ?? ''
             return (
               <div key={m.id} className="px-5 py-3 space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="date"
-                    value={m.date ?? ''}
-                    onChange={(e) => updateMilestone(null, m.id, { date: e.target.value || null })}
-                    className="shrink-0 h-7 w-[9.5rem] px-1.5 text-xs text-[#6B6560] tabular-nums bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-                  />
-                  <select
-                    value={m.status}
-                    onChange={(e) => updateMilestone(null, m.id, { status: e.target.value as MilestoneStatus })}
-                    style={{ color: MILESTONE_STATUS_COLORS[m.status] }}
-                    className="shrink-0 h-7 px-1.5 text-xs font-medium bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-                  >
-                    {MILESTONE_STATUS_ORDER.map((s) => (
-                      <option key={s} value={s} style={{ color: MILESTONE_STATUS_COLORS[s] }}>
-                        {MILESTONE_STATUS_LABELS[s]}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    placeholder="Naam van deze taak"
-                    value={titleValue}
-                    onChange={(e) => setTitleDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))}
-                    onBlur={() => saveTitleIfChanged(null, m)}
-                    className="flex-1 min-w-0 h-8 px-2 text-base text-[#1C1B19] placeholder:text-[#1C1B19] bg-transparent border border-transparent rounded-md hover:border-[#DDD8D2] focus:outline-none focus:border-[#DDD8D2] focus:bg-white"
-                  />
-                  <select
-                    value={m.assigned_to ?? ''}
-                    onChange={(e) =>
-                      updateMilestone(null, m.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })
-                    }
-                    className="shrink-0 h-7 px-1.5 text-xs bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-                  >
-                    <option value="">— Niemand —</option>
-                    {ASSIGNEE_OPTIONS.map((a) => (
-                      <option key={a} value={a}>{a}</option>
-                    ))}
-                  </select>
-                  {m.date && (
-                    <div className={`w-28 text-right text-xs shrink-0 tabular-nums ${urgencyClass(m.date)}`}>
-                      {relativeLabel(new Date(m.date), today)}
-                    </div>
-                  )}
+                <input
+                  placeholder="Naam van deze taak"
+                  value={titleValue}
+                  onChange={(e) => setTitleDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                  onBlur={() => saveTitleIfChanged(null, m)}
+                  className="w-full h-8 px-2 text-base text-[#1C1B19] placeholder:text-[#1C1B19] bg-transparent border border-transparent rounded-md hover:border-[#DDD8D2] focus:outline-none focus:border-[#DDD8D2] focus:bg-white"
+                />
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="shrink-0 flex flex-col gap-0.5">
+                    <input
+                      type="date"
+                      value={m.date ?? ''}
+                      onChange={(e) => updateMilestone(null, m.id, { date: e.target.value || null })}
+                      className="h-7 w-[9.5rem] px-1.5 text-xs text-[#6B6560] tabular-nums bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+                    />
+                    {m.date && (
+                      <span className={`text-[10px] pl-1.5 tabular-nums ${urgencyClass(m.date)}`}>
+                        {relativeLabel(new Date(m.date), today)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1">
+                    <select
+                      value={m.status}
+                      onChange={(e) => updateMilestone(null, m.id, { status: e.target.value as MilestoneStatus })}
+                      style={{ color: MILESTONE_STATUS_COLORS[m.status] }}
+                      className="h-7 px-1.5 text-xs font-medium bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+                    >
+                      {MILESTONE_STATUS_ORDER.map((s) => (
+                        <option key={s} value={s} style={{ color: MILESTONE_STATUS_COLORS[s] }}>
+                          {MILESTONE_STATUS_LABELS[s]}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={m.assigned_to ?? ''}
+                      onChange={(e) =>
+                        updateMilestone(null, m.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })
+                      }
+                      className="h-7 px-1.5 text-xs bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+                    >
+                      <option value="">— Niemand —</option>
+                      {ASSIGNEE_OPTIONS.map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </div>
                   <button
                     type="button"
                     onClick={() => deleteGeneralTask(m.id)}
                     title="Algemene taak verwijderen"
-                    className="shrink-0 text-[#C7C2BB] hover:text-red-600"
+                    className="shrink-0 text-[#C7C2BB] hover:text-red-600 mt-1.5"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -455,12 +459,16 @@ export default function PlanningAgenda({
       <div className="space-y-6">
         {errorBanner}
         {addTaskSection}
-        {generalTasksSection}
-        <h2 className="text-sm font-medium text-[#1C1B19]">Project taken</h2>
-        <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-16 text-center">
-          <p className="text-sm text-[#6B6560]">Geen aankomende mijlpalen — vul datums in bij de Planning-tab van een project.</p>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {generalTasksSection}
+          <div className="flex-1 min-w-0 space-y-3">
+            <h2 className="text-sm font-medium text-[#1C1B19]">Project taken</h2>
+            <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-16 text-center">
+              <p className="text-sm text-[#6B6560]">Geen aankomende mijlpalen — vul datums in bij de Planning-tab van een project.</p>
+            </div>
+            {unplanned.length > 0 && <UnplannedList projects={unplanned} />}
+          </div>
         </div>
-        {unplanned.length > 0 && <UnplannedList projects={unplanned} />}
       </div>
     )
   }
@@ -474,10 +482,6 @@ export default function PlanningAgenda({
       {errorBanner}
 
       {addTaskSection}
-
-      {generalTasksSection}
-
-      <h2 className="text-sm font-medium text-[#1C1B19]">Project taken</h2>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -500,6 +504,12 @@ export default function PlanningAgenda({
           </FilterChip>
         </div>
       </div>
+
+      <div className="flex flex-col lg:flex-row gap-6">
+      {generalTasksSection}
+
+      <div className="flex-1 min-w-0 space-y-3">
+      <h2 className="text-sm font-medium text-[#1C1B19]">Project taken</h2>
 
       {!entries.length ? (
         <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-16 text-center">
@@ -526,59 +536,62 @@ export default function PlanningAgenda({
                   </div>
                 )}
                 <div className="px-5 py-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <input
-                      type="date"
-                      value={entry.milestone.date ?? ''}
-                      onChange={(e) =>
-                        updateMilestone(entry.project.id, entry.milestone.id, { date: e.target.value || null })
-                      }
-                      className="shrink-0 h-7 w-[9.5rem] px-1.5 text-xs text-[#6B6560] tabular-nums bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-                    />
-                    <select
-                      value={entry.milestone.status}
-                      onChange={(e) =>
-                        updateMilestone(entry.project.id, entry.milestone.id, { status: e.target.value as MilestoneStatus })
-                      }
-                      style={{ color: MILESTONE_STATUS_COLORS[entry.milestone.status] }}
-                      className="shrink-0 h-7 px-1.5 text-xs font-medium bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-                    >
-                      {MILESTONE_STATUS_ORDER.map((s) => (
-                        <option key={s} value={s} style={{ color: MILESTONE_STATUS_COLORS[s] }}>
-                          {MILESTONE_STATUS_LABELS[s]}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      title="Titel van deze taak aanpassen"
-                      placeholder={milestoneLabel(entry.milestone)}
-                      value={titleValue}
-                      onChange={(e) => setTitleDrafts((prev) => ({ ...prev, [entry.milestone.id]: e.target.value }))}
-                      onBlur={() => saveTitleIfChanged(entry.project.id, entry.milestone)}
-                      className="hidden sm:block w-72 shrink-0 h-8 px-2 text-base text-[#1C1B19] placeholder:text-[#1C1B19] bg-transparent border border-transparent rounded-md hover:border-[#DDD8D2] focus:outline-none focus:border-[#DDD8D2] focus:bg-white"
-                    />
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="shrink-0 flex flex-col gap-0.5">
+                      <input
+                        type="date"
+                        value={entry.milestone.date ?? ''}
+                        onChange={(e) =>
+                          updateMilestone(entry.project.id, entry.milestone.id, { date: e.target.value || null })
+                        }
+                        className="h-7 w-[9.5rem] px-1.5 text-xs text-[#6B6560] tabular-nums bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+                      />
+                      <span className={`text-[10px] pl-1.5 tabular-nums ${urgencyClass(entry.milestone.date as string)}`}>
+                        {relativeLabel(date, today)}
+                      </span>
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <Link href={`/projecten/${entry.project.id}`} className="text-sm text-[#1C1B19] hover:text-[#C9A96E] truncate block">
-                        <span className="font-medium">{entry.project.customerName}</span>{' '}
-                        <span className="text-[#9A948D]">· {entry.project.title}</span>
+                      <input
+                        title="Titel van deze taak aanpassen"
+                        placeholder={milestoneLabel(entry.milestone)}
+                        value={titleValue}
+                        onChange={(e) => setTitleDrafts((prev) => ({ ...prev, [entry.milestone.id]: e.target.value }))}
+                        onBlur={() => saveTitleIfChanged(entry.project.id, entry.milestone)}
+                        className="w-full h-8 px-2 text-base text-[#1C1B19] placeholder:text-[#1C1B19] bg-transparent border border-transparent rounded-md hover:border-[#DDD8D2] focus:outline-none focus:border-[#DDD8D2] focus:bg-white"
+                      />
+                      <Link href={`/projecten/${entry.project.id}`} className="text-[10px] pl-2 text-[#9A948D] hover:text-[#C9A96E] truncate block">
+                        <span className="font-medium">{entry.project.customerName}</span> · {entry.project.title}
                       </Link>
                     </div>
-                    <select
-                      value={entry.milestone.assigned_to ?? ''}
-                      onChange={(e) =>
-                        updateMilestone(entry.project.id, entry.milestone.id, {
-                          assigned_to: (e.target.value || null) as MilestoneAssignee | null,
-                        })
-                      }
-                      className="shrink-0 h-7 px-1.5 text-xs bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-                    >
-                      <option value="">— Niemand —</option>
-                      {ASSIGNEE_OPTIONS.map((a) => (
-                        <option key={a} value={a}>{a}</option>
-                      ))}
-                    </select>
-                    <div className={`w-28 text-right text-xs shrink-0 tabular-nums ${urgencyClass(entry.milestone.date as string)}`}>
-                      {relativeLabel(date, today)}
+                    <div className="shrink-0 flex items-center gap-1">
+                      <select
+                        value={entry.milestone.status}
+                        onChange={(e) =>
+                          updateMilestone(entry.project.id, entry.milestone.id, { status: e.target.value as MilestoneStatus })
+                        }
+                        style={{ color: MILESTONE_STATUS_COLORS[entry.milestone.status] }}
+                        className="h-7 px-1.5 text-xs font-medium bg-transparent border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+                      >
+                        {MILESTONE_STATUS_ORDER.map((s) => (
+                          <option key={s} value={s} style={{ color: MILESTONE_STATUS_COLORS[s] }}>
+                            {MILESTONE_STATUS_LABELS[s]}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={entry.milestone.assigned_to ?? ''}
+                        onChange={(e) =>
+                          updateMilestone(entry.project.id, entry.milestone.id, {
+                            assigned_to: (e.target.value || null) as MilestoneAssignee | null,
+                          })
+                        }
+                        className="h-7 px-1.5 text-xs bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+                      >
+                        <option value="">— Niemand —</option>
+                        {ASSIGNEE_OPTIONS.map((a) => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <input
@@ -596,6 +609,8 @@ export default function PlanningAgenda({
       )}
 
       {unplanned.length > 0 && <UnplannedList projects={unplanned} />}
+      </div>
+      </div>
     </div>
   )
 }

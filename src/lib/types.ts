@@ -538,8 +538,8 @@ export type MilestoneKey =
   | 'montage_start'
   | 'oplevering'
   | 'custom'
-export type MilestoneStatus = 'nog_doen' | 'gepland' | 'bevestigd' | 'klaar'
-export type MilestoneAssignee = 'Kieke' | 'Merel' | 'Leverancier'
+export type MilestoneStatus = 'nog_doen' | 'gepland' | 'bevestigd' | 'bezig' | 'klaar'
+export type MilestoneAssignee = 'Kieke' | 'Merel' | 'Leverancier' | 'FINKA'
 
 // Planning-mijlpalen — elk project krijgt automatisch 5 vaste (zie
 // migratie-trigger create_default_milestones), zodat de projecttab en de

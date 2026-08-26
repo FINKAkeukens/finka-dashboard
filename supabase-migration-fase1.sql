@@ -662,3 +662,20 @@ ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_ass
 -- =========================================================
 
 ALTER TABLE finka_project_milestones ALTER COLUMN project_id DROP NOT NULL;
+
+-- =========================================================
+-- 32. Planning — extra mijlpaal-status 'bezig' ("Ermee bezig"), tussen
+--    Bevestigd en Klaar.
+-- =========================================================
+
+ALTER TABLE finka_project_milestones DROP CONSTRAINT IF EXISTS finka_project_milestones_status_check;
+ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_status_check
+  CHECK (status IN ('nog_doen', 'gepland', 'bevestigd', 'bezig', 'klaar'));
+
+-- =========================================================
+-- 33. Planning — extra toewijs-optie 'FINKA' (naast Kieke/Merel/Leverancier).
+-- =========================================================
+
+ALTER TABLE finka_project_milestones DROP CONSTRAINT IF EXISTS finka_project_milestones_assigned_to_check;
+ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_assigned_to_check
+  CHECK (assigned_to IS NULL OR assigned_to IN ('Kieke', 'Merel', 'Leverancier', 'FINKA'));

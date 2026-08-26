@@ -3,7 +3,7 @@ import { MilestoneAssignee, MilestoneKey, MilestoneStatus, ProjectMilestone } fr
 
 // Vaste toewijs-opties — team is klein genoeg om dit hard te coderen i.p.v.
 // een aparte gebruikerslijst op te tuigen.
-export const ASSIGNEE_OPTIONS: MilestoneAssignee[] = ['Kieke', 'Merel', 'Leverancier']
+export const ASSIGNEE_OPTIONS: MilestoneAssignee[] = ['Kieke', 'Merel', 'Leverancier', 'FINKA']
 
 // Vaste volgorde van de 5 standaardmijlpalen — 'custom'-items staan hier
 // bewust niet in, die worden los toegevoegd/verwijderd per project.
@@ -32,12 +32,13 @@ export function milestoneLabel(m: Pick<ProjectMilestone, 'milestone_key' | 'labe
 }
 
 // Vaste volgorde voor dropdowns — vroegste naar laatste stadium.
-export const MILESTONE_STATUS_ORDER: MilestoneStatus[] = ['nog_doen', 'gepland', 'bevestigd', 'klaar']
+export const MILESTONE_STATUS_ORDER: MilestoneStatus[] = ['nog_doen', 'bezig', 'gepland', 'bevestigd', 'klaar']
 
 export const MILESTONE_STATUS_LABELS: Record<MilestoneStatus, string> = {
   nog_doen: 'Nog doen',
   gepland: 'Pending',
   bevestigd: 'Bevestigd',
+  bezig: 'Ermee bezig',
   klaar: 'Klaar',
 }
 
@@ -48,6 +49,7 @@ export const MILESTONE_STATUS_COLORS: Record<MilestoneStatus, string> = {
   nog_doen: '#6B6560',
   gepland: '#D97706',
   bevestigd: '#22C55E',
+  bezig: '#2563EB',
   klaar: '#166534',
 }
 
