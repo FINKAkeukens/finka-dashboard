@@ -608,6 +608,105 @@ ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS levering_verhuislift D
 ALTER TABLE finka_quotes ADD COLUMN IF NOT EXISTS page_disclaimers JSONB DEFAULT '{}'::jsonb;
 
 -- =========================================================
+-- 24. Aansluitschema — checklistregels (leidingwerk/elektra) per project,
+--    te overhandigen aan de installateur. Elk project start met een vaste
+--    standaardlijst (zie DEFAULT_CONNECTION_ITEMS in src/lib/aansluitschema.ts,
+--    die de rijen bij eerste bezoek van het tabblad client-side seedt — geen
+--    DB-trigger nodig, in tegenstelling tot de mijlpalen, omdat staff de
+--    seed-lijst incidenteel kan willen aanpassen zonder een migratie).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_connection_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('water_afvoer', 'elektra', 'overig')),
+  standard_key TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  omschrijving TEXT NOT NULL DEFAULT '',
+  van_toepassing BOOLEAN NOT NULL DEFAULT false,
+  aantal TEXT,
+  hoogte_cm TEXT,
+  positie_toelichting TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_connection_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_connection_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_connection_items TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 25. Aansluitschema — documentmetadata, vrije tekstblokken en de visuele
+--    vooraanzicht-tekening (kastenrij + aansluitpunten) als JSONB. Eén rij
+--    per project (singleton), zelfde patroon als de JSONB-lijsten die de
+--    offerte-module al gebruikt (Quote.technical_attachments e.d.) — cabinets
+--    en pins horen altijd bij dit ene document en hebben geen losse query's
+--    elders nodig.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_connection_schema (
+  project_id UUID PRIMARY KEY REFERENCES finka_projects(id) ON DELETE CASCADE,
+  klant_referentie TEXT,
+  adres TEXT,
+  opsteller TEXT,
+  behorend_bij_tekening TEXT,
+  versie INTEGER NOT NULL DEFAULT 1,
+  groepenverdeling_tekst TEXT,
+  extra_secties JSONB NOT NULL DEFAULT '[]'::jsonb,
+  let_op_notities TEXT,
+  wand_hoogte_mm INTEGER NOT NULL DEFAULT 2700,
+  plint_hoogte_mm INTEGER NOT NULL DEFAULT 150,
+  cabinets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  pins JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_connection_schema ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_connection_schema FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_connection_schema TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 26. Vooraanzicht-upload bij de offerte — los van de bestaande "Plattegrond"
+--    (dat is een aanzicht van bovenaf en dus ongeschikt als bron voor het
+--    aansluitschema, dat een vooraanzicht van de kastenwand met
+--    kastbreedtes/artikelcodes nodig heeft om posities uit af te lezen).
+-- =========================================================
+
+ALTER TABLE finka_quotes ADD COLUMN IF NOT EXISTS vooraanzicht_url TEXT;
+
+-- =========================================================
+-- 27. Meerdere vooraanzichten per offerte (bv. hoofdwand + kookeiland van 2
+--    kanten) i.p.v. één losse vooraanzicht_url. En: het aansluitschema krijgt
+--    meerdere "wanden" — elk met een eigen kastenrij + aansluitpunten,
+--    gekoppeld aan één van deze vooraanzicht-afbeeldingen — i.p.v. één vaste
+--    kastenrij per project.
+-- =========================================================
+
+ALTER TABLE finka_quotes ADD COLUMN IF NOT EXISTS vooraanzicht_urls JSONB DEFAULT '[]'::jsonb;
+UPDATE finka_quotes SET vooraanzicht_urls = jsonb_build_array(vooraanzicht_url)
+  WHERE vooraanzicht_url IS NOT NULL AND (vooraanzicht_urls IS NULL OR vooraanzicht_urls = '[]'::jsonb);
+ALTER TABLE finka_quotes DROP COLUMN IF EXISTS vooraanzicht_url;
+
+ALTER TABLE finka_connection_schema ADD COLUMN IF NOT EXISTS wanden JSONB NOT NULL DEFAULT '[]'::jsonb;
+UPDATE finka_connection_schema SET wanden = jsonb_build_array(jsonb_build_object(
+    'id', gen_random_uuid(),
+    'label', 'Hoofdwand',
+    'bron_afbeelding_url', NULL,
+    'wand_hoogte_mm', wand_hoogte_mm,
+    'plint_hoogte_mm', plint_hoogte_mm,
+    'cabinets', cabinets,
+    'pins', pins
+  ))
+  WHERE wanden = '[]'::jsonb AND (jsonb_array_length(cabinets) > 0 OR jsonb_array_length(pins) > 0);
+ALTER TABLE finka_connection_schema DROP COLUMN IF EXISTS wand_hoogte_mm;
+ALTER TABLE finka_connection_schema DROP COLUMN IF EXISTS plint_hoogte_mm;
+ALTER TABLE finka_connection_schema DROP COLUMN IF EXISTS cabinets;
+ALTER TABLE finka_connection_schema DROP COLUMN IF EXISTS pins;
+
+-- =========================================================
 -- 28. Downloadgeschiedenis van de klant-offerte-PDF — elke keer dat iemand
 --    op "Download PDF" klikt (src/app/api/offerte/[projectId]/pdf/route.ts)
 --    komt hier een rij bij. snapshot bewaart zowel de klant-zichtbare velden

@@ -29,7 +29,12 @@ export async function renderPdf(url: string, cookieHeader: string): Promise<Buff
       })
       await page.setCookie(...cookies)
     }
-    await page.goto(url, { waitUntil: 'networkidle0' })
+    // 'load' i.p.v. 'networkidle0': in `next dev` blijft Next.js' eigen
+    // hot-reload-websocket permanent open, waardoor 'networkidle0' nooit
+    // wordt bereikt en de PDF-generatie in lokale ontwikkeling blijft hangen
+    // tot de timeout. 'load' (alle initiële resources, incl. afbeeldingen,
+    // geladen) is voor deze server-gerenderde print-pagina's voldoende.
+    await page.goto(url, { waitUntil: 'load' })
     const pdf = await page.pdf({ printBackground: true, preferCSSPageSize: true })
     return Buffer.from(pdf)
   } finally {
