@@ -133,6 +133,7 @@ export function getSpecSummary(appliance: Appliance): string {
   }
   if (s.energy_label) parts.push(`label ${s.energy_label}`)
   if (s.product_line) parts.push(String(s.product_line))
+  if (s.series) parts.push(String(s.series))
 
   return parts.join(' · ') || '—'
 }
@@ -237,6 +238,9 @@ export function specEntries(type: string, specs: ApplianceSpecs): { label: strin
   }
   if (specs.product_line) {
     entries.push({ label: 'Lijn', value: specs.product_line })
+  }
+  if (specs.series) {
+    entries.push({ label: 'Serie', value: String(specs.series) })
   }
 
   return entries.filter((e): e is { label: string; value: string } => e.value != null)

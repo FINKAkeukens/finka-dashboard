@@ -778,3 +778,18 @@ ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_sta
 ALTER TABLE finka_project_milestones DROP CONSTRAINT IF EXISTS finka_project_milestones_assigned_to_check;
 ALTER TABLE finka_project_milestones ADD CONSTRAINT finka_project_milestones_assigned_to_check
   CHECK (assigned_to IS NULL OR assigned_to IN ('Kieke', 'Merel', 'Leverancier', 'FINKA'));
+
+-- =========================================================
+-- 34. Apparatuur-type-constraint volledig gelijkgetrokken met ApplianceType
+--    in de code — 'kokendwaterkraan' bleek live te ontbreken (ondanks dat
+--    'ie in migratie #1 stond), en 'magnetron'/'vriezer'/'wijnklimaatkast'
+--    waren nooit toegevoegd sinds ze in de app werden geïntroduceerd.
+-- =========================================================
+
+ALTER TABLE finka_appliances DROP CONSTRAINT IF EXISTS finka_appliances_type_check;
+ALTER TABLE finka_appliances ADD CONSTRAINT finka_appliances_type_check
+  CHECK (type IN (
+    'kookplaat','oven','combi-oven','magnetron','vaatwasser','afzuigkap',
+    'koelkast','koelvries','vriezer','wijnklimaatkast','kokendwaterkraan',
+    'kraan','spoelbak','anders'
+  ));

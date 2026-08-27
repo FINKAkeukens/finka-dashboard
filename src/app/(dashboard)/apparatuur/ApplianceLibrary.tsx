@@ -277,6 +277,8 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   // Productlijn — zelfde generieke behandeling als energielabel: blijft
   // staan tussen categorieën door.
   const [productLineFilter, setProductLineFilter] = useState('alle')
+  // Merk — ook generiek, opties dynamisch afgeleid uit de aanwezige apparaten.
+  const [brandFilter, setBrandFilter] = useState('alle')
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('price')
   const [sortAsc, setSortAsc] = useState(true)
@@ -285,6 +287,10 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   const [specFilters, setSpecFilters] = useState<Record<string, string>>({})
 
   const typeCounts = useMemo(() => countByType(appliances), [appliances])
+  const brands = useMemo(
+    () => Array.from(new Set(appliances.map(a => a.brand))).sort((a, b) => a.localeCompare(b, 'nl')),
+    [appliances]
+  )
   const detailAppliance = appliances.find(a => a.id === detailId) ?? null
 
   // Groep waar een type bij hoort (indien van toepassing) — oven/combi-oven/
@@ -332,6 +338,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (productLineFilter !== 'alle') {
         if (productLineFilter === PRODUCT_LINE_FILTER_NONE ? !!a.specs?.product_line : a.specs?.product_line !== productLineFilter) return false
       }
+      if (brandFilter !== 'alle' && a.brand !== brandFilter) return false
       if (q) {
         const s = q.toLowerCase()
         const matchesType = TYPE_LABELS[a.type]?.toLowerCase().includes(s)
@@ -350,7 +357,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (specFilters.bowls && specs.bowls !== specFilters.bowls) return false
       return true
     })
-  }, [appliances, activeView, activeCategory, energyLabelFilters, productLineFilter, q, specFilters])
+  }, [appliances, activeView, activeCategory, energyLabelFilters, productLineFilter, brandFilter, q, specFilters])
 
   const sorted = useMemo(() => {
     const items = [...filtered]
@@ -526,6 +533,16 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                   className="w-full rounded-lg border border-[#DDD8D2] py-2 pl-8 pr-3 text-sm focus:border-[#1C1B19] focus:outline-none"
                 />
               </div>
+              <select
+                value={brandFilter}
+                onChange={e => setBrandFilter(e.target.value)}
+                className="rounded-lg border border-[#DDD8D2] bg-white px-2.5 py-1.5 text-xs text-[#6B6560] focus:outline-none focus:border-[#1C1B19]"
+              >
+                <option value="alle">Alle merken</option>
+                {brands.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
               <div className="flex gap-1">
                 {['alle', 'budget', 'midden', 'premium'].map(c => (
                   <button

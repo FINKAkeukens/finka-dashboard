@@ -150,12 +150,17 @@ export default function EditApplianceForm({
         </Field>
       </div>
 
-      <Field label="Productlijn">
-        <Select value={String(specs.product_line ?? '')} onChange={v => updateSpec('product_line', v || undefined)} options={[
-          { value: '', label: '— Geen —' },
-          ...PRODUCT_LINES.map(l => ({ value: l, label: l })),
-        ]} />
-      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Productlijn">
+          <Select value={String(specs.product_line ?? '')} onChange={v => updateSpec('product_line', v || undefined)} options={[
+            { value: '', label: '— Geen —' },
+            ...PRODUCT_LINES.map(l => ({ value: l, label: l })),
+          ]} />
+        </Field>
+        <Field label="Serie">
+          <Input value={String(specs.series ?? '')} onChange={e => updateSpec('series', e.target.value || undefined)} placeholder="bijv. iQ300, iQ700, Serie 8..." />
+        </Field>
+      </div>
 
       {/* Specs */}
       <div className="border-t border-[#F0EDE9] pt-4 space-y-3">

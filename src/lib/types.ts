@@ -89,6 +89,8 @@ export interface ApplianceSpecs {
   width_cm?: number
   energy_label?: EnergyLabel
   product_line?: ProductLine
+  // Merk-specifieke productserie, vrije tekst (bv. "iQ300", "iQ700", "Serie 8", "Mastery").
+  series?: string
   [key: string]: unknown
 }
 

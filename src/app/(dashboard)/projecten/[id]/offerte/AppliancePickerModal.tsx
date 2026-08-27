@@ -11,13 +11,21 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Search, X } from 'lucide-react'
-import { Appliance, ApplianceCategory } from '@/lib/types'
+import { Appliance, ApplianceCategory, ProductLine } from '@/lib/types'
 import { TYPE_LABELS, TYPE_ORDER, CATEGORY_COLORS, formatPrice, getSpecSummary } from '@/lib/appliance-utils'
 
 const CATEGORY_LABELS: Record<ApplianceCategory, string> = {
   budget: 'Budget',
   midden: 'Midden',
   premium: 'Premium',
+}
+
+// Welke productlijn er relevant is zodra dit merk gekozen is — alleen dan
+// tonen we het bijbehorende filter, anders staat er een leeg/nutteloos
+// vinkje voor merken die deze lijn helemaal niet voeren.
+const BRAND_PRODUCT_LINE: Record<string, ProductLine> = {
+  Siemens: 'Studioline',
+  Bosch: 'Accentline',
 }
 
 export default function AppliancePickerModal({
@@ -34,7 +42,10 @@ export default function AppliancePickerModal({
   const [search, setSearch] = useState('')
   const [brandFilter, setBrandFilter] = useState('alle')
   const [categoryFilter, setCategoryFilter] = useState('alle')
-  const [typeFilter, setTypeFilter] = useState('alle')
+  // Meerdere types tegelijk aanvinken kan (bv. vaatwasser + koelvries in één
+  // keer), leeg = geen filter op type.
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set())
+  const [productLineOnly, setProductLineOnly] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const brands = useMemo(
@@ -42,20 +53,39 @@ export default function AppliancePickerModal({
     [appliances]
   )
 
-  const filtered = appliances.filter((a) => {
-    if (brandFilter !== 'alle' && a.brand !== brandFilter) return false
-    if (categoryFilter !== 'alle' && a.category !== categoryFilter) return false
-    if (typeFilter !== 'alle' && a.type !== typeFilter) return false
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      a.brand.toLowerCase().includes(q) ||
-      a.model.toLowerCase().includes(q) ||
-      TYPE_LABELS[a.type]?.toLowerCase().includes(q)
-    )
-  })
+  const relevantProductLine = BRAND_PRODUCT_LINE[brandFilter]
 
-  const selected = appliances.filter((a) => selectedIds.has(a.id))
+  // Zelfde sortering als de geselecteerde lijst: per type gegroepeerd, dan
+  // op prijs laag naar hoog — makkelijker scannen dan alfabetisch op merk.
+  const filtered = appliances
+    .filter((a) => {
+      if (brandFilter !== 'alle' && a.brand !== brandFilter) return false
+      if (categoryFilter !== 'alle' && a.category !== categoryFilter) return false
+      if (typeFilters.size > 0 && !typeFilters.has(a.type)) return false
+      if (productLineOnly && relevantProductLine && a.specs?.product_line !== relevantProductLine) return false
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (
+        a.brand.toLowerCase().includes(q) ||
+        a.model.toLowerCase().includes(q) ||
+        TYPE_LABELS[a.type]?.toLowerCase().includes(q)
+      )
+    })
+    .sort((a, b) => {
+      const typeCmp = TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+      if (typeCmp !== 0) return typeCmp
+      return (a.price ?? 0) - (b.price ?? 0)
+    })
+
+  // Geselecteerde lijst altijd gegroepeerd per type (zelfde volgorde als
+  // overal elders in de app), en binnen elk type op prijs laag naar hoog.
+  const selected = appliances
+    .filter((a) => selectedIds.has(a.id))
+    .sort((a, b) => {
+      const typeCmp = TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+      if (typeCmp !== 0) return typeCmp
+      return (a.price ?? 0) - (b.price ?? 0)
+    })
 
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
@@ -66,13 +96,35 @@ export default function AppliancePickerModal({
     })
   }
 
+  function toggleType(t: string) {
+    setTypeFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(t)) next.delete(t)
+      else next.add(t)
+      return next
+    })
+  }
+
   function reset() {
     setSearch('')
     setBrandFilter('alle')
     setCategoryFilter('alle')
-    setTypeFilter('alle')
+    setTypeFilters(new Set())
+    setProductLineOnly(false)
     setSelectedIds(new Set())
   }
+
+  const totalPrice = selected.reduce((sum, a) => sum + (a.price ?? 0), 0)
+  // Alleen kopjes per type tonen als de lijst er meer dan één bevat — bij
+  // één type is een herhaald kopje overbodig. Buiten de JSX berekend (i.p.v.
+  // een mutable variabele tijdens het renderen) zodat de compiler niet
+  // struikelt over herhaalde toewijzingen in een .map().
+  const showTypeDividers = new Set(filtered.map((a) => a.type)).size > 1
+  const filteredWithHeaders = filtered.reduce<{ appliance: Appliance; showHeader: boolean }[]>((acc, a) => {
+    const prevType = acc[acc.length - 1]?.appliance.type
+    acc.push({ appliance: a, showHeader: showTypeDividers && a.type !== prevType })
+    return acc
+  }, [])
 
   function handleConfirm() {
     selected.forEach((a) => onSelect(a))
@@ -82,144 +134,171 @@ export default function AppliancePickerModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Apparaat uit bibliotheek toevoegen</DialogTitle>
         </DialogHeader>
 
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B6560]" />
-          <Input
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Zoek op merk, model of type..."
-            className="pl-8"
-          />
-        </div>
+        <div className="flex gap-5 flex-1 min-h-0">
+          {/* Links: zoeken, filters, doorzoekbare lijst */}
+          <div className="flex-1 min-w-0 flex flex-col gap-3">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B6560]" />
+              <Input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Zoek op merk, model of type..."
+                className="pl-8"
+              />
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={brandFilter}
-            onChange={(e) => setBrandFilter(e.target.value)}
-            className="text-xs bg-[#F7F5F2] border border-[#DDD8D2] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#1C1B19]"
-          >
-            <option value="alle">Alle merken</option>
-            {brands.map((b) => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-
-          <div className="flex gap-1 flex-wrap">
-            {(['alle', 'budget', 'midden', 'premium'] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategoryFilter(c)}
-                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                  categoryFilter === c
-                    ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
-                    : 'bg-white text-[#6B6560] border-[#DDD8D2] hover:border-[#1C1B19]'
-                }`}
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={brandFilter}
+                onChange={(e) => { setBrandFilter(e.target.value); setProductLineOnly(false) }}
+                className="text-xs bg-[#F7F5F2] border border-[#DDD8D2] rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#1C1B19]"
               >
-                {c === 'alle' ? 'Alle categorieën' : CATEGORY_LABELS[c]}
-              </button>
-            ))}
-          </div>
-        </div>
+                <option value="alle">Alle merken</option>
+                {brands.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
 
-        <div className="flex gap-1 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setTypeFilter('alle')}
-            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-              typeFilter === 'alle'
-                ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
-                : 'bg-white text-[#6B6560] border-[#DDD8D2] hover:border-[#1C1B19]'
-            }`}
-          >
-            Alle types
-          </button>
-          {TYPE_ORDER.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTypeFilter(t)}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                typeFilter === t
-                  ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
-                  : 'bg-white text-[#6B6560] border-[#DDD8D2] hover:border-[#1C1B19]'
-              }`}
-            >
-              {TYPE_LABELS[t]}
-            </button>
-          ))}
-        </div>
-
-        <div className="overflow-y-auto -mx-6 px-6">
-          {!filtered.length ? (
-            <p className="text-sm text-[#6B6560] py-8 text-center">Geen apparatuur gevonden</p>
-          ) : (
-            <div className="divide-y divide-[#DDD8D2]">
-              {filtered.map((a) => (
-                <label
-                  key={a.id}
-                  className="w-full flex items-center gap-3 py-3 text-left hover:bg-[#F7F5F2] transition-colors px-2 -mx-2 rounded-lg cursor-pointer"
-                >
-                  <Checkbox
-                    checked={selectedIds.has(a.id)}
-                    onCheckedChange={() => toggleSelected(a.id)}
-                  />
-                  <div className="min-w-0 flex-1 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[#1C1B19] truncate">
-                        {a.brand} {a.model}
-                      </p>
-                      <p className="text-xs text-[#6B6560]">
-                        {TYPE_LABELS[a.type]} · {getSpecSummary(a)}
-                        {a.category && (
-                          <span className={`ml-2 px-1.5 py-0.5 rounded border text-[10px] ${CATEGORY_COLORS[a.category]}`}>
-                            {CATEGORY_LABELS[a.category]}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <span className="text-sm font-medium text-[#1C1B19] shrink-0">{formatPrice(a.price)}</span>
-                  </div>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-[#DDD8D2] pt-3 space-y-2">
-          {selected.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {selected.map((a) => (
-                <span
-                  key={a.id}
-                  className="inline-flex items-center gap-1 pl-2 pr-1 py-1 text-xs bg-[#F0EDE9] border border-[#DDD8D2] rounded-full"
-                >
-                  {a.brand} {a.model}
+              <div className="flex gap-1 flex-wrap">
+                {(['alle', 'budget', 'midden', 'premium'] as const).map((c) => (
                   <button
+                    key={c}
                     type="button"
-                    onClick={() => toggleSelected(a.id)}
-                    className="text-[#9A948D] hover:text-[#1C1B19]"
-                    title="Verwijderen uit selectie"
+                    onClick={() => setCategoryFilter(c)}
+                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                      categoryFilter === c
+                        ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
+                        : 'bg-white text-[#6B6560] border-[#DDD8D2] hover:border-[#1C1B19]'
+                    }`}
                   >
-                    <X size={12} />
+                    {c === 'alle' ? 'Alle categorieën' : CATEGORY_LABELS[c]}
                   </button>
-                </span>
-              ))}
+                ))}
+              </div>
+
+              {relevantProductLine && (
+                <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-[#DDD8D2] text-[#6B6560] cursor-pointer hover:border-[#1C1B19]">
+                  <Checkbox checked={productLineOnly} onCheckedChange={(v) => setProductLineOnly(!!v)} />
+                  Alleen {relevantProductLine}
+                </label>
+              )}
             </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#6B6560]">
-              {selected.length} apparaat{selected.length === 1 ? '' : 'en'} geselecteerd
-            </span>
-            <Button onClick={handleConfirm} disabled={!selected.length}>
-              Toevoegen{selected.length ? ` (${selected.length})` : ''}
-            </Button>
+
+            <div>
+              <p className="text-xs text-[#9A948D] mb-1.5">Type (meerdere mogelijk)</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {TYPE_ORDER.map((t) => (
+                  <label
+                    key={t}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border cursor-pointer transition-colors ${
+                      typeFilters.has(t)
+                        ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
+                        : 'bg-white text-[#6B6560] border-[#DDD8D2] hover:border-[#1C1B19]'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={typeFilters.has(t)}
+                      onCheckedChange={() => toggleType(t)}
+                      className={typeFilters.has(t) ? 'border-white' : ''}
+                    />
+                    {TYPE_LABELS[t]}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
+              {!filtered.length ? (
+                <p className="text-sm text-[#6B6560] py-8 text-center">Geen apparatuur gevonden</p>
+              ) : (
+                <div className="divide-y divide-[#DDD8D2]">
+                  {filteredWithHeaders.map(({ appliance: a, showHeader }) => {
+                    return (
+                    <div key={a.id}>
+                      {showHeader && (
+                        <p className="pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-[#9A948D] text-center">
+                          {TYPE_LABELS[a.type]}
+                        </p>
+                      )}
+                    <label
+                      className="w-full flex items-center gap-3 py-3 text-left hover:bg-[#F7F5F2] transition-colors px-2 -mx-2 rounded-lg cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={selectedIds.has(a.id)}
+                        onCheckedChange={() => toggleSelected(a.id)}
+                      />
+                      <div className="min-w-0 flex-1 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#1C1B19] truncate">
+                            {a.brand} {a.model}
+                          </p>
+                          <p className="text-xs text-[#6B6560]">
+                            {TYPE_LABELS[a.type]} · {getSpecSummary(a)}
+                            {a.category && (
+                              <span className={`ml-2 px-1.5 py-0.5 rounded border text-[10px] ${CATEGORY_COLORS[a.category]}`}>
+                                {CATEGORY_LABELS[a.category]}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <span className="text-sm font-medium text-[#1C1B19] shrink-0">{formatPrice(a.price)}</span>
+                      </div>
+                    </label>
+                    </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Rechts: geselecteerde apparaten — eigen kolom zodat je bij veel
+              selecties niet in een piepklein lijstje hoeft te scrollen. */}
+          <div className="w-72 shrink-0 flex flex-col border-l border-[#DDD8D2] pl-5">
+            <p className="text-xs font-medium text-[#1C1B19] mb-2">
+              Geselecteerd{selected.length ? ` (${selected.length})` : ''}
+            </p>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+              {!selected.length ? (
+                <p className="text-xs text-[#9A948D]">Nog niets geselecteerd</p>
+              ) : (
+                selected.map((a) => (
+                  <div key={a.id} className="rounded-lg border border-[#DDD8D2] px-2.5 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] uppercase tracking-wide text-[#6B6560] bg-[#F0EDE9] rounded px-1.5 py-0.5">
+                        {TYPE_LABELS[a.type]}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleSelected(a.id)}
+                        className="text-[#9A948D] hover:text-red-600"
+                        title="Verwijderen uit selectie"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p className="text-xs font-medium text-[#1C1B19] mt-1">{a.brand} {a.model}</p>
+                    <p className="text-[11px] text-[#6B6560]">{getSpecSummary(a)}</p>
+                    <p className="text-xs font-medium text-[#1C1B19] mt-1">{formatPrice(a.price)}</p>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="border-t border-[#DDD8D2] mt-2 pt-2 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#6B6560]">Totaal</span>
+                <span className="font-semibold text-[#1C1B19]">{formatPrice(totalPrice)}</span>
+              </div>
+              <Button onClick={handleConfirm} disabled={!selected.length} className="w-full">
+                Toevoegen{selected.length ? ` (${selected.length})` : ''}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

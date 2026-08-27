@@ -44,6 +44,7 @@ export default function NieuweApparatuurPage() {
     const specs: Record<string, unknown> = {}
     if (form.get('energy_label')) specs.energy_label = form.get('energy_label')
     if (form.get('product_line')) specs.product_line = form.get('product_line')
+    if (form.get('series')) specs.series = form.get('series')
     if (type === 'kookplaat') {
       if (form.get('energy_type')) specs.energy_type = form.get('energy_type')
       if (form.get('zones')) specs.zones = Number(form.get('zones'))
@@ -181,13 +182,19 @@ export default function NieuweApparatuurPage() {
           </select>
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Productlijn</Label>
-          <select name="product_line"
-            className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
-            <option value="">— Geen —</option>
-            {PRODUCT_LINES.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Productlijn</Label>
+            <select name="product_line"
+              className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+              <option value="">— Geen —</option>
+              {PRODUCT_LINES.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Serie</Label>
+            <Input name="series" placeholder="bijv. iQ300, iQ700, Serie 8..." />
+          </div>
         </div>
 
         {/* Type-specifieke specs */}
