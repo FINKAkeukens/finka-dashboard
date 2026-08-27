@@ -197,3 +197,79 @@ export async function extractKitchenSummary(pdfBase64: string): Promise<KitchenS
     return { summary: [], totaalExclBtw: null }
   }
 }
+
+interface ConnectionCatalogEntry {
+  standard_key: string | null
+  omschrijving: string
+}
+
+export interface ConnectionSuggestionResult {
+  items: Array<{ standard_key: string; van_toepassing?: boolean; aantal?: string; hoogte_cm?: string; positie_toelichting?: string }>
+  nieuwe_regels: Array<{ category: 'water_afvoer' | 'elektra' | 'overig'; omschrijving: string; aantal?: string; hoogte_cm?: string; positie_toelichting?: string }>
+  cabinets_suggestie: Array<{ breedte_mm: number; artikelcode: string; label?: string }>
+  pins_suggestie: Array<{ type: 'warm_water' | 'koud_water' | 'afvoer' | 'elektra'; label: string; hoogte_cm?: string; x?: number }>
+}
+
+// Stelt een concept-invulling voor het aansluitschema voor — vult NOOIT iets
+// automatisch in de database. De aanroepende route/UI toont dit altijd als
+// een door Merel te beoordelen voorstel (zie AansluitschemaTab.tsx). Maten
+// komen alleen uit wat zij zelf typt/aanlevert of wat rechtstreeks van de
+// bijgevoegde tekening af te lezen is — de AI verzint geen posities zonder
+// brontekst (zie de "geen AI-beeldgeneratie op technische
+// tekeningen"-afspraak in het offerte-module-geheugen). Zowel de kastenrij
+// als de pin-posities worden uit de tekening zelf gelezen, zodat Merel alleen
+// hoeft aan te vinken wélke aansluitingen nodig zijn — niet waar ze komen.
+const CONNECTION_SUGGESTION_PROMPT = (catalogus: ConnectionCatalogEntry[]) => `Je bent een assistent voor een Nederlandse keukenontwerper (FINKA Keukens). Je helpt een aansluitschema (leidingwerk + elektra) voor de installateur invullen, op basis van vrije tekst van de keukenontwerper en/of een bijgevoegde tekening/plattegrond (bv. een Winner Flex/CAD-uitdraai van de kastenwand).
+
+De vaste standaardcatalogus met regels (per project aan/uit te vinken) is:
+${catalogus.map((c) => `- ${c.standard_key ?? '(eigen regel)'}: ${c.omschrijving}`).join('\n')}
+
+Analyseer de input en stel voor:
+1. "items": voor elke standaardregel die overduidelijk van toepassing is, een object met standard_key, van_toepassing: true, en indien te herleiden: aantal, hoogte_cm (in centimeter, vanaf afgewerkte vloer — vaste conventie), positie_toelichting. Laat regels die je niet kunt onderbouwen vanuit de input weg (geen giswerk).
+2. "nieuwe_regels": alleen als er een aansluiting genoemd wordt die niet in de standaardcatalogus past — category (water_afvoer/elektra/overig), omschrijving, en evt. aantal/hoogte_cm/positie_toelichting.
+3. "cabinets_suggestie": ALLEEN als er een tekening is bijgevoegd met een duidelijk herkenbare kastenrij (vooraanzicht) — lees de kasten van links naar rechts af: breedte_mm (schat op basis van de vermelde maten/maatlat), artikelcode (indien zichtbaar/leesbaar op de tekening), label (bv. "Spoelkast", "Vaatwasser" — alleen als herkenbaar). Dit vormt de basis waarop de pin-posities hieronder worden berekend.
+4. "pins_suggestie": ALLEEN als je uit de tekening kunt aflezen wáár een aangevinkte aansluiting moet komen — {type: warm_water|koud_water|afvoer|elektra, label, hoogte_cm (indien af te lezen, anders leeg laten — nooit verzinnen), x (0-1 fractie van de totale breedte van de kastenrij hierboven, van links naar rechts)}. Baseer x op de zichtbare positie in de tekening (bv. "spoelbak in de 4e kast" → x op het midden van die kast). Bij twijfel: laat dit leeg, dit is een startpunt dat de gebruiker zelf corrigeert, nooit een gok.
+
+Antwoord ALLEEN met geldige JSON:
+{
+  "items": [...],
+  "nieuwe_regels": [...],
+  "cabinets_suggestie": [...],
+  "pins_suggestie": [...]
+}`
+
+export async function extractConnectionSuggestions(
+  vrijeTekst: string,
+  catalogus: ConnectionCatalogEntry[],
+  plattegrondUrl?: string | null
+): Promise<ConnectionSuggestionResult> {
+  const content: Anthropic.Messages.ContentBlockParam[] = []
+  if (plattegrondUrl) {
+    content.push({ type: 'image', source: { type: 'url', url: plattegrondUrl } })
+  }
+  content.push({
+    type: 'text',
+    text: `${CONNECTION_SUGGESTION_PROMPT(catalogus)}\n\nVrije tekst van de keukenontwerper:\n${vrijeTekst.slice(0, 4000) || '(geen — baseer je uitsluitend op de bijgevoegde tekening)'}`,
+  })
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2048,
+    messages: [{ role: 'user', content }],
+  })
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON found')
+    const parsed = JSON.parse(jsonMatch[0])
+    return {
+      items: Array.isArray(parsed.items) ? parsed.items : [],
+      nieuwe_regels: Array.isArray(parsed.nieuwe_regels) ? parsed.nieuwe_regels : [],
+      cabinets_suggestie: Array.isArray(parsed.cabinets_suggestie) ? parsed.cabinets_suggestie : [],
+      pins_suggestie: Array.isArray(parsed.pins_suggestie) ? parsed.pins_suggestie : [],
+    }
+  } catch {
+    return { items: [], nieuwe_regels: [], cabinets_suggestie: [], pins_suggestie: [] }
+  }
+}

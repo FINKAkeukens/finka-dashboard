@@ -7,6 +7,7 @@ const tabs = [
   { id: 'offerte', label: 'Offerte' },
   { id: 'klantkeuzes', label: 'Klantkeuzes' },
   { id: 'planning', label: 'Planning' },
+  { id: 'aansluitschema', label: 'Aansluitschema' },
   { id: 'facturen', label: 'Facturen' },
   { id: 'documenten', label: 'Documenten' },
   { id: 'notities', label: 'Notities' },

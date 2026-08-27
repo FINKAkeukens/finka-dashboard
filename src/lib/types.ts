@@ -320,6 +320,12 @@ export interface Quote {
   version: number
   status: QuoteStatus
   plattegrond_url: string | null
+  // Vooraanzicht(en) van de kastenwand (bv. Winner Flex-uitdraai) — apart van
+  // plattegrond_url (aanzicht van bovenaf): het aansluitschema heeft dit
+  // vooraanzicht nodig om kastbreedtes/artikelcodes/posities af te lezen.
+  // Meerdere mogelijk (bv. hoofdwand + kookeiland van 2 kanten) — elk wordt
+  // in het aansluitschema gekoppeld aan een eigen "wand".
+  vooraanzicht_urls: string[]
   render_urls: string[]
   standaard_afbeeldingen: string[]
   cover_image_url: string | null
@@ -558,6 +564,95 @@ export interface ProjectMilestone {
   label: string | null
   notes: string | null
   assigned_to: MilestoneAssignee | null
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Aansluitschema — checklist (leidingwerk/elektra) + visuele vooraanzicht-
+// tekening per project. Zie src/lib/aansluitschema.ts voor de vaste
+// standaardlijst en render-helpers.
+// ---------------------------------------------------------------------------
+
+export type ConnectionCategory = 'water_afvoer' | 'elektra' | 'overig'
+
+// Eén regel uit de checklist (bv. "Warm water aansluiting spoelbak"). Elk
+// project start met de vaste standaardregels (standard_key gezet); staff kan
+// daarnaast eigen regels toevoegen (standard_key = null).
+export interface ConnectionItem {
+  id: string
+  project_id: string
+  category: ConnectionCategory
+  standard_key: string | null
+  sort_order: number
+  omschrijving: string
+  van_toepassing: boolean
+  aantal: string | null
+  // Vrije tekst i.p.v. numeriek: het brondocument gebruikt ook "vloer"/"p.m."
+  hoogte_cm: string | null
+  positie_toelichting: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PinType = 'warm_water' | 'koud_water' | 'afvoer' | 'elektra'
+
+// Eén aansluitpunt op de visuele vooraanzicht-tekening. connection_item_id
+// koppelt 'm optioneel aan een checklistregel (om hoogte_cm over te nemen),
+// maar heeft altijd zijn eigen hoogte_cm zodat een pin ook los kan bestaan.
+export interface ConnectionPin {
+  id: string
+  connection_item_id: string | null
+  x: number // 0-1 fractie van de breedte van de kastenrij
+  type: PinType
+  label: string
+  hoogte_cm: string
+}
+
+// Eén kastblok in de kastenrij-tekening, van links naar rechts.
+export interface ConnectionCabinet {
+  id: string
+  sort_order: number
+  breedte_mm: number
+  artikelcode: string
+  label: string | null
+  is_aansluitzone: boolean
+}
+
+export interface ConnectionSectionBlock {
+  titel: string
+  tekst: string
+}
+
+// Eén vooraanzicht-tekening met zijn eigen kastenrij + aansluitpunten — een
+// project kan er meerdere hebben (bv. hoofdwand + kookeiland van 2 kanten),
+// elk gekoppeld aan een eigen geüploade vooraanzicht-afbeelding
+// (Quote.vooraanzicht_urls) waaruit de AI kastbreedtes/posities leest.
+export interface ConnectionWand {
+  id: string
+  label: string
+  bron_afbeelding_url: string | null
+  wand_hoogte_mm: number
+  plint_hoogte_mm: number
+  cabinets: ConnectionCabinet[]
+  pins: ConnectionPin[]
+}
+
+// Documentmetadata + vrije tekst + de wanden (elk met eigen tekening), één
+// rij per project. De checklistregels zelf staan los in finka_connection_items
+// en zijn wand-onafhankelijk (een aansluiting geldt projectbreed, alleen de
+// visuele positie verschilt per wand).
+export interface ConnectionSchema {
+  project_id: string
+  klant_referentie: string | null
+  adres: string | null
+  opsteller: string | null
+  behorend_bij_tekening: string | null
+  versie: number
+  groepenverdeling_tekst: string | null
+  extra_secties: ConnectionSectionBlock[]
+  let_op_notities: string | null
+  wanden: ConnectionWand[]
   created_at: string
   updated_at: string
 }

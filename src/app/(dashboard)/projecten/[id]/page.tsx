@@ -10,9 +10,10 @@ import ComingSoonTab from './ComingSoonTab'
 import HistoryTab from './HistoryTab'
 import QuoteEditor from './offerte/QuoteEditor'
 import PlanningTab from './PlanningTab'
+import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
-import { Appliance, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
+import { Appliance, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -62,6 +63,27 @@ export default async function ProjectDetailPage({
       .eq('project_id', id)
       .order('sort_order')
     milestones = (data ?? []) as ProjectMilestone[]
+  }
+
+  let connectionItems: ConnectionItem[] = []
+  let connectionSchema: ConnectionSchema | null = null
+  let vooraanzichtUrls: string[] = []
+  if (tab === 'aansluitschema') {
+    const [{ data: itemsData }, { data: schemaData }, { data: latestQuote }] = await Promise.all([
+      supabase.from('finka_connection_items').select('*').eq('project_id', id).order('sort_order'),
+      supabase.from('finka_connection_schema').select('*').eq('project_id', id).maybeSingle(),
+      supabase
+        .from('finka_quotes')
+        .select('vooraanzicht_urls')
+        .eq('project_id', id)
+        .is('archived_at', null)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
+    connectionItems = (itemsData ?? []) as ConnectionItem[]
+    connectionSchema = schemaData as ConnectionSchema | null
+    vooraanzichtUrls = (latestQuote as { vooraanzicht_urls: string[] | null } | null)?.vooraanzicht_urls ?? []
   }
 
   let quote: Quote | null = null
@@ -138,6 +160,14 @@ export default async function ProjectDetailPage({
         <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} eurolineRates={eurolineRates} werkbladRates={werkbladRates} />
       ) : tab === 'planning' ? (
         <PlanningTab projectId={id} milestones={milestones} />
+      ) : tab === 'aansluitschema' ? (
+        <AansluitschemaTab
+          projectId={id}
+          project={project}
+          items={connectionItems}
+          schema={connectionSchema}
+          vooraanzichtUrls={vooraanzichtUrls}
+        />
       ) : tab === 'notities' ? (
         <NotesPanel projectId={id} />
       ) : (
