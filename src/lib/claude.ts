@@ -32,12 +32,13 @@ Extraheer alle keukenapparatuur die vermeld wordt. Voor elk product, geef:
   koelkast: fridge_liters, freezer (true/false), db_sound
   kokendwaterkraan: functions_count (getal uit X-in-1), has_sparkling (true/false), tank_liters, finish
   Voeg altijd db_sound toe als het vermeld staat.
+- notes: het originele beschrijvingsregel/onderschrift van DIT specifieke product zoals het in het brondocument staat (bv. kleur, uitvoering, materiaal, bijzondere kenmerken). Overtypen/parafraseren mag, weglaten niet als er tekst bij staat — dit helpt om te bepalen wat voor apparaat het precies is. Leeg laten als er niets vermeldenswaardigs bij dit product staat.
 
-Geef ook:
+Geef ook (dit zijn gegevens over de hele offerte, niet per product):
 - supplier_name: naam van de leverancier
 - supplier_email: e-mailadres van de leverancier
 - quote_date: datum van de offerte (YYYY-MM-DD), als vermeld
-- notes: korte samenvatting van bijzonderheden
+- notes: korte samenvatting van bijzonderheden van de hele offerte (niet hetzelfde als de notes per product hierboven)
 
 Antwoord ALLEEN met geldige JSON:
 {
@@ -56,6 +57,7 @@ type ExtractionResult = {
     price?: number
     category?: string
     specs: Record<string, unknown>
+    notes?: string
   }>
   supplier_name?: string
   supplier_email?: string
@@ -132,6 +134,8 @@ const KITCHEN_SUMMARY_PROMPT = `Je bent een assistent voor een Nederlandse keuke
 
 Maak hiervan een overzichtelijke samenvatting in gewone, klantvriendelijke taal — géén artikelnummers, alleen het type onderdeel, kleur en maat. De klant leest dit, dus het moet leesbaar zijn zonder vakjargon of interne codes.
 
+Alle maten geef je ALTIJD in millimeters (mm) weer, ook als het brondocument de maat in cm of m vermeldt — reken dan zelf om (1 cm = 10 mm, 1 m = 1000 mm) en schrijf het resultaat als een geheel getal gevolgd door "mm", zonder spatie (bv. "600mm", niet "60cm" of "60 cm").
+
 Voorbeelden van hoe regels eruit moeten zien (dit is de stijl, niet de inhoud):
 - "Hoge kast, 2080mm"
 - "Plint, 130mm"
@@ -139,8 +143,8 @@ Voorbeelden van hoe regels eruit moeten zien (dit is de stijl, niet de inhoud):
 - "Handgrepen, RVS-look"
 - "Greeploze lage kasten, 780mm"
 - "Corpuskleur: wit"
-- "4x ladekast, 60cm breed"
-- "2x hoekkast, 90cm breed"
+- "4x ladekast, 600mm breed"
+- "2x hoekkast, 900mm breed"
 
 Groepeer waar zinvol (bv. "3x hoge kast, 2080mm" i.p.v. drie losse regels). Vat samen op basis van wat je in het document ziet: kastmaten en -aantallen, plint, front-/greepstijl, kleuren/afwerkingen, en andere herkenbare hoofdonderdelen. Sla pure artikelnummers, leveranciersinterne codes en boekhoudkundige regels over.
 

@@ -42,7 +42,16 @@ interface EmailData {
 export async function fetchRecentOfferteEmails(refreshToken: string, maxResults = 50): Promise<EmailData[]> {
   const gmail = await getGmailClient(refreshToken)
 
-  const query = '(offerte OR offertenummer OR prijslijst OR quotation OR aanbieding OR prijsopgave OR from:info@cebin.nl) -in:sent -from:contact@finkakeukens.nl -from:merelhazes@gmail.com newer_than:365d'
+  // Zoekwoorden beperkt tot het onderwerp (niet de hele mailtekst) — alle tot
+  // nu toe succesvol verwerkte offertes hadden het woord al in het onderwerp
+  // staan, en zoeken in de hele body trok irrelevante mail aan die het woord
+  // toevallig érgens in de tekst had (bv. een verzekeringsmail met
+  // "prijsopgave" in de bijlage-tekst). "aanbieding" is te generiek en
+  // geschrapt. from:info@cebin.nl blijft wél breed (vangt af en toe een
+  // offerte zonder het gebruikelijke "Offerte cebin nr:"-onderwerp), maar
+  // sluit expliciet de administratieve mailtypes uit die daar het gros van
+  // de ruis vormden (orderbevestigingen, facturen, betaallinkjes, samples).
+  const query = '(subject:offerte OR subject:offertenummer OR subject:prijslijst OR subject:quotation OR subject:prijsopgave OR from:info@cebin.nl) -in:sent -from:contact@finkakeukens.nl -from:merelhazes@gmail.com -subject:(orderbevestiging OR "ideal link" OR factuur OR "aanpassing order" OR kleurstalen OR verzekering) newer_than:365d'
 
   const { data } = await gmail.users.messages.list({
     userId: 'me',

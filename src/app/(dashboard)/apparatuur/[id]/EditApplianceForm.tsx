@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS } from '@/lib/appliance-utils'
+import { ENERGY_LABELS, PRODUCT_LINES } from '@/lib/appliance-utils'
 import { Trash2 } from 'lucide-react'
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
@@ -149,6 +149,13 @@ export default function EditApplianceForm({
           ]} />
         </Field>
       </div>
+
+      <Field label="Productlijn">
+        <Select value={String(specs.product_line ?? '')} onChange={v => updateSpec('product_line', v || undefined)} options={[
+          { value: '', label: '— Geen —' },
+          ...PRODUCT_LINES.map(l => ({ value: l, label: l })),
+        ]} />
+      </Field>
 
       {/* Specs */}
       <div className="border-t border-[#F0EDE9] pt-4 space-y-3">

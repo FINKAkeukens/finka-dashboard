@@ -4,6 +4,7 @@ export type ApplianceType = 'kookplaat' | 'oven' | 'vaatwasser' | 'afzuigkap' | 
 export type OvenSubtype = 'solo' | 'combi-magnetron' | 'stoom'
 // Huidige EU-energielabelschaal (A = zuinigst, G = minst zuinig).
 export type EnergyLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'
+export type ProductLine = 'Studioline' | 'Accentline'
 export type EmailStatus = 'pending' | 'processing' | 'processed' | 'skipped'
 
 export interface Customer {
@@ -87,6 +88,7 @@ export interface ApplianceSpecs {
   color?: string
   width_cm?: number
   energy_label?: EnergyLabel
+  product_line?: ProductLine
   [key: string]: unknown
 }
 

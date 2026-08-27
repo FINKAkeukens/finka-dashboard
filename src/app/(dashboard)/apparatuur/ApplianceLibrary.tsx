@@ -11,6 +11,7 @@ import {
   ENERGY_LABELS,
   OVEN_GROUP,
   OVEN_SUBTYPE_LABELS,
+  PRODUCT_LINES,
   TYPE_LABELS,
   TYPE_ORDER,
   countByType,
@@ -27,6 +28,8 @@ import {
 } from '@/components/ui/sheet'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Search, X, ShoppingCart, Trash2, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
+
+const PRODUCT_LINE_FILTER_NONE = '__geen_lijn__'
 
 // Meerkeuze-dropdown voor energielabel — eigen implementatie (i.p.v. de
 // shadcn DropdownMenu) omdat deze app geen --popover/--accent hover-tokens
@@ -271,6 +274,9 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   // dan specFilters, die per type-specifiek en wél gereset worden. Meerdere
   // labels tegelijk selecteren kan (bv. A + B), leeg = geen filter.
   const [energyLabelFilters, setEnergyLabelFilters] = useState<Set<string>>(new Set())
+  // Productlijn — zelfde generieke behandeling als energielabel: blijft
+  // staan tussen categorieën door.
+  const [productLineFilter, setProductLineFilter] = useState('alle')
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('price')
   const [sortAsc, setSortAsc] = useState(true)
@@ -323,6 +329,9 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       }
       if (activeCategory !== 'alle' && a.category !== activeCategory) return false
       if (energyLabelFilters.size > 0 && !(a.specs?.energy_label && energyLabelFilters.has(a.specs.energy_label))) return false
+      if (productLineFilter !== 'alle') {
+        if (productLineFilter === PRODUCT_LINE_FILTER_NONE ? !!a.specs?.product_line : a.specs?.product_line !== productLineFilter) return false
+      }
       if (q) {
         const s = q.toLowerCase()
         const matchesType = TYPE_LABELS[a.type]?.toLowerCase().includes(s)
@@ -341,7 +350,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (specFilters.bowls && specs.bowls !== specFilters.bowls) return false
       return true
     })
-  }, [appliances, activeView, activeCategory, energyLabelFilters, q, specFilters])
+  }, [appliances, activeView, activeCategory, energyLabelFilters, productLineFilter, q, specFilters])
 
   const sorted = useMemo(() => {
     const items = [...filtered]
@@ -533,6 +542,21 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                 ))}
               </div>
               <EnergyLabelFilter selected={energyLabelFilters} onChange={setEnergyLabelFilters} />
+              <div className="flex gap-1">
+                {(['alle', ...PRODUCT_LINES, PRODUCT_LINE_FILTER_NONE] as const).map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setProductLineFilter(v)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                      productLineFilter === v
+                        ? 'border-[#1C1B19] bg-[#1C1B19] text-white'
+                        : 'border-[#DDD8D2] text-[#6B6560] hover:border-[#1C1B19]'
+                    }`}
+                  >
+                    {v === 'alle' ? 'Alle lijnen' : v === PRODUCT_LINE_FILTER_NONE ? 'Geen lijn' : v}
+                  </button>
+                ))}
+              </div>
             </div>
             {SpecFilterRow()}
           </div>

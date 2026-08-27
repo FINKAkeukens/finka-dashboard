@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS } from '@/lib/appliance-utils'
+import { ENERGY_LABELS, PRODUCT_LINES } from '@/lib/appliance-utils'
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
   { value: 'kookplaat', label: 'Kookplaat' },
@@ -43,6 +43,7 @@ export default function NieuweApparatuurPage() {
 
     const specs: Record<string, unknown> = {}
     if (form.get('energy_label')) specs.energy_label = form.get('energy_label')
+    if (form.get('product_line')) specs.product_line = form.get('product_line')
     if (type === 'kookplaat') {
       if (form.get('energy_type')) specs.energy_type = form.get('energy_type')
       if (form.get('zones')) specs.zones = Number(form.get('zones'))
@@ -177,6 +178,15 @@ export default function NieuweApparatuurPage() {
             className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
             <option value="">— Geen —</option>
             {ENERGY_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Productlijn</Label>
+          <select name="product_line"
+            className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+            <option value="">— Geen —</option>
+            {PRODUCT_LINES.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </div>
 

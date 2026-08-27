@@ -460,7 +460,6 @@ export default function PlanningAgenda({
         {errorBanner}
         {addTaskSection}
         <div className="flex flex-col lg:flex-row gap-6">
-          {generalTasksSection}
           <div className="flex-1 min-w-0 space-y-3">
             <h2 className="text-sm font-medium text-[#1C1B19]">Project taken</h2>
             <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-16 text-center">
@@ -468,6 +467,7 @@ export default function PlanningAgenda({
             </div>
             {unplanned.length > 0 && <UnplannedList projects={unplanned} />}
           </div>
+          {generalTasksSection}
         </div>
       </div>
     )
@@ -506,8 +506,6 @@ export default function PlanningAgenda({
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-      {generalTasksSection}
-
       <div className="flex-1 min-w-0 space-y-3">
       <h2 className="text-sm font-medium text-[#1C1B19]">Project taken</h2>
 
@@ -610,6 +608,7 @@ export default function PlanningAgenda({
 
       {unplanned.length > 0 && <UnplannedList projects={unplanned} />}
       </div>
+      {generalTasksSection}
       </div>
     </div>
   )

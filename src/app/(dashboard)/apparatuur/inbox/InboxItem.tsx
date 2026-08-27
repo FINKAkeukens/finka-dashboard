@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, Check, X, Paperclip, RefreshCw } from 'lucide-r
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AiExtracted } from '@/lib/types'
+import { CATEGORY_COLORS, TYPE_LABELS, TYPE_ORDER } from '@/lib/appliance-utils'
 
 interface EmailQueueItem {
   id: string
@@ -102,6 +103,7 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
         price: a.price ?? null,
         category,
         specs: a.specs ?? {},
+        notes: a.notes ?? null,
         price_history: history,
         supplier_id,
         quote_date: extracted?.quote_date ?? null,
@@ -123,12 +125,6 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
   async function handleSkip() {
     await supabase.from('finka_email_queue').update({ status: 'skipped' }).eq('id', item.id)
     router.refresh()
-  }
-
-  const categoryBadge: Record<string, string> = {
-    budget: 'bg-green-50 text-green-700',
-    midden: 'bg-blue-50 text-blue-700',
-    premium: 'bg-amber-50 text-amber-700',
   }
 
   return (
@@ -185,8 +181,8 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
                       }}
                       className="text-sm w-full border-0 bg-transparent focus:outline-none text-[#1C1B19] font-medium"
                     >
-                      {['kookplaat','oven','combi-oven','vaatwasser','afzuigkap','koelkast','koelvries','kokendwaterkraan','anders'].map(t => (
-                        <option key={t} value={t}>{t}</option>
+                      {TYPE_ORDER.map(t => (
+                        <option key={t} value={t}>{TYPE_LABELS[t]}</option>
                       ))}
                     </select>
                   </div>
@@ -217,7 +213,7 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
                         updated[i] = { ...updated[i], category: e.target.value as import('@/lib/types').ApplianceCategory }
                         setAppliances(updated)
                       }}
-                      className={`text-sm px-2 py-0.5 rounded-full w-full focus:outline-none ${categoryBadge[a.category ?? ''] ?? 'bg-gray-50 text-gray-600'}`}
+                      className={`text-sm px-2 py-0.5 rounded-full w-full focus:outline-none border ${a.category ? CATEGORY_COLORS[a.category] : 'bg-gray-50 text-gray-600 border-gray-200'}`}
                     >
                       <option value="">—</option>
                       <option value="budget">Budget</option>
@@ -226,6 +222,21 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
                     </select>
                   </div>
                 </div>
+                  {(a.notes || !readonly) && (
+                    <div>
+                      <p className="text-xs text-[#6B6560] mb-1">Onderschrift uit de offerte</p>
+                      <Input
+                        value={a.notes ?? ''}
+                        onChange={e => {
+                          const updated = [...appliances]
+                          updated[i] = { ...updated[i], notes: e.target.value }
+                          setAppliances(updated)
+                        }}
+                        className="h-7 text-sm"
+                        placeholder="Geen onderschrift gevonden — vul zelf aan indien nuttig"
+                      />
+                    </div>
+                  )}
                   {a.type === 'anders' && (
                     <div>
                       <p className="text-xs text-[#6B6560] mb-1">Omschrijving (wat is het?)</p>

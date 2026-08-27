@@ -1,4 +1,4 @@
-import { Appliance, ApplianceSpecs, EnergyLabel, OvenSubtype } from '@/lib/types'
+import { Appliance, ApplianceSpecs, EnergyLabel, OvenSubtype, ProductLine } from '@/lib/types'
 
 export const TYPE_LABELS: Record<string, string> = {
   kookplaat: 'Kookplaat',
@@ -58,6 +58,10 @@ export const ENERGY_LABEL_COLORS: Record<EnergyLabel, string> = {
   F: 'bg-red-50 text-red-700 border-red-200',
   G: 'bg-red-100 text-red-800 border-red-300',
 }
+
+// Productlijn is ook generiek — geldt voor elk apparaattype, net als
+// energielabel.
+export const PRODUCT_LINES: ProductLine[] = ['Studioline', 'Accentline']
 
 export const CATEGORY_COLORS: Record<string, string> = {
   budget: 'bg-green-50 text-green-700 border-green-200',
@@ -128,6 +132,7 @@ export function getSpecSummary(appliance: Appliance): string {
     parts.push(`${s.db_sound} dB`)
   }
   if (s.energy_label) parts.push(`label ${s.energy_label}`)
+  if (s.product_line) parts.push(String(s.product_line))
 
   return parts.join(' · ') || '—'
 }
@@ -229,6 +234,9 @@ export function specEntries(type: string, specs: ApplianceSpecs): { label: strin
   }
   if (specs.energy_label) {
     entries.push({ label: 'Energielabel', value: specs.energy_label })
+  }
+  if (specs.product_line) {
+    entries.push({ label: 'Lijn', value: specs.product_line })
   }
 
   return entries.filter((e): e is { label: string; value: string } => e.value != null)

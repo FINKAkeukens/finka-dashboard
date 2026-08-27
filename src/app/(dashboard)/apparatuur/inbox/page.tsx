@@ -5,6 +5,7 @@ import { Mail, Wifi, WifiOff, CheckCircle, Clock, SkipForward } from 'lucide-rea
 import GmailConnectButton from './GmailConnectButton'
 import SyncButton from './SyncButton'
 import InboxItem from './InboxItem'
+import BulkSkipEmptyButton from './BulkSkipEmptyButton'
 
 export default async function InboxPage({
   searchParams,
@@ -34,6 +35,14 @@ export default async function InboxPage({
   ]
 
   const activeItems = tab === 'processed' ? processed : tab === 'skipped' ? skipped : pending
+
+  // Pending e-mails waar de AI niks in herkende — vaak ruis (reply-threads,
+  // niet-gerelateerde mail die toevallig op een zoekwoord matcht). Die
+  // blijven anders eindeloos "pending" staan totdat iemand ze één voor één
+  // openklapt om te zien dat er niks in zit.
+  const emptyPendingIds = (pending ?? [])
+    .filter(p => !p.ai_extracted?.appliances?.length)
+    .map(p => p.id)
 
   return (
     <div className="p-8 max-w-4xl">
@@ -104,6 +113,15 @@ export default async function InboxPage({
           </a>
         ))}
       </div>
+
+      {tab === 'pending' && emptyPendingIds.length > 0 && (
+        <div className="flex items-center justify-between bg-[#F7F5F2] rounded-lg px-4 py-2.5 mb-4">
+          <p className="text-xs text-[#6B6560]">
+            {emptyPendingIds.length} e-mail{emptyPendingIds.length !== 1 ? 's' : ''} zonder herkende producten — vaak ruis (reply-threads, niet-gerelateerde mail).
+          </p>
+          <BulkSkipEmptyButton ids={emptyPendingIds} />
+        </div>
+      )}
 
       {/* Inhoud */}
       {!activeItems?.length ? (
