@@ -370,6 +370,79 @@ export interface Quote {
   items?: QuoteItem[]
 }
 
+// ---------------------------------------------------------------------------
+// Configurator — per onderdeel meerdere vergelijkbare "opties" (bv. apparatuur
+// van merk A vs. merk B), gegroepeerd in "kostenoverzichten" die telkens één
+// optie per onderdeel combineren. Zie het Configurator-tabblad.
+// ---------------------------------------------------------------------------
+
+export type ConfiguratorSection = 'kasten' | 'apparatuur' | 'werkblad' | 'opslag'
+
+// JSONB-vorm per sectie — vrij van vorm zodat "Dupliceren" gewoon een
+// deep-copy van `data` is. Elke sectie krijgt zijn eigen data-interface;
+// deze union dekt ze allemaal.
+export interface KastenOptionData {
+  attachments: OfferAttachment[]
+  summary_lines: string[]
+}
+
+export interface WerkbladOptionData {
+  attachments: OfferAttachment[]
+  summary_lines: string[]
+  calc_inputs: WerkbladCalcInputs | null
+}
+
+export interface ApparatuurOptionItem {
+  id: string
+  appliance_id: string | null
+  description: string
+  brand: string | null
+  model: string | null
+  unit_price: number
+  quantity: number
+  include_in_customer_view: boolean
+}
+
+export interface ApparatuurOptionData {
+  items: ApparatuurOptionItem[]
+  // Voor apparatuur die niet uit de eigen bibliotheek komt — zelfde flow als
+  // voorheen in Offerte (leveranciersofferte uploaden, AI destilleert een
+  // samenvatting + bedrag).
+  attachments: OfferAttachment[]
+  summary_lines: string[]
+}
+
+export interface OpslagOptionData {
+  euroline_inputs: EurolineInputs
+}
+
+export type ConfiguratorOptionData = KastenOptionData | WerkbladOptionData | ApparatuurOptionData | OpslagOptionData
+
+export interface ConfiguratorOption {
+  id: string
+  quote_id: string
+  section: ConfiguratorSection
+  name: string
+  sort_order: number
+  data: ConfiguratorOptionData
+  cost_total: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ConfiguratorScenario {
+  id: string
+  quote_id: string
+  name: string
+  sort_order: number
+  kasten_option_id: string | null
+  apparatuur_option_id: string | null
+  werkblad_option_id: string | null
+  opslag_option_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 // Eén rij per keer dat de klant-PDF is gedownload (zie
 // src/app/api/offerte/[projectId]/pdf/route.ts + src/lib/quote-download-diff.ts).
 export interface QuoteDownload {

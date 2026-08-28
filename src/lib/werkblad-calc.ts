@@ -19,6 +19,24 @@ export function newWerkbladPart(rates: WerkbladRates): WerkbladPart {
   }
 }
 
+// Fallback als de werkblad-tarievenrij (nog) niet geladen kon worden — zelfde
+// waarden als de DB-defaults. Gedeeld tussen QuoteEditor en de Configurator
+// zodat beide altijd hetzelfde vangnet gebruiken.
+export const DEFAULT_WERKBLAD_RATES: WerkbladRates = {
+  id: '',
+  materials: [{ id: 'default', name: 'Composiet – CEBIN (mat.+rand)', price_per_m2: 320 }],
+  cutouts: { kookplaat: 120, spoelbak: 260, kraan: 32 },
+  thicknesses: [
+    { mm: 4, surcharge: 0 }, { mm: 12, surcharge: 0 }, { mm: 20, surcharge: 0 },
+    { mm: 25, surcharge: 0 }, { mm: 30, surcharge: 0 }, { mm: 38, surcharge: 0 },
+  ],
+  hoekverbinding: 0,
+  inmeten: 0,
+  montage: 0,
+  transport: 0,
+  updated_at: '',
+}
+
 export function defaultWerkbladCalcInputs(rates: WerkbladRates): WerkbladCalcInputs {
   return {
     parts: [newWerkbladPart(rates)],

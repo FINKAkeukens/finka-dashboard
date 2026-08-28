@@ -134,7 +134,7 @@ export default function AppliancePickerModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
-      <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="w-[95vw] max-w-5xl h-[85vh] max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Apparaat uit bibliotheek toevoegen</DialogTitle>
         </DialogHeader>

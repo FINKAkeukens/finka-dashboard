@@ -6,16 +6,14 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, EurolineInputs, EurolineRates, FieldSource, OfferAttachment, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize, WerkbladCalcInputs, WerkbladRates } from '@/lib/types'
-import { ArrowRight, Calculator, ChevronDown, FileText, GripVertical, Info, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
+import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
+import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import WerkbladCalculator from '@/components/WerkbladCalculator'
-import { defaultWerkbladCalcInputs, computeWerkbladTotals, werkbladSummaryLines } from '@/lib/werkblad-calc'
 
 const TYPE_LABELS: Record<QuoteItemType, string> = {
   apparaat: 'Apparaat',
@@ -43,107 +41,6 @@ const CUSTOMER_CATEGORY_LABELS: Record<QuoteCustomerCategory, string> = {
 // (uit dezelfde bibliotheek gekozen), in de klantversie bij "Accessoires"
 // horen in plaats van bij "Apparatuur".
 const ACCESSOIRE_APPLIANCE_TYPES: ApplianceType[] = ['kraan', 'spoelbak']
-
-// Fallback als de instellingenrij (nog) niet geladen kon worden — zelfde
-// waarden als de DB-defaults in de migratie. De tarieven zelf worden nu
-// beheerd via Instellingen → Euroline-tarieven, niet meer hardcoded.
-const DEFAULT_EUROLINE_RATES: EurolineRates = {
-  id: '',
-  opslag_base: 139.75,
-  opslag_per_week_extra: 23.75,
-  levering_base: 282.75,
-  levering_groter_toeslag: 124.75,
-  levering_niet_begane_grond: 120.25,
-  levering_verhuislift: 250,
-  levering_extra_lostijd_per_halfuur: 64.50,
-  levering_buiten_werkgebied: 124.75,
-  werkblad_multiplex: 33.50,
-  werkblad_composiet: 77.50,
-  installatie_per_m1: 207.50,
-  installatie_buitengebied_per_m1: 250,
-  service_tarief_per_uur: 75,
-  service_minimum: 250,
-  updated_at: '',
-}
-
-// Fallback als de werkblad-tarievenrij (nog) niet geladen kon worden.
-const DEFAULT_WERKBLAD_RATES: WerkbladRates = {
-  id: '',
-  materials: [{ id: 'default', name: 'Composiet – CEBIN (mat.+rand)', price_per_m2: 320 }],
-  cutouts: { kookplaat: 120, spoelbak: 260, kraan: 32 },
-  thicknesses: [
-    { mm: 4, surcharge: 0 }, { mm: 12, surcharge: 0 }, { mm: 20, surcharge: 0 },
-    { mm: 25, surcharge: 0 }, { mm: 30, surcharge: 0 }, { mm: 38, surcharge: 0 },
-  ],
-  hoekverbinding: 0,
-  inmeten: 0,
-  montage: 0,
-  transport: 0,
-  updated_at: '',
-}
-
-const DEFAULT_EUROLINE_INPUTS: EurolineInputs = {
-  montage_meters: 0,
-  installatie_buitengebied: false,
-  opslag_extra_weken: 0,
-  levering_groter: false,
-  levering_niet_begane_grond: false,
-  levering_verhuislift: false,
-  levering_buiten_werkgebied: false,
-  levering_extra_lostijd_halfuren: 0,
-  werkblad_levering: 'geen',
-  service_uren: 0,
-}
-
-// "Inbegrepen"-posten uit het Euroline-tarievenblad — dingen die altijd al
-// in de basisprijs zitten (dus geen aparte optie in de rekentool), puur ter
-// informatie via het i-icoontje.
-const EUROLINE_INBEGREPEN: Record<'opslag' | 'levering' | 'installatie' | 'service', string[]> = {
-  opslag: [
-    'Opslag van apparatuur voor 3 weken, per pallet plek',
-    'Opslag van een keukenwerkblad voor 3 weken',
-    'Werkblad-opslag na 3 weken (inbegrepen bij de keuken)',
-  ],
-  levering: [
-    'Lostijd van 1 uur bij een reguliere levering',
-    'Levering van een keuken binnen Noord-Holland (werkgebied Euroline Logistiek)',
-  ],
-  installatie: [
-    'Entree tot het portaal, koppeling met Simar of Compusoft',
-    'Digitale beoordeling afleverlocatie',
-    'Planning levering keukens in overleg met de klant',
-    'Verzekering van de keukenmaterialen zodra Euroline ze onder zich heeft',
-    'Rijplaten bij levering (indien nodig)',
-    'Beschermhoezen schoenen',
-    'Visuele weergave voor- en na de levering van de keuken',
-    'Uitgebreide rapportage van oplevering (bij montage)',
-    '99% schadevrije aflevering van keukens (2025)',
-  ],
-  service: [],
-}
-
-function EurolineInfoButton({ category }: { category: keyof typeof EUROLINE_INBEGREPEN }) {
-  const [open, setOpen] = useState(false)
-  const items = EUROLINE_INBEGREPEN[category]
-  if (!items.length) return null
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} title="Wat zit hier altijd al in?" className="text-[#9A948D] hover:text-[#1C1B19]">
-        <Info size={13} />
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Altijd inbegrepen</DialogTitle>
-          </DialogHeader>
-          <ul className="text-sm text-[#1C1B19] space-y-1.5 list-disc pl-4">
-            {items.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
 
 // "Tabje" om per pagina een losse disclaimer-tekst te typen — staat onderaan
 // die pagina in de klantversie, lichtgrijs zoals de sectielabels (zie
@@ -256,23 +153,6 @@ function normalizeSections(sections: unknown): QuoteCustomerSection[] {
   return normalized
 }
 
-// Kostprijs-opbouw op basis van het interne prijsindicatie-sjabloon:
-// per categorie werkelijke kosten + marge%, opgeteld + BTW erover.
-// Keukenkastjes en Apparatuur worden automatisch gevuld (Winner Flex-
-// uitdraai resp. gekozen apparatuur); de rest heeft Euroline-standaard-
-// tarieven als startpunt, alles blijft overschrijfbaar.
-const DEFAULT_COST_BREAKDOWN: CostBreakdownItem[] = [
-  { key: 'keukenkastjes', label: 'Keukenkastjes', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 50, marge_percentage_source: 'def' },
-  { key: 'apparatuur', label: 'Apparatuur', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 25, marge_percentage_source: 'def' },
-  { key: 'werkblad', label: 'Aanrechtblad', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 20, marge_percentage_source: 'def' },
-  { key: 'accessoires', label: 'Accessoires', werkelijke_kosten: 0, werkelijke_kosten_source: 'def', marge_percentage: 10, marge_percentage_source: 'def' },
-  { key: 'inmeten', label: 'Inmeten', werkelijke_kosten: 250, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
-  { key: 'opslag', label: 'Opslag', werkelijke_kosten: 139.75, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
-  { key: 'levering', label: 'Levering', werkelijke_kosten: 360.25, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
-  { key: 'installatie', label: 'Installatie', werkelijke_kosten: 0, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
-  { key: 'service', label: 'Service', werkelijke_kosten: 250, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
-]
-
 function newDraftItem(overrides: Partial<DraftItem> = {}): DraftItem {
   return {
     id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -299,23 +179,13 @@ export default function QuoteEditor({
   items: initialItems,
   downloads,
   appliances,
-  eurolineRates,
-  werkbladRates,
 }: {
   projectId: string
   quote: Quote | null
   items: QuoteItem[]
   downloads: QuoteDownload[]
   appliances: Appliance[]
-  eurolineRates: EurolineRates | null
-  werkbladRates: WerkbladRates | null
 }) {
-  // Merge i.p.v. harde ?? fallback: als de DB-rij bestaat maar een nieuw
-  // toegevoegd tariefveld nog mist (migratie nog niet gedraaid), voorkomt dit
-  // een crash op rates.<nieuw_veld>.toFixed() i.p.v. alleen de hele rij te
-  // negeren wanneer er kennelijk al wél een rij bestaat.
-  const rates = { ...DEFAULT_EUROLINE_RATES, ...(eurolineRates ?? {}) }
-  const wbRates = werkbladRates ?? DEFAULT_WERKBLAD_RATES
   const supabase = createClient()
   const router = useRouter()
 
@@ -324,7 +194,6 @@ export default function QuoteEditor({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [accessoirePickerSectionIdx, setAccessoirePickerSectionIdx] = useState<number | null>(null)
   const [coverPickerOpen, setCoverPickerOpen] = useState(false)
 
@@ -346,33 +215,6 @@ export default function QuoteEditor({
   const plattegrondInputRef = useRef<HTMLInputElement>(null)
   const renderInputRef = useRef<HTMLInputElement>(null)
   const standaardInputRef = useRef<HTMLInputElement>(null)
-
-  const [technicalAttachments, setTechnicalAttachments] = useState<OfferAttachment[]>(
-    initialQuote?.technical_attachments ?? []
-  )
-  const [uploadingWinnerflex, setUploadingWinnerflex] = useState(false)
-  const winnerflexInputRef = useRef<HTMLInputElement>(null)
-
-  const [werkbladAttachments, setWerkbladAttachments] = useState<OfferAttachment[]>(
-    initialQuote?.werkblad_attachments ?? []
-  )
-  const [uploadingWerkblad, setUploadingWerkblad] = useState(false)
-  const werkbladInputRef = useRef<HTMLInputElement>(null)
-
-  // Zelf-rekentool — alternatief voor de PDF-upload hierboven, voor als er
-  // nog geen leveranciersofferte is. Invoer blijft per offerte bewaard.
-  const [werkbladCalcInputs, setWerkbladCalcInputs] = useState<WerkbladCalcInputs>(
-    initialQuote?.werkblad_calc_inputs?.parts?.length
-      ? initialQuote.werkblad_calc_inputs
-      : defaultWerkbladCalcInputs(wbRates)
-  )
-  const [werkbladCalcOpen, setWerkbladCalcOpen] = useState(false)
-
-  const [apparatuurAttachments, setApparatuurAttachments] = useState<OfferAttachment[]>(
-    initialQuote?.apparatuur_attachments ?? []
-  )
-  const [uploadingApparatuurOfferte, setUploadingApparatuurOfferte] = useState(false)
-  const apparatuurOfferteInputRef = useRef<HTMLInputElement>(null)
 
   // Klantversie — volledig losstaand van de interne regels/prijzen hieronder.
   // Niets hier wordt automatisch gevuld vanuit interne data.
@@ -455,45 +297,6 @@ export default function QuoteEditor({
   )
   const [btwPercentage, setBtwPercentage] = useState(initialQuote?.btw_percentage ?? 21)
   const [overallMarginPercentage, setOverallMarginPercentage] = useState(0)
-  const [eurolineInputs, setEurolineInputs] = useState<EurolineInputs>(
-    initialQuote?.euroline_inputs && Object.keys(initialQuote.euroline_inputs).length
-      ? { ...DEFAULT_EUROLINE_INPUTS, ...initialQuote.euroline_inputs }
-      : DEFAULT_EUROLINE_INPUTS
-  )
-
-  function updateEurolineInput(patch: Partial<EurolineInputs>) {
-    setEurolineInputs((prev) => ({ ...prev, ...patch }))
-  }
-
-  const eurolineOpslag = round2(rates.opslag_base + eurolineInputs.opslag_extra_weken * rates.opslag_per_week_extra)
-  const eurolineWerkbladLeveringToeslag =
-    eurolineInputs.werkblad_levering === 'multiplex' ? rates.werkblad_multiplex
-    : eurolineInputs.werkblad_levering === 'composiet' ? rates.werkblad_composiet
-    : 0
-  const eurolineLevering = round2(
-    rates.levering_base +
-    (eurolineInputs.levering_groter ? rates.levering_groter_toeslag : 0) +
-    (eurolineInputs.levering_niet_begane_grond ? rates.levering_niet_begane_grond : 0) +
-    (eurolineInputs.levering_verhuislift ? rates.levering_verhuislift : 0) +
-    (eurolineInputs.levering_buiten_werkgebied ? rates.levering_buiten_werkgebied : 0) +
-    eurolineInputs.levering_extra_lostijd_halfuren * rates.levering_extra_lostijd_per_halfuur +
-    eurolineWerkbladLeveringToeslag
-  )
-  const eurolineInstallatie = round2(
-    eurolineInputs.montage_meters * (eurolineInputs.installatie_buitengebied ? rates.installatie_buitengebied_per_m1 : rates.installatie_per_m1)
-  )
-  const eurolineService = round2(
-    eurolineInputs.service_uren > 0
-      ? Math.max(eurolineInputs.service_uren * rates.service_tarief_per_uur, rates.service_minimum)
-      : 0
-  )
-
-  function applyEurolineToRows() {
-    updateCostRow('opslag', { werkelijke_kosten: eurolineOpslag, werkelijke_kosten_source: 'auto' })
-    updateCostRow('levering', { werkelijke_kosten: eurolineLevering, werkelijke_kosten_source: 'auto' })
-    updateCostRow('installatie', { werkelijke_kosten: eurolineInstallatie, werkelijke_kosten_source: 'auto' })
-    updateCostRow('service', { werkelijke_kosten: eurolineService, werkelijke_kosten_source: 'auto' })
-  }
   const [totalValue, setTotalValue] = useState(initialQuote?.total_price ?? 0)
   const [totalSource, setTotalSource] = useState<FieldSource>(initialQuote?.total_price_source ?? 'auto')
 
@@ -641,169 +444,6 @@ export default function QuoteEditor({
     e.target.value = ''
   }
 
-  // Leest de JSON-body van een upload-response — gooit een leesbare fout
-  // i.p.v. een kale SyntaxError als de server geen geldige JSON teruggaf
-  // (bv. een 413/HTML-foutpagina omdat het bestand te groot is).
-  async function parseUploadResponse(res: Response) {
-    try {
-      return await res.json()
-    } catch {
-      throw new Error(
-        res.ok
-          ? 'Onverwachte reactie van de server'
-          : `Serverfout (${res.status}) — mogelijk is het bestand te groot`
-      )
-    }
-  }
-
-  async function handleWinnerflexUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !quote) return
-    setError('')
-    setUploadingWinnerflex(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('quoteId', quote.id)
-
-      const res = await fetch('/api/quotes/parse-winnerflex', { method: 'POST', body: formData })
-      const body = await parseUploadResponse(res)
-
-      if (!res.ok) {
-        setError(`Verwerken mislukt: ${body.error ?? res.statusText}`)
-      } else {
-        // Vervangt (niet toevoegt): een nieuwe/gecorrigeerde uitdraai moet de
-        // vorige bijlage + samenvatting overschrijven, anders lijkt een
-        // her-upload alsof er niks gebeurt.
-        setTechnicalAttachments([body.attachment as OfferAttachment])
-        // Landt als concept-sectie in de klantversie — nooit direct "af",
-        // staff controleert/bewerkt dit altijd voordat de offerte de deur uitgaat.
-        if (body.summary?.length) {
-          replaceSectionLines('kasten', 'Kasten', body.summary as string[])
-        }
-        if (typeof body.totaalExclBtw === 'number') {
-          updateCostRow('keukenkastjes', { werkelijke_kosten: body.totaalExclBtw, werkelijke_kosten_source: 'auto' })
-        }
-        if (body.summaryError) {
-          setError(`Bijlage geüpload, maar AI-verwerking mislukte: ${body.summaryError}`)
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Uploaden mislukt')
-    } finally {
-      setUploadingWinnerflex(false)
-      e.target.value = ''
-    }
-  }
-
-  async function handleWerkbladUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !quote) return
-    setError('')
-    setUploadingWerkblad(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('quoteId', quote.id)
-
-      const res = await fetch('/api/quotes/parse-werkblad', { method: 'POST', body: formData })
-      const body = await parseUploadResponse(res)
-
-      if (!res.ok) {
-        setError(`Verwerken mislukt: ${body.error ?? res.statusText}`)
-      } else {
-        setWerkbladAttachments([body.attachment as OfferAttachment])
-        if (body.summary?.length) {
-          replaceSectionLines('werkblad', 'Werkblad', body.summary as string[])
-        }
-        if (typeof body.totaalExclBtw === 'number') {
-          updateCostRow('werkblad', { werkelijke_kosten: body.totaalExclBtw, werkelijke_kosten_source: 'auto' })
-        }
-        if (body.summaryError) {
-          setError(`Bijlage geüpload, maar AI-verwerking mislukte: ${body.summaryError}`)
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Uploaden mislukt')
-    } finally {
-      setUploadingWerkblad(false)
-      e.target.value = ''
-    }
-  }
-
-  async function handleApparatuurOfferteUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !quote) return
-    setError('')
-    setUploadingApparatuurOfferte(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('quoteId', quote.id)
-
-      const res = await fetch('/api/quotes/parse-apparatuur', { method: 'POST', body: formData })
-      const body = await parseUploadResponse(res)
-
-      if (!res.ok) {
-        setError(`Verwerken mislukt: ${body.error ?? res.statusText}`)
-      } else {
-        setApparatuurAttachments([body.attachment as OfferAttachment])
-        if (body.summary?.length) {
-          replaceSectionLines('apparatuur', 'Apparatuur', body.summary as string[])
-        }
-        if (typeof body.totaalExclBtw === 'number') {
-          // 'in' i.p.v. 'auto': de apparatuur-rij volgt normaal live de aangeklikte
-          // bibliotheek-apparatuur — een externe offerte overschrijft dat expliciet.
-          updateCostRow('apparatuur', { werkelijke_kosten: body.totaalExclBtw, werkelijke_kosten_source: 'in' })
-        }
-        if (body.summaryError) {
-          setError(`Bijlage geüpload, maar AI-verwerking mislukte: ${body.summaryError}`)
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Uploaden mislukt')
-    } finally {
-      setUploadingApparatuurOfferte(false)
-      e.target.value = ''
-    }
-  }
-
-  // Bijlage weg = de basis voor dat bedrag en die samenvatting is weg — zet
-  // de kostprijsregel terug naar zijn standaardstatus (0, 'auto') en wis de
-  // AI-samenvatting uit de klantversie, anders blijven een verouderd bedrag
-  // en verouderde kastonderdelen achter alsof de bijlage er nog stond.
-  function removeTechnicalAttachment(url: string) {
-    setTechnicalAttachments((prev) => prev.filter((a) => a.url !== url))
-    updateCostRow('keukenkastjes', { werkelijke_kosten: 0, werkelijke_kosten_source: 'auto' })
-    clearSectionLines('kasten')
-  }
-
-  function removeWerkbladAttachment(url: string) {
-    setWerkbladAttachments((prev) => prev.filter((a) => a.url !== url))
-    updateCostRow('werkblad', { werkelijke_kosten: 0, werkelijke_kosten_source: 'auto' })
-    clearSectionLines('werkblad')
-  }
-
-  // Zet het berekende totaal (incl. eigen marge) in de kostprijs-opbouw en
-  // een klantvriendelijke samenvatting in de klantversie — zelfde landingsplek
-  // als de AI-PDF-upload hierboven, alleen 'in' i.p.v. 'auto': dit is een
-  // bewuste eigen berekening, geen automatische extractie.
-  function applyWerkbladCalc() {
-    const totals = computeWerkbladTotals(werkbladCalcInputs, wbRates)
-    updateCostRow('werkblad', { werkelijke_kosten: totals.kostprijs, werkelijke_kosten_source: 'in' })
-    replaceSectionLines('werkblad', 'Werkblad', werkbladSummaryLines(totals))
-    setWerkbladCalcOpen(false)
-  }
-
-  function removeApparatuurAttachment(url: string) {
-    setApparatuurAttachments((prev) => prev.filter((a) => a.url !== url))
-    // 'auto' i.p.v. 0 met 'in': dat laat de apparatuur-rij weer teruggaan naar
-    // live meetellen van de aangeklikte bibliotheek-apparatuur, i.p.v. gewoon
-    // op 0 blijven staan terwijl er misschien wél apparatuur gekozen is.
-    updateCostRow('apparatuur', { werkelijke_kosten: 0, werkelijke_kosten_source: 'auto' })
-    clearSectionLines('apparatuur')
-  }
-
   // Voegt één tekstregel toe aan de (eerste) sectie van deze categorie —
   // maakt de sectie aan als die nog niet bestaat. Gebruikt wanneer staff
   // losse regels (bv. apparatuur uit de bibliotheek) overzet — elke klik
@@ -814,30 +454,6 @@ export default function QuoteEditor({
       const newLines = lines.map((text) => ({ text, included: true }))
       if (idx === -1) return [...prev, { category, title: defaultTitle, lines: newLines }]
       return prev.map((s, i) => (i === idx ? { ...s, lines: [...s.lines, ...newLines] } : s))
-    })
-  }
-
-  // Vervangt de regels van deze categorie volledig — gebruikt door de
-  // Winner Flex/werkblad/apparatuur-uploads: een nieuwe/vervangende PDF moet
-  // de vorige AI-samenvatting overschrijven, niet ernaast blijven staan.
-  function replaceSectionLines(category: QuoteCustomerCategory, defaultTitle: string, lines: string[]) {
-    setCustomerSections((prev) => {
-      const idx = prev.findIndex((s) => s.category === category)
-      const newLines = lines.map((text) => ({ text, included: true }))
-      if (idx === -1) return [...prev, { category, title: defaultTitle, lines: newLines }]
-      return prev.map((s, i) => (i === idx ? { ...s, lines: newLines } : s))
-    })
-  }
-
-  // Wist de regels van de eerste sectie van deze categorie (zelfde "eerste
-  // match"-gedrag als replaceSectionLines) — gebruikt wanneer een bijlage
-  // verwijderd wordt. Anders dan replaceSectionLines: maakt NOOIT een nieuwe
-  // (dan lege) sectie aan als er nog geen bestaat.
-  function clearSectionLines(category: QuoteCustomerCategory) {
-    setCustomerSections((prev) => {
-      const idx = prev.findIndex((s) => s.category === category)
-      if (idx === -1) return prev
-      return prev.map((s, i) => (i === idx ? { ...s, lines: [] } : s))
     })
   }
 
@@ -875,23 +491,6 @@ export default function QuoteEditor({
 
   function addSection() {
     setCustomerSections((prev) => [...prev, { category: 'overig', title: 'Nieuwe sectie', lines: [] }])
-  }
-
-  // Voegt een lege, handmatig te typen regel toe aan de Werkblad-sectie
-  // (maakt 'm aan als die nog niet bestaat), klapt 'm uit in de "Wat zit
-  // erin"-editor verderop en scrolt ernaartoe — anders verschijnt de nieuwe
-  // regel onopgemerkt (leeg, verderop op de pagina) en lijkt de knop niets
-  // te doen.
-  function addManualWerkbladLine() {
-    const idx = customerSections.findIndex((s) => s.category === 'werkblad')
-    const targetIdx = idx === -1 ? customerSections.length : idx
-    addSectionLines('werkblad', 'Werkblad', [''])
-    setCollapsedSections((prev) => {
-      const next = new Set(prev)
-      next.delete(targetIdx)
-      return next
-    })
-    setPendingScrollSectionIdx(targetIdx)
   }
 
   function updateSectionTitle(index: number, title: string) {
@@ -1150,12 +749,7 @@ export default function QuoteEditor({
       render_urls: renderUrls,
       standaard_afbeeldingen: standaardAfbeeldingen,
       cover_image_url: coverImageUrl || null,
-      technical_attachments: technicalAttachments,
-      werkblad_attachments: werkbladAttachments,
-      apparatuur_attachments: apparatuurAttachments,
       cost_breakdown: finalCostBreakdown,
-      euroline_inputs: eurolineInputs,
-      werkblad_calc_inputs: werkbladCalcInputs,
       subtotal: totaalKostenExclMarge,
       subtotal_source: 'auto' as const,
       korting_percentage: 0,
@@ -1269,13 +863,6 @@ export default function QuoteEditor({
 
   return (
     <div className="space-y-6">
-      <AppliancePickerModal
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        appliances={appliances}
-        onSelect={addApplianceItem}
-      />
-
       <AppliancePickerModal
         open={accessoirePickerSectionIdx !== null}
         onOpenChange={(open) => { if (!open) setAccessoirePickerSectionIdx(null) }}
@@ -1488,128 +1075,14 @@ export default function QuoteEditor({
         </DialogContent>
       </Dialog>
 
-      {/* Winner Flex / technische uitdraai — bijlage blijft intern */}
-      <div className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-medium text-[#1C1B19]">Winner Flex / technische uitdraai</h3>
-            <p className="text-xs text-[#6B6560] mt-0.5">
-              Upload de tekening + onderdelenlijst (PDF) — het overzicht landt als concept-sectie in de klantversie hieronder, de bijlage zelf blijft intern.
-            </p>
-          </div>
-          <input ref={winnerflexInputRef} type="file" accept="application/pdf" hidden onChange={handleWinnerflexUpload} />
-          <Button variant="outline" size="sm" onClick={() => winnerflexInputRef.current?.click()} disabled={uploadingWinnerflex}>
-            <Upload size={13} className="mr-1.5" />
-            {uploadingWinnerflex ? 'Verwerken...' : 'Uitdraai uploaden'}
-          </Button>
-        </div>
+      {/* Winner Flex / technische uitdraai — verhuisd naar het Configurator-tabblad
+         (onderdeel "Kasten"), incl. de mogelijkheid om meerdere opties te vergelijken. */}
 
-        {technicalAttachments.length > 0 && (
-          <div className="space-y-1.5">
-            {technicalAttachments.map((att) => (
-              <div key={att.url} className="flex items-center justify-between gap-2 bg-[#F7F5F2] rounded-lg px-3 py-2">
-                <a href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#1C1B19] hover:underline min-w-0">
-                  <FileText size={14} className="shrink-0 text-[#6B6560]" />
-                  <span className="truncate">{att.name}</span>
-                </a>
-                <button onClick={() => removeTechnicalAttachment(att.url)} title="Bijlage verwijderen">
-                  <X size={13} className="text-[#9A948D] hover:text-red-600" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Werkblad-specificatie — verhuisd naar het Configurator-tabblad
+         (onderdeel "Werkblad"), incl. de mogelijkheid om meerdere opties te vergelijken. */}
 
-      {/* Werkblad-specificatie — bijlage blijft intern */}
-      <div className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-medium text-[#1C1B19]">Werkblad-specificatie</h3>
-            <p className="text-xs text-[#6B6560] mt-0.5">
-              Upload de werkblad-offerte/specificatie (PDF), bereken zelf een richtprijs, of typ zelf een regel — alle drie vullen het overzicht in de klantversie aan (de eerste twee vullen ook het bedrag in de kostprijs-opbouw hieronder).
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <input ref={werkbladInputRef} type="file" accept="application/pdf" hidden onChange={handleWerkbladUpload} />
-            <Button variant="outline" size="sm" onClick={() => werkbladInputRef.current?.click()} disabled={uploadingWerkblad}>
-              <Upload size={13} className="mr-1.5" />
-              {uploadingWerkblad ? 'Verwerken...' : 'Specificatie uploaden'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setWerkbladCalcOpen(true)}>
-              <Calculator size={13} className="mr-1.5" />
-              Zelf berekenen
-            </Button>
-            <Button variant="outline" size="sm" onClick={addManualWerkbladLine}>
-              <Plus size={13} className="mr-1.5" />
-              Regel toevoegen
-            </Button>
-          </div>
-        </div>
-
-        {werkbladAttachments.length > 0 && (
-          <div className="space-y-1.5">
-            {werkbladAttachments.map((att) => (
-              <div key={att.url} className="flex items-center justify-between gap-2 bg-[#F7F5F2] rounded-lg px-3 py-2">
-                <a href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#1C1B19] hover:underline min-w-0">
-                  <FileText size={14} className="shrink-0 text-[#6B6560]" />
-                  <span className="truncate">{att.name}</span>
-                </a>
-                <button onClick={() => removeWerkbladAttachment(att.url)} title="Bijlage verwijderen">
-                  <X size={13} className="text-[#9A948D] hover:text-red-600" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <Dialog open={werkbladCalcOpen} onOpenChange={setWerkbladCalcOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Werkblad zelf berekenen</DialogTitle>
-          </DialogHeader>
-          <WerkbladCalculator
-            rates={wbRates}
-            value={werkbladCalcInputs}
-            onChange={setWerkbladCalcInputs}
-            onApply={applyWerkbladCalc}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Apparatuur-offerte — voor apparatuur die niet uit de bibliotheek komt */}
-      <div className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-medium text-[#1C1B19]">Apparatuur-offerte</h3>
-            <p className="text-xs text-[#6B6560] mt-0.5">
-              Voor apparatuur die je niet uit de eigen bibliotheek kiest — upload de leveranciersofferte (PDF), het overzicht landt in de klantversie, het bedrag in de kostprijs-opbouw.
-            </p>
-          </div>
-          <input ref={apparatuurOfferteInputRef} type="file" accept="application/pdf" hidden onChange={handleApparatuurOfferteUpload} />
-          <Button variant="outline" size="sm" onClick={() => apparatuurOfferteInputRef.current?.click()} disabled={uploadingApparatuurOfferte}>
-            <Upload size={13} className="mr-1.5" />
-            {uploadingApparatuurOfferte ? 'Verwerken...' : 'Offerte uploaden'}
-          </Button>
-        </div>
-
-        {apparatuurAttachments.length > 0 && (
-          <div className="space-y-1.5">
-            {apparatuurAttachments.map((att) => (
-              <div key={att.url} className="flex items-center justify-between gap-2 bg-[#F7F5F2] rounded-lg px-3 py-2">
-                <a href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#1C1B19] hover:underline min-w-0">
-                  <FileText size={14} className="shrink-0 text-[#6B6560]" />
-                  <span className="truncate">{att.name}</span>
-                </a>
-                <button onClick={() => removeApparatuurAttachment(att.url)} title="Bijlage verwijderen">
-                  <X size={13} className="text-[#9A948D] hover:text-red-600" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Apparatuur — verhuisd naar het Configurator-tabblad, incl. de
+         mogelijkheid om meerdere opties (bv. andere merken) te vergelijken. */}
 
       {/* Interne regels — kostprijzen, NOOIT automatisch zichtbaar voor de klant */}
       <div>
@@ -1722,10 +1195,6 @@ export default function QuoteEditor({
           </table>
 
           <div className="flex gap-2 px-4 py-3 border-t border-[#DDD8D2] bg-[#F7F5F2]">
-            <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
-              <Zap size={13} className="mr-1.5" />
-              Apparaat uit bibliotheek
-            </Button>
             <Button variant="outline" size="sm" onClick={addManualItem}>
               <Plus size={13} className="mr-1.5" />
               Losse regel
@@ -1791,148 +1260,8 @@ export default function QuoteEditor({
           </table>
         </div>
 
-        {/* Euroline-rekentool: berekent Opslag/Levering/Installatie/Service
-           op basis van de Euroline-tarieven, en zet het resultaat met één
-           klik in de kostprijs-tabel hierboven (blijft daarna gewoon
-           overschrijfbaar zoals alle AUTO-velden). */}
-        <div className="bg-white rounded-xl border border-[#DDD8D2] p-4 mt-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-[#1C1B19]">Euroline-rekentool</h4>
-              <p className="text-xs text-[#6B6560] mt-0.5">Berekent Opslag, Levering, Installatie en Service op basis van de Euroline-tarieven.</p>
-            </div>
-            <a href="/instellingen/euroline" target="_blank" rel="noreferrer" className="text-xs text-[#C9A96E] hover:underline whitespace-nowrap">
-              Tarieven beheren →
-            </a>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-xs">Montage — aantal meter (m1)</Label>
-                <EurolineInfoButton category="installatie" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={eurolineInputs.montage_meters}
-                  onChange={(e) => updateEurolineInput({ montage_meters: Number(e.target.value) })}
-                  className="h-8"
-                />
-                <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(eurolineInstallatie)}</span>
-              </div>
-              <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                <Checkbox
-                  checked={eurolineInputs.installatie_buitengebied}
-                  onCheckedChange={(v) => updateEurolineInput({ installatie_buitengebied: v === true })}
-                />
-                Installatie in buitengebied (€{rates.installatie_buitengebied_per_m1.toFixed(2)}/m1 i.p.v. €{rates.installatie_per_m1.toFixed(2)}/m1)
-              </label>
-              <p className="text-[10px] text-[#9A948D]">
-                €{eurolineInputs.installatie_buitengebied ? rates.installatie_buitengebied_per_m1.toFixed(2) : rates.installatie_per_m1.toFixed(2)} per m1
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-xs">Opslag — extra weken (na 3 weken inbegrepen)</Label>
-                <EurolineInfoButton category="opslag" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="1"
-                  value={eurolineInputs.opslag_extra_weken}
-                  onChange={(e) => updateEurolineInput({ opslag_extra_weken: Number(e.target.value) })}
-                  className="h-8"
-                />
-                <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(eurolineOpslag)}</span>
-              </div>
-              <p className="text-[10px] text-[#9A948D]">Basis €{rates.opslag_base.toFixed(2)}, +€{rates.opslag_per_week_extra.toFixed(2)}/week</p>
-            </div>
-
-            <div className="space-y-1.5 col-span-2">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-xs">Levering</Label>
-                <EurolineInfoButton category="levering" />
-              </div>
-              <div className="flex items-center gap-4 flex-wrap">
-                <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                  <Checkbox
-                    checked={eurolineInputs.levering_groter}
-                    onCheckedChange={(v) => updateEurolineInput({ levering_groter: v === true })}
-                  />
-                  Grotere levering (&gt;5 pallets, +€{rates.levering_groter_toeslag.toFixed(2)})
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                  <Checkbox
-                    checked={eurolineInputs.levering_niet_begane_grond}
-                    onCheckedChange={(v) => updateEurolineInput({ levering_niet_begane_grond: v === true })}
-                  />
-                  Niet begane grond (+€{rates.levering_niet_begane_grond.toFixed(2)})
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                  <Checkbox
-                    checked={eurolineInputs.levering_verhuislift}
-                    onCheckedChange={(v) => updateEurolineInput({ levering_verhuislift: v === true })}
-                  />
-                  Verhuislift (+€{rates.levering_verhuislift.toFixed(2)})
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                  <Checkbox
-                    checked={eurolineInputs.levering_buiten_werkgebied}
-                    onCheckedChange={(v) => updateEurolineInput({ levering_buiten_werkgebied: v === true })}
-                  />
-                  Buiten werkgebied Euroline (+€{rates.levering_buiten_werkgebied.toFixed(2)})
-                </label>
-                <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                  Extra lostijd (halve uren)
-                  <Input
-                    type="number"
-                    step="1"
-                    value={eurolineInputs.levering_extra_lostijd_halfuren}
-                    onChange={(e) => updateEurolineInput({ levering_extra_lostijd_halfuren: Number(e.target.value) })}
-                    className="h-7 w-16"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                  Werkblad-levering
-                  <select
-                    value={eurolineInputs.werkblad_levering}
-                    onChange={(e) => updateEurolineInput({ werkblad_levering: e.target.value as EurolineInputs['werkblad_levering'] })}
-                    className="h-7 text-xs bg-white border border-[#DDD8D2] rounded px-1.5 focus:outline-none focus:border-[#1C1B19]"
-                  >
-                    <option value="geen">Geen</option>
-                    <option value="multiplex">Multiplex/Greenpanel (+€{rates.werkblad_multiplex.toFixed(2)})</option>
-                    <option value="composiet">Composiet/keramiek/hardsteen (+€{rates.werkblad_composiet.toFixed(2)})</option>
-                  </select>
-                </div>
-                <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(eurolineLevering)}</span>
-              </div>
-              <p className="text-[10px] text-[#9A948D]">Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)</p>
-            </div>
-
-            <div className="space-y-1.5 col-span-2">
-              <Label className="text-xs">Service — aantal uur nacalculatie</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.5"
-                  value={eurolineInputs.service_uren}
-                  onChange={(e) => updateEurolineInput({ service_uren: Number(e.target.value) })}
-                  className="h-8 max-w-[120px]"
-                />
-                <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(eurolineService)}</span>
-              </div>
-              <p className="text-[10px] text-[#9A948D]">€{rates.service_tarief_per_uur}/uur, minimum €{rates.service_minimum} zodra er service is</p>
-            </div>
-          </div>
-
-          <Button variant="outline" size="sm" onClick={applyEurolineToRows}>
-            Toepassen op kostprijs-tabel
-          </Button>
-        </div>
+        {/* Euroline-rekentool (Opslag, levering, installatie, service) —
+           verhuisd naar het Configurator-tabblad. */}
 
         {/* Eén compact blok: BTW/totaal + marge-overzicht. Marge-overzicht
            leest rechtstreeks uit de categorietabel hierboven, dus kan nooit

@@ -9,11 +9,12 @@ import TabBar from './TabBar'
 import ComingSoonTab from './ComingSoonTab'
 import HistoryTab from './HistoryTab'
 import QuoteEditor from './offerte/QuoteEditor'
+import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
 import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
-import { Appliance, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
+import { Appliance, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -92,7 +93,9 @@ export default async function ProjectDetailPage({
   let appliances: Appliance[] = []
   let eurolineRates: EurolineRates | null = null
   let werkbladRates: WerkbladRates | null = null
-  if (tab === 'offerte') {
+  let configuratorOptions: ConfiguratorOption[] = []
+  let configuratorScenarios: ConfiguratorScenario[] = []
+  if (tab === 'offerte' || tab === 'configurator') {
     const [{ data: quoteData }, { data: applianceData }, { data: ratesData }, { data: werkbladRatesData }] = await Promise.all([
       supabase
         .from('finka_quotes')
@@ -111,13 +114,22 @@ export default async function ProjectDetailPage({
     eurolineRates = ratesData as EurolineRates | null
     werkbladRates = werkbladRatesData as WerkbladRates | null
 
-    if (quote) {
+    if (quote && tab === 'offerte') {
       const [{ data: itemsData }, { data: downloadsData }] = await Promise.all([
         supabase.from('finka_quote_items').select('*').eq('quote_id', quote.id).order('sort_order'),
         supabase.from('finka_quote_downloads').select('*').eq('quote_id', quote.id).order('downloaded_at', { ascending: false }),
       ])
       quoteItems = (itemsData ?? []) as QuoteItem[]
       quoteDownloads = (downloadsData ?? []) as QuoteDownload[]
+    }
+
+    if (quote && tab === 'configurator') {
+      const [{ data: optionsData }, { data: scenariosData }] = await Promise.all([
+        supabase.from('finka_configurator_options').select('*').eq('quote_id', quote.id).order('sort_order'),
+        supabase.from('finka_configurator_scenarios').select('*').eq('quote_id', quote.id).order('sort_order'),
+      ])
+      configuratorOptions = (optionsData ?? []) as ConfiguratorOption[]
+      configuratorScenarios = (scenariosData ?? []) as ConfiguratorScenario[]
     }
   }
 
@@ -156,8 +168,17 @@ export default async function ProjectDetailPage({
 
       {tab === 'historie' ? (
         <HistoryTab entries={historyEntries} />
+      ) : tab === 'configurator' ? (
+        <ConfiguratorTab
+          quote={quote}
+          options={configuratorOptions}
+          scenarios={configuratorScenarios}
+          werkbladRates={werkbladRates}
+          eurolineRates={eurolineRates}
+          appliances={appliances}
+        />
       ) : tab === 'offerte' ? (
-        <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} eurolineRates={eurolineRates} werkbladRates={werkbladRates} />
+        <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} />
       ) : tab === 'planning' ? (
         <PlanningTab projectId={id} milestones={milestones} />
       ) : tab === 'aansluitschema' ? (

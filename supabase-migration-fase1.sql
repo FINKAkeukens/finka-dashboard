@@ -793,3 +793,51 @@ ALTER TABLE finka_appliances ADD CONSTRAINT finka_appliances_type_check
     'koelkast','koelvries','vriezer','wijnklimaatkast','kokendwaterkraan',
     'kraan','spoelbak','anders'
   ));
+
+-- =========================================================
+-- 35. Configurator-tabblad — per onderdeel (Kasten/Apparatuur/Werkblad/
+--    Opslag-levering-montage) meerdere vergelijkbare "opties" kunnen
+--    invullen, en die combineren tot één of meerdere "kostenoverzichten"
+--    (elk: precies één gekozen optie per onderdeel). De section-constraint
+--    bevat meteen alle 4 waarden, ook al krijgt in fase 1 alleen 'kasten'
+--    een editor — voorkomt dat de constraint later los bijgewerkt moet
+--    worden per fase.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_configurator_options (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id UUID NOT NULL REFERENCES finka_quotes(id) ON DELETE CASCADE,
+  section TEXT NOT NULL CHECK (section IN ('kasten', 'apparatuur', 'werkblad', 'opslag')),
+  name TEXT NOT NULL DEFAULT 'Optie 1',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  cost_total NUMERIC(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_finka_configurator_options_quote ON finka_configurator_options(quote_id);
+
+CREATE TABLE IF NOT EXISTS finka_configurator_scenarios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  quote_id UUID NOT NULL REFERENCES finka_quotes(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Kostenoverzicht 1',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  kasten_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL,
+  apparatuur_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL,
+  werkblad_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL,
+  opslag_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_finka_configurator_scenarios_quote ON finka_configurator_scenarios(quote_id);
+
+ALTER TABLE finka_configurator_options ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finka_configurator_scenarios ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users only" ON finka_configurator_options FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Authenticated users only" ON finka_configurator_scenarios FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_configurator_options TO anon, authenticated, service_role;
+GRANT ALL ON TABLE finka_configurator_scenarios TO anon, authenticated, service_role;
