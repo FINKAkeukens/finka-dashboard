@@ -3,10 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { Users, Zap, Mail, TrendingUp, FolderKanban } from 'lucide-react'
 import Link from 'next/link'
-
-// "Test Test" (2026-015-FK) is een dummy-klant uit het testen van het
-// dashboard, geen echte klant — telt nergens in de dashboardcijfers mee.
-const TEST_CUSTOMER_ID = '85ed0a45-f27c-4ef5-9cbf-9168f1128a83'
+import { TEST_CUSTOMER_ID } from '@/lib/constants'
 
 export default async function DashboardPage() {
   const supabase = await createClient()

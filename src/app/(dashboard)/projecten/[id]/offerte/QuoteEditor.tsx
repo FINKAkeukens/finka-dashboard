@@ -738,6 +738,11 @@ export default function QuoteEditor({
     // op i.p.v. de mogelijk verouderde opgeslagen waarde.
     const finalCostBreakdown = costBreakdown.map((r) => ({ ...r, werkelijke_kosten: displayedCost(r) }))
     const finalTotal = totalSource === 'auto' ? totaalPrijsInclBtw : totalValue
+    // Eerste keer dat de status op 'akkoord' komt te staan — voor de
+    // omzet-rapportage op /financieel. Blijft daarna staan, ook als de
+    // status later weer wijzigt (historisch moment van accorderen).
+    const justAccorded = status === 'akkoord' && !quote.akkoord_at
+    const akkoordAt = justAccorded ? new Date().toISOString() : quote.akkoord_at
 
     const before = {
       status: quote.status,
@@ -745,6 +750,7 @@ export default function QuoteEditor({
     }
     const quoteUpdate = {
       status,
+      akkoord_at: akkoordAt,
       plattegrond_url: plattegrondUrl || null,
       render_urls: renderUrls,
       standaard_afbeeldingen: standaardAfbeeldingen,
@@ -785,6 +791,28 @@ export default function QuoteEditor({
       return
     }
     await logFieldChanges(supabase, 'finka_quotes', quote.id, before, quoteUpdate, changedBy)
+
+    // Legt de begrote bedragen per categorie vast zodra de offerte voor het
+    // eerst wordt geaccordeerd — ijkpunt voor het Financieel-tabblad
+    // (begroot vs. werkelijk), blijft daarna ongewijzigd staan ook als deze
+    // offerte later nog verandert.
+    if (justAccorded) {
+      const { error: financialsError } = await supabase
+        .from('finka_project_financials')
+        .upsert(
+          finalCostBreakdown.map((row) => ({
+            project_id: projectId,
+            category: row.key,
+            begroot_bedrag: row.werkelijke_kosten,
+            marge_percentage: row.marge_percentage,
+            // Startpunt = begroot, staff corrigeert zodra de echte kosten
+            // bekend zijn (en vinkt dan "betaald" aan).
+            werkelijk_bedrag: row.werkelijke_kosten,
+          })),
+          { onConflict: 'project_id,category' }
+        )
+      if (financialsError) setError(financialsError.message)
+    }
 
     const currentIds = new Set(items.filter((i) => !i.isNew).map((i) => i.id))
     const toDelete = [...originalItemIds.current].filter((id) => !currentIds.has(id))

@@ -841,3 +841,179 @@ CREATE POLICY "Authenticated users only" ON finka_configurator_scenarios FOR ALL
 
 GRANT ALL ON TABLE finka_configurator_options TO anon, authenticated, service_role;
 GRANT ALL ON TABLE finka_configurator_scenarios TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 36. Checklist-tabblad — voortgangschecklist per project (verkoop t/m
+--    afronding). Elk project krijgt automatisch de vaste standaardpunten
+--    (zie de trigger hieronder), staff kan daarnaast losse eigen punten
+--    toevoegen. item_key is bewust vrije tekst zonder CHECK-constraint
+--    (zelfde aanpak als finka_connection_items.standard_key) — voorkomt dat
+--    de constraint uit de pas loopt zodra er een standaardpunt bijkomt.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_checklist_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  item_key TEXT,
+  category TEXT NOT NULL,
+  label TEXT,
+  checked BOOLEAN NOT NULL DEFAULT false,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS finka_checklist_items_fixed_unique
+  ON finka_checklist_items (project_id, item_key)
+  WHERE item_key IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION create_default_checklist_items()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO finka_checklist_items (project_id, item_key, category, sort_order)
+  VALUES
+    (NEW.id, 'wensen_genoteerd', 'verkoop', 0),
+    (NEW.id, 'eerste_offerte_verstuurd', 'verkoop', 1),
+    (NEW.id, 'finale_offerte_akkoord', 'verkoop', 2),
+    (NEW.id, 'aanbetaling_ontvangen', 'verkoop', 3),
+    (NEW.id, 'keuken_ingemeten', 'ontwerp_meten', 4),
+    (NEW.id, 'tekening_goedgekeurd', 'ontwerp_meten', 5),
+    (NEW.id, 'apparatuur_gekozen', 'ontwerp_meten', 6),
+    (NEW.id, 'werkblad_gekozen', 'ontwerp_meten', 7),
+    (NEW.id, 'kasten_besteld', 'bestellen', 8),
+    (NEW.id, 'apparatuur_besteld', 'bestellen', 9),
+    (NEW.id, 'werkblad_besteld', 'bestellen', 10),
+    (NEW.id, 'accessoires_besteld', 'bestellen', 11),
+    (NEW.id, 'aansluitschema_gedeeld', 'bestellen', 12),
+    (NEW.id, 'levering_ingepland', 'levering_montage', 13),
+    (NEW.id, 'keuken_geleverd', 'levering_montage', 14),
+    (NEW.id, 'montage_ingepland', 'levering_montage', 15),
+    (NEW.id, 'montage_afgerond', 'levering_montage', 16),
+    (NEW.id, 'eindcontrole', 'levering_montage', 17),
+    (NEW.id, 'restbetaling_ontvangen', 'afronding', 18),
+    (NEW.id, 'garantiepapieren', 'afronding', 19);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_default_checklist_items ON finka_projects;
+CREATE TRIGGER set_default_checklist_items
+  AFTER INSERT ON finka_projects
+  FOR EACH ROW EXECUTE FUNCTION create_default_checklist_items();
+
+-- Backfill: bestaande projecten (aangemaakt vóór deze migratie) krijgen
+-- alsnog alle standaardpunten.
+INSERT INTO finka_checklist_items (project_id, item_key, category, sort_order)
+SELECT p.id, m.key, m.category, m.sort_order
+FROM finka_projects p
+CROSS JOIN (VALUES
+  ('wensen_genoteerd', 'verkoop', 0),
+  ('eerste_offerte_verstuurd', 'verkoop', 1),
+  ('finale_offerte_akkoord', 'verkoop', 2),
+  ('aanbetaling_ontvangen', 'verkoop', 3),
+  ('keuken_ingemeten', 'ontwerp_meten', 4),
+  ('tekening_goedgekeurd', 'ontwerp_meten', 5),
+  ('apparatuur_gekozen', 'ontwerp_meten', 6),
+  ('werkblad_gekozen', 'ontwerp_meten', 7),
+  ('kasten_besteld', 'bestellen', 8),
+  ('apparatuur_besteld', 'bestellen', 9),
+  ('werkblad_besteld', 'bestellen', 10),
+  ('accessoires_besteld', 'bestellen', 11),
+  ('aansluitschema_gedeeld', 'bestellen', 12),
+  ('levering_ingepland', 'levering_montage', 13),
+  ('keuken_geleverd', 'levering_montage', 14),
+  ('montage_ingepland', 'levering_montage', 15),
+  ('montage_afgerond', 'levering_montage', 16),
+  ('eindcontrole', 'levering_montage', 17),
+  ('restbetaling_ontvangen', 'afronding', 18),
+  ('garantiepapieren', 'afronding', 19)
+) AS m(key, category, sort_order)
+WHERE NOT EXISTS (
+  SELECT 1 FROM finka_checklist_items ci WHERE ci.project_id = p.id AND ci.item_key = m.key
+);
+
+ALTER TABLE finka_checklist_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_checklist_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_checklist_items TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 37. Financieel-pagina — moment van accorderen bijhouden per offerte, zodat
+--    omzet per maand/jaar te rapporteren is (zie /financieel). Wordt vanaf nu
+--    automatisch gezet door QuoteEditor zodra de status voor het eerst op
+--    'akkoord' komt te staan. Bestaande al-geaccordeerde offertes krijgen als
+--    beste schatting hun updated_at-moment mee.
+-- =========================================================
+
+ALTER TABLE finka_quotes ADD COLUMN IF NOT EXISTS akkoord_at TIMESTAMPTZ;
+
+UPDATE finka_quotes SET akkoord_at = updated_at
+WHERE status = 'akkoord' AND akkoord_at IS NULL;
+
+-- =========================================================
+-- 38. Financieel-tabblad per project — begroot vs. werkelijk per kosten-
+--    categorie (Kasten, Apparatuur, Werkblad, ...). begroot_bedrag wordt
+--    automatisch vastgelegd (snapshot van cost_breakdown) zodra een offerte
+--    voor het eerst op 'akkoord' komt te staan, zie QuoteEditor's
+--    handleSave. category is bewust vrije tekst zonder CHECK-constraint
+--    (zelfde aanpak als bij Checklist) i.p.v. gekoppeld aan CostCategoryKey.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_project_financials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  begroot_bedrag NUMERIC(10,2) NOT NULL DEFAULT 0,
+  werkelijk_bedrag NUMERIC(10,2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, category)
+);
+
+ALTER TABLE finka_project_financials ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_project_financials FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_project_financials TO anon, authenticated, service_role;
+
+-- Backfill: offertes die al vóór deze migratie op 'akkoord' stonden, halen
+-- de "eerste keer akkoord"-snapshot in de app nooit (die triggert alleen op
+-- de overgang náár 'akkoord'). Vult 'm hier één keer met de huidige
+-- cost_breakdown-inhoud van die offertes.
+INSERT INTO finka_project_financials (project_id, category, begroot_bedrag)
+SELECT q.project_id, row->>'key', COALESCE((row->>'werkelijke_kosten')::numeric, 0)
+FROM finka_quotes q
+CROSS JOIN LATERAL jsonb_array_elements(q.cost_breakdown) AS row
+WHERE q.status = 'akkoord' AND q.archived_at IS NULL
+ON CONFLICT (project_id, category) DO NOTHING;
+
+-- =========================================================
+-- 39. Financieel-tabblad — ook de marge% van het moment van accorderen
+--    vastleggen, niet alleen het kostenbedrag. Samen bepalen ze de vaste
+--    "prijs klant" per categorie (begroot_bedrag * (1 + marge_percentage/100)),
+--    waarmee de werkelijke bruto marge (prijs klant - werkelijke kosten)
+--    te berekenen is zodra staff de werkelijke kosten invult.
+-- =========================================================
+
+ALTER TABLE finka_project_financials ADD COLUMN IF NOT EXISTS marge_percentage NUMERIC(6,2) NOT NULL DEFAULT 0;
+
+UPDATE finka_project_financials pf
+SET marge_percentage = sub.marge_percentage
+FROM (
+  SELECT q.project_id, row->>'key' AS category, COALESCE((row->>'marge_percentage')::numeric, 0) AS marge_percentage
+  FROM finka_quotes q
+  CROSS JOIN LATERAL jsonb_array_elements(q.cost_breakdown) AS row
+  WHERE q.status = 'akkoord' AND q.archived_at IS NULL
+) sub
+WHERE pf.project_id = sub.project_id AND pf.category = sub.category;
+
+-- =========================================================
+-- 40. Financieel-tabblad — werkelijke kosten staan standaard al gelijk aan
+--    begroot (staff hoeft dus niet blind te typen, alleen te corrigeren),
+--    en een "betaald"-vinkje geeft aan of dat bedrag écht bevestigd is —
+--    pas dan telt het mee als werkelijke kosten in de marge-berekening
+--    i.p.v. als nog-onbevestigde standaardwaarde.
+-- =========================================================
+
+ALTER TABLE finka_project_financials ADD COLUMN IF NOT EXISTS betaald BOOLEAN NOT NULL DEFAULT false;
+
+UPDATE finka_project_financials SET werkelijk_bedrag = begroot_bedrag WHERE werkelijk_bedrag IS NULL;

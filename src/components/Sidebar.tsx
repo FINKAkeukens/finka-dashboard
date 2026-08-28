@@ -14,6 +14,7 @@ import {
   Settings,
   Calculator,
   CalendarRange,
+  Euro,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -44,6 +45,7 @@ const groups: NavGroup[] = [
     label: 'Projecten',
     items: [
       { href: '/projecten', label: 'Projecten', icon: FolderKanban },
+      { href: '/financieel', label: 'Financieel', icon: Euro },
       { href: '/planning', label: 'Planning', icon: CalendarRange },
     ],
   },

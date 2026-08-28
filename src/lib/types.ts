@@ -201,6 +201,34 @@ export type CostCategoryKey =
 
 export type EurolineWerkbladLevering = 'geen' | 'multiplex' | 'composiet'
 
+// ---------------------------------------------------------------------------
+// Financieel (project-tabblad) — begroot vs. werkelijk per kostencategorie.
+// begroot_bedrag wordt automatisch vastgelegd zodra de offerte voor het
+// eerst op 'akkoord' wordt gezet (snapshot van cost_breakdown op dat
+// moment, zie QuoteEditor's handleSave) en blijft daarna staan, ook als de
+// offerte later nog wijzigt. werkelijk_bedrag vult staff zelf in zodra de
+// echte kosten bekend zijn (na levering/montage).
+// ---------------------------------------------------------------------------
+
+export interface ProjectFinancialItem {
+  id: string
+  project_id: string
+  category: CostCategoryKey
+  begroot_bedrag: number
+  // Marge% zoals die in de kostprijs-opbouw stond op het moment van
+  // accorderen — samen met begroot_bedrag bepaalt dit de (vaste) prijs die
+  // de klant per categorie betaalt: prijs_klant = begroot_bedrag * (1 + marge_percentage/100).
+  marge_percentage: number
+  // Staat standaard al gelijk aan begroot_bedrag (zie migratie/upsert bij
+  // accorderen) — handmatig overschrijfbaar zodra de echte kosten bekend
+  // zijn. Telt pas mee als "echt werkelijk" in de totalen/marge-berekening
+  // zodra `betaald` is aangevinkt.
+  werkelijk_bedrag: number | null
+  betaald: boolean
+  created_at: string
+  updated_at: string
+}
+
 // Losse disclaimer-tekst per paginatype (klantversie) — de prijspagina
 // (customer_disclaimer_text) en aansluitingenpagina
 // (customer_connections_disclaimer) hadden dit al als los veld, dit dekt de
@@ -344,6 +372,11 @@ export interface Quote {
   btw_percentage: number
   total_price: number
   total_price_source: FieldSource
+  // Moment waarop de status voor het eerst op 'akkoord' werd gezet — voor
+  // omzet-rapportage (zie /financieel). Wordt automatisch gezet in
+  // QuoteEditor's handleSave, nooit met terugwerkende kracht overschreven
+  // als de status daarna weer wijzigt.
+  akkoord_at: string | null
   // Klantversie — losstaand van de interne regels/prijzen hierboven.
   // Niets hiervan wordt automatisch gevuld vanuit interne data; alles wordt
   // expliciet door staff toegevoegd/bewerkt (zie include_in_customer_view).
@@ -639,6 +672,31 @@ export interface ProjectMilestone {
   label: string | null
   notes: string | null
   assigned_to: MilestoneAssignee | null
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Checklist — voortgangschecklist per project (verkoop t/m afronding). Elk
+// project krijgt automatisch de vaste standaardpunten (zie migratie-trigger
+// create_default_checklist_items + CHECKLIST_ORDER in src/lib/checklist.ts);
+// staff kan daarnaast losse eigen punten toevoegen per categorie.
+// ---------------------------------------------------------------------------
+
+export type ChecklistCategory = 'verkoop' | 'ontwerp_meten' | 'bestellen' | 'levering_montage' | 'afronding'
+
+export interface ChecklistItem {
+  id: string
+  project_id: string
+  // NULL = vrij toegevoegd item; anders één van CHECKLIST_ORDER in
+  // src/lib/checklist.ts. Vrije tekst i.p.v. een vaste union + CHECK-
+  // constraint (zelfde aanpak als ConnectionItem.standard_key) — voorkomt
+  // dat de database-constraint uit de pas loopt zodra er een punt bijkomt.
+  item_key: string | null
+  category: ChecklistCategory
+  label: string | null
+  checked: boolean
+  sort_order: number
   created_at: string
   updated_at: string
 }

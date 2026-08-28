@@ -6,8 +6,10 @@ import { usePathname } from 'next/navigation'
 const tabs = [
   { id: 'configurator', label: 'Configurator' },
   { id: 'offerte', label: 'Offerte' },
+  { id: 'financieel', label: 'Financieel' },
   { id: 'klantkeuzes', label: 'Klantkeuzes' },
   { id: 'planning', label: 'Planning' },
+  { id: 'checklist', label: 'Checklist' },
   { id: 'aansluitschema', label: 'Aansluitschema' },
   { id: 'facturen', label: 'Facturen' },
   { id: 'documenten', label: 'Documenten' },

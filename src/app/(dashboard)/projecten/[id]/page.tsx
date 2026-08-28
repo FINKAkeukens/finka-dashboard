@@ -11,10 +11,12 @@ import HistoryTab from './HistoryTab'
 import QuoteEditor from './offerte/QuoteEditor'
 import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
+import ChecklistTab from './ChecklistTab'
+import FinancieelTab from './FinancieelTab'
 import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
-import { Appliance, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
+import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -64,6 +66,34 @@ export default async function ProjectDetailPage({
       .eq('project_id', id)
       .order('sort_order')
     milestones = (data ?? []) as ProjectMilestone[]
+  }
+
+  let checklistItems: ChecklistItem[] = []
+  if (tab === 'checklist') {
+    const { data } = await supabase
+      .from('finka_checklist_items')
+      .select('*')
+      .eq('project_id', id)
+      .order('sort_order')
+    checklistItems = (data ?? []) as ChecklistItem[]
+  }
+
+  let financialItems: ProjectFinancialItem[] = []
+  let financialBtwPercentage = 21
+  if (tab === 'financieel') {
+    const [{ data: financialsData }, { data: latestQuote }] = await Promise.all([
+      supabase.from('finka_project_financials').select('*').eq('project_id', id),
+      supabase
+        .from('finka_quotes')
+        .select('btw_percentage')
+        .eq('project_id', id)
+        .is('archived_at', null)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ])
+    financialItems = (financialsData ?? []) as ProjectFinancialItem[]
+    financialBtwPercentage = (latestQuote as { btw_percentage: number } | null)?.btw_percentage ?? 21
   }
 
   let connectionItems: ConnectionItem[] = []
@@ -134,7 +164,7 @@ export default async function ProjectDetailPage({
   }
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className={`p-8 ${tab === 'financieel' ? 'max-w-6xl' : 'max-w-4xl'}`}>
       <Link href="/projecten" className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19] mb-6">
         <ArrowLeft size={14} />
         Terug naar projecten
@@ -179,8 +209,12 @@ export default async function ProjectDetailPage({
         />
       ) : tab === 'offerte' ? (
         <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} />
+      ) : tab === 'financieel' ? (
+        <FinancieelTab items={financialItems} btwPercentage={financialBtwPercentage} />
       ) : tab === 'planning' ? (
         <PlanningTab projectId={id} milestones={milestones} />
+      ) : tab === 'checklist' ? (
+        <ChecklistTab projectId={id} items={checklistItems} />
       ) : tab === 'aansluitschema' ? (
         <AansluitschemaTab
           projectId={id}
