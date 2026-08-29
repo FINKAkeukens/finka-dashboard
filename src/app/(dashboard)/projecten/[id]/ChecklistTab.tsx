@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { Plus, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
 import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 
@@ -87,6 +87,7 @@ export default function ChecklistTab({
       item_key: null,
       category: categoryLabels.get(t.category_id) ?? 'Overig',
       label: t.label,
+      visible_to_customer: t.visible_to_customer,
       sort_order: index,
     }))
     const { data, error: insError } = await supabase.from('finka_checklist_items').insert(rows).select()
@@ -104,6 +105,16 @@ export default function ChecklistTab({
     const { error: updError } = await supabase
       .from('finka_checklist_items')
       .update({ checked, updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+    if (updError) setError(updError.message)
+  }
+
+  async function toggleVisible(item: ChecklistItem) {
+    const visible_to_customer = !item.visible_to_customer
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, visible_to_customer } : i)))
+    const { error: updError } = await supabase
+      .from('finka_checklist_items')
+      .update({ visible_to_customer, updated_at: new Date().toISOString() })
       .eq('id', item.id)
     if (updError) setError(updError.message)
   }
@@ -199,6 +210,16 @@ export default function ChecklistTab({
                     onBlur={() => saveLabel(item)}
                     className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${item.checked ? 'line-through text-[#9A948D]' : 'text-[#1C1B19]'}`}
                   />
+                  <button
+                    onClick={() => toggleVisible(item)}
+                    title={item.visible_to_customer ? 'Zichtbaar voor klant — klik om te verbergen' : 'Verborgen voor klant — klik om te tonen'}
+                  >
+                    {item.visible_to_customer ? (
+                      <Eye size={14} className="text-[#9A948D] hover:text-[#1C1B19]" />
+                    ) : (
+                      <EyeOff size={14} className="text-[#C9A96E]" />
+                    )}
+                  </button>
                   <button onClick={() => removeItem(item.id)} title="Punt verwijderen">
                     <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
                   </button>

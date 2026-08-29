@@ -18,6 +18,7 @@ import {
   Scale,
   Receipt,
   ListChecks,
+  HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -76,6 +77,7 @@ const groups: NavGroup[] = [
       { href: '/instellingen/euroline', label: 'Euroline-tarieven', icon: Settings },
       { href: '/instellingen/werkblad', label: 'Werkblad-prijzen', icon: Settings },
       { href: '/instellingen/checklist', label: 'Checklist-items', icon: ListChecks },
+      { href: '/instellingen/vragenlijst', label: 'Vragenlijst', icon: HelpCircle },
     ],
   },
 ]

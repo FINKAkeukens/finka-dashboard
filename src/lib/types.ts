@@ -752,6 +752,11 @@ export interface ChecklistItem {
   category: string
   label: string | null
   checked: boolean
+  // Bepaalt of dit punt meetelt op de klantportaal-statuspagina
+  // (/portaal/projecten/[id]) — interne stappen (bv. "Kasten betaald")
+  // hoeven klanten niet te zien. Startwaarde komt van het sjabloon-item op
+  // het moment van "Checklist aanmaken", los aan/uit te zetten per project.
+  visible_to_customer: boolean
   sort_order: number
   created_at: string
   updated_at: string
@@ -777,7 +782,57 @@ export interface ChecklistTemplateItem {
   id: string
   category_id: string
   label: string
+  // Startwaarde voor ChecklistItem.visible_to_customer — zie daar.
+  visible_to_customer: boolean
   sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Vragenlijst (klantportaal) — anders dan de checklist GEEN snapshot: een
+// project-antwoord verwijst rechtstreeks naar het sjabloon-item. Zie
+// migratie-sectie 49 voor de reden.
+// ---------------------------------------------------------------------------
+
+export type QuestionnaireQuestionType = 'tekst' | 'lange_tekst' | 'multi_select' | 'bestand'
+
+// Kopje/sectie binnen de vragenlijst (bv. "Wensen en voorkeuren") — puur
+// instellingen, geen snapshot per project (zie QuestionnaireTemplateQuestion).
+export interface QuestionnaireCategoryItem {
+  id: string
+  label: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface QuestionnaireTemplateQuestion {
+  id: string
+  category_id: string
+  question: string
+  type: QuestionnaireQuestionType
+  // Alleen relevant bij type === 'multi_select' — de aan te vinken opties.
+  options: string[]
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface QuestionnaireResponse {
+  id: string
+  project_id: string
+  question_id: string
+  // Bij type 'tekst'/'lange_tekst' gewoon de tekst; bij 'multi_select' een
+  // JSON-array van gekozen opties (bv. '["Oven","Vriezer"]'); bij 'bestand'
+  // een JSON-array van {url, name} — één kolom i.p.v. een aparte tabel/
+  // kolom per vraagtype.
+  answer: string | null
+  // Staff kan een vraag per project verbergen voor de klant — anders dan
+  // bij ChecklistItem.visible_to_customer is dit hier geen sjabloon-
+  // snapshot (vragen zijn live/gedeeld, zie QuestionnaireTemplateQuestion),
+  // maar staat op de project+vraag-koppeling zelf.
+  hidden: boolean
   created_at: string
   updated_at: string
 }

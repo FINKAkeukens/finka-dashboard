@@ -1230,3 +1230,192 @@ WHERE NOT EXISTS (SELECT 1 FROM finka_staff_users s WHERE s.id = auth.users.id);
 
 ALTER TABLE finka_customers ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS finka_customers_auth_user_id_idx ON finka_customers(auth_user_id) WHERE auth_user_id IS NOT NULL;
+
+-- =========================================================
+-- 47. Klantportaal — per checklist-item aan/uit kunnen zetten of het
+--    zichtbaar is voor de klant (bv. interne stappen als "Kasten betaald"
+--    hoeven klanten niet te zien). Staat op de sjabloon (het standaard-
+--    lijstje uit /instellingen/checklist, als startwaarde voor nieuwe
+--    project-checklists) én los per project-item (voor uitzonderingen),
+--    zelfde snapshot-principe als label/category.
+-- =========================================================
+
+ALTER TABLE finka_checklist_templates ADD COLUMN IF NOT EXISTS visible_to_customer BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE finka_checklist_items ADD COLUMN IF NOT EXISTS visible_to_customer BOOLEAN NOT NULL DEFAULT true;
+
+-- =========================================================
+-- 48. Klantportaal — omgekeerde standaard: nieuwe checklist-items staan nu
+--    standaard verborgen voor de klant (opt-in per item via de oog-knop),
+--    i.p.v. standaard zichtbaar (opt-out). Bestaande items worden hierop
+--    ook teruggezet, zodat staff bewust per item aanzet wat een klant mag
+--    zien i.p.v. dat er per ongeluk al iets zichtbaar staat.
+-- =========================================================
+
+ALTER TABLE finka_checklist_templates ALTER COLUMN visible_to_customer SET DEFAULT false;
+ALTER TABLE finka_checklist_items ALTER COLUMN visible_to_customer SET DEFAULT false;
+
+UPDATE finka_checklist_templates SET visible_to_customer = false;
+UPDATE finka_checklist_items SET visible_to_customer = false;
+
+-- =========================================================
+-- 49. Klantportaal — vragenlijst. Anders dan de checklist is dit bewust
+--    GEEN snapshot-per-project: finka_questionnaire_responses verwijst
+--    rechtstreeks naar het sjabloon-item (question_id), zodat een nieuwe
+--    vraag die staff later toevoegt meteen voor alle projecten verschijnt —
+--    logisch voor een intakeformulier (je wil alsnog een antwoord), anders
+--    dan de checklist (die juist een vaste momentopname van toen moet
+--    blijven). Antwoorden komen alleen via een API-route binnen
+--    (/api/portaal/antwoord) die valideert dat het project bij de
+--    ingelogde klant hoort — nooit rechtstreeks vanuit de klant-browser.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_questionnaire_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  question TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'tekst' CHECK (type IN ('tekst','lange_tekst')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_questionnaire_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_questionnaire_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_questionnaire_templates TO anon, authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS finka_questionnaire_responses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  question_id UUID NOT NULL REFERENCES finka_questionnaire_templates(id) ON DELETE CASCADE,
+  answer TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(project_id, question_id)
+);
+
+ALTER TABLE finka_questionnaire_responses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_questionnaire_responses FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_questionnaire_responses TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 50. Vragenlijst — multi-select vraagtype (met eigen, per vraag instelbare
+--    opties) + kopjes (categorieën, zelfde patroon als de checklist) om de
+--    langere vragenlijst overzichtelijk te houden. finka_questionnaire_
+--    responses.answer blijft bewust TEXT: bij multi_select staat daar een
+--    JSON-array (bv. '["Oven","Vriezer"]') in, zodat er geen aparte kolom
+--    per vraagtype nodig is. Meteen ook de eerste echte inhoud (aangeleverd
+--    door de gebruiker) i.p.v. het testvraagje van hiervoor.
+-- =========================================================
+
+DELETE FROM finka_questionnaire_templates WHERE question = 'test vraag lavala';
+
+ALTER TABLE finka_questionnaire_templates DROP CONSTRAINT IF EXISTS finka_questionnaire_templates_type_check;
+ALTER TABLE finka_questionnaire_templates ADD CONSTRAINT finka_questionnaire_templates_type_check CHECK (type IN ('tekst','lange_tekst','multi_select'));
+ALTER TABLE finka_questionnaire_templates ADD COLUMN IF NOT EXISTS options JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS finka_questionnaire_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_questionnaire_categories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_questionnaire_categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_questionnaire_categories TO anon, authenticated, service_role;
+
+ALTER TABLE finka_questionnaire_templates ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES finka_questionnaire_categories(id) ON DELETE CASCADE;
+
+INSERT INTO finka_questionnaire_categories (label, sort_order) VALUES
+  ('Afmetingen van de ruimte', 0),
+  ('Positie van aansluitingen', 1),
+  ('Wensen en voorkeuren', 2),
+  ('Indeling en functionaliteit', 3),
+  ('Budget', 4),
+  ('Eventuele extra''s', 5),
+  ('Inspiratievoorbeelden', 6),
+  ('Praktische informatie', 7),
+  ('Overige opmerkingen', 8);
+
+INSERT INTO finka_questionnaire_templates (category_id, question, type, options, sort_order)
+SELECT c.id, q.question, q.type, to_jsonb(q.options), q.sort_order
+FROM (VALUES
+  ('Afmetingen van de ruimte', 'Plattegrond met exacte maten van de keuken (lengte, breedte, hoogte)', 'lange_tekst', ARRAY[]::text[], 0),
+  ('Afmetingen van de ruimte', 'Locatie en afmetingen van ramen, deuren, en eventuele schuine wanden of plafonds', 'lange_tekst', ARRAY[]::text[], 1),
+  ('Afmetingen van de ruimte', 'Hoogte van het plafond en eventuele balken of obstakels', 'lange_tekst', ARRAY[]::text[], 2),
+
+  ('Positie van aansluitingen', 'Locatie van water- en afvoeraansluitingen', 'lange_tekst', ARRAY[]::text[], 0),
+  ('Positie van aansluitingen', 'Plaats van stopcontacten en elektriciteitspunten', 'lange_tekst', ARRAY[]::text[], 1),
+  ('Positie van aansluitingen', 'Eventuele ventilatie- of afzuigkanalen', 'lange_tekst', ARRAY[]::text[], 2),
+
+  ('Wensen en voorkeuren', 'Gewenste stijl', 'lange_tekst', ARRAY[]::text[], 0),
+  ('Wensen en voorkeuren', 'Kleurvoorkeuren voor kasten, werkblad en achterwand', 'lange_tekst', ARRAY[]::text[], 1),
+  ('Wensen en voorkeuren', 'Greeploos of handgrepen?', 'multi_select', ARRAY['Greeploos','Handgrepen'], 2),
+  ('Wensen en voorkeuren', 'Type werkblad', 'multi_select', ARRAY['Composiet','Natuursteen','Keramiek','RVS','Anders'], 3),
+  ('Wensen en voorkeuren', 'Werkblad: meeleveren of zelf regelen?', 'multi_select', ARRAY['Meeleveren','Zelf regelen'], 4),
+  ('Wensen en voorkeuren', 'Welke apparatuur wil je? (meerdere mogelijk)', 'multi_select', ARRAY[
+    'Oven','Magnetron','Combi magnetron','Combi oven','Stoomoven',
+    'Koelkast','Vriezer','Koel/vriescombinatie','Inductie kookplaat',
+    'Kookplaat met geïntegreerde afzuiging','Afzuigkap','Quooker',
+    'Wijnklimaatkast','Bordenwarmer','Anders, namelijk...'
+  ], 5),
+  ('Wensen en voorkeuren', 'Apparatuur: meeleveren of zelf regelen?', 'multi_select', ARRAY['Meeleveren','Zelf regelen'], 6),
+
+  ('Indeling en functionaliteit', 'Specifieke behoeften zoals extra opbergruimte, apothekerskast, verhoogde werkhoogte of een bar', 'lange_tekst', ARRAY[]::text[], 0),
+
+  ('Budget', 'Indicatie van het beschikbare budget voor de keuken (incl. of excl. apparatuur en blad)', 'lange_tekst', ARRAY[]::text[], 0),
+
+  ('Eventuele extra''s', 'Speciale wensen zoals ingebouwde verlichting, specifieke handgreepjes', 'lange_tekst', ARRAY[]::text[], 0),
+  ('Eventuele extra''s', 'Eventuele beperkingen, zoals draagkracht van de vloer voor een zwaar werkblad', 'lange_tekst', ARRAY[]::text[], 1),
+
+  ('Inspiratievoorbeelden', 'Foto''s, moodboards of Pinterest-borden (upload of link)', 'lange_tekst', ARRAY[]::text[], 0),
+
+  ('Praktische informatie', 'Tijdlijn: wanneer moet de keuken geplaatst worden?', 'tekst', ARRAY[]::text[], 0),
+  ('Praktische informatie', 'Adres van de locatie en eventuele bijzonderheden (bijv. appartement zonder lift)', 'lange_tekst', ARRAY[]::text[], 1),
+  ('Praktische informatie', 'Toegang tot de woning (smalle deuren, trappen, etc.)', 'lange_tekst', ARRAY[]::text[], 2),
+
+  ('Overige opmerkingen', 'Overige opmerkingen', 'lange_tekst', ARRAY[]::text[], 0)
+) AS q(category_label, question, type, options, sort_order)
+JOIN finka_questionnaire_categories c ON c.label = q.category_label;
+
+ALTER TABLE finka_questionnaire_templates ALTER COLUMN category_id SET NOT NULL;
+
+-- =========================================================
+-- 51. Vragenlijst — vraagtype "Bestand" (jpg/png/pdf), voor bv. plattegrond-
+--    of inspiratiefoto's. Eigen storage-bucket (publiek, want er zit geen
+--    concurrentiegevoelige data in — alleen door de klant zelf aangeleverde
+--    foto's/pdf's van hun eigen keuken). Net als bij multi_select staat het
+--    antwoord als JSON in finka_questionnaire_responses.answer (een array
+--    van {url, name}) — geen aparte tabel/kolom nodig. Upload gaat altijd
+--    via /api/portaal/upload (service-role, valideert projecteigendom) —
+--    nooit rechtstreeks vanuit de klant-browser naar Storage.
+-- =========================================================
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('klant-uploads', 'klant-uploads', true)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE finka_questionnaire_templates DROP CONSTRAINT IF EXISTS finka_questionnaire_templates_type_check;
+ALTER TABLE finka_questionnaire_templates ADD CONSTRAINT finka_questionnaire_templates_type_check CHECK (type IN ('tekst','lange_tekst','multi_select','bestand'));
+
+-- De twee vragen die in het aangeleverde document al om een upload vroegen,
+-- meteen op het nieuwe type gezet.
+UPDATE finka_questionnaire_templates
+SET type = 'bestand'
+WHERE question = 'Plattegrond met exacte maten van de keuken (lengte, breedte, hoogte)';
+
+UPDATE finka_questionnaire_templates
+SET type = 'bestand', question = 'Foto''s, moodboards of Pinterest-borden (upload)'
+WHERE question = 'Foto''s, moodboards of Pinterest-borden (upload of link)';
+
+-- =========================================================
+-- 52. Vragenlijst — per project een vraag kunnen verbergen voor de klant.
+--    Anders dan bij de checklist bestaat er geen per-project kopie van een
+--    vraag (finka_questionnaire_templates is bewust live/gedeeld, zie
+--    migratie-sectie 49) — dus "verborgen" hoort hier op de al bestaande
+--    project+vraag-koppeling: finka_questionnaire_responses. Staff kan een
+--    vraag verbergen nog vóórdat de klant 'm heeft beantwoord; de rij wordt
+--    dan aangemaakt met answer = NULL en hidden = true.
+-- =========================================================
+
+ALTER TABLE finka_questionnaire_responses ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false;

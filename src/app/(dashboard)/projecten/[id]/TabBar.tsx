@@ -10,6 +10,7 @@ const tabs = [
   { id: 'klantkeuzes', label: 'Klantkeuzes' },
   { id: 'planning', label: 'Planning' },
   { id: 'checklist', label: 'Checklist' },
+  { id: 'vragenlijst', label: 'Vragenlijst' },
   { id: 'aansluitschema', label: 'Aansluitschema' },
   { id: 'facturen', label: 'Facturen' },
   { id: 'documenten', label: 'Documenten' },

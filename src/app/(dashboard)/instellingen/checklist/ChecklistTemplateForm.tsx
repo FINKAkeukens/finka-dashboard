@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
 import { ChecklistCategoryItem, ChecklistTemplateItem } from '@/lib/types'
 
 // Zelfde aanpak als ChecklistTab: elke wijziging slaat meteen op, geen
@@ -75,6 +75,16 @@ export default function ChecklistTemplateForm({
     setItems((prev) => prev.filter((i) => i.id !== id))
     const { error: delError } = await supabase.from('finka_checklist_templates').delete().eq('id', id)
     if (delError) setError(delError.message)
+  }
+
+  async function toggleVisible(item: ChecklistTemplateItem) {
+    const visible_to_customer = !item.visible_to_customer
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, visible_to_customer } : i)))
+    const { error: updError } = await supabase
+      .from('finka_checklist_templates')
+      .update({ visible_to_customer, updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+    if (updError) setError(updError.message)
   }
 
   async function moveItem(categoryId: string, id: string, direction: -1 | 1) {
@@ -234,6 +244,16 @@ export default function ChecklistTemplateForm({
                     onBlur={() => saveLabel(item)}
                     className="flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] text-[#1C1B19]"
                   />
+                  <button
+                    onClick={() => toggleVisible(item)}
+                    title={item.visible_to_customer ? 'Zichtbaar voor klant — klik om te verbergen' : 'Verborgen voor klant — klik om te tonen'}
+                  >
+                    {item.visible_to_customer ? (
+                      <Eye size={14} className="text-[#9A948D] hover:text-[#1C1B19]" />
+                    ) : (
+                      <EyeOff size={14} className="text-[#C9A96E]" />
+                    )}
+                  </button>
                   <button onClick={() => removeItem(item.id)} title="Item verwijderen">
                     <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
                   </button>

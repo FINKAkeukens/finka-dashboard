@@ -12,11 +12,12 @@ import QuoteEditor from './offerte/QuoteEditor'
 import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
 import ChecklistTab from './ChecklistTab'
+import VragenlijstTab from './VragenlijstTab'
 import FinancieelTab from './FinancieelTab'
 import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
+import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
 
 export default async function ProjectDetailPage({
   params,
@@ -76,6 +77,20 @@ export default async function ProjectDetailPage({
       .eq('project_id', id)
       .order('sort_order')
     checklistItems = (data ?? []) as ChecklistItem[]
+  }
+
+  let questionnaireCategories: QuestionnaireCategoryItem[] = []
+  let questionnaireQuestions: QuestionnaireTemplateQuestion[] = []
+  let questionnaireResponses: QuestionnaireResponse[] = []
+  if (tab === 'vragenlijst') {
+    const [{ data: categoriesData }, { data: questionsData }, { data: responsesData }] = await Promise.all([
+      supabase.from('finka_questionnaire_categories').select('*').order('sort_order'),
+      supabase.from('finka_questionnaire_templates').select('*').order('sort_order'),
+      supabase.from('finka_questionnaire_responses').select('*').eq('project_id', id),
+    ])
+    questionnaireCategories = (categoriesData ?? []) as QuestionnaireCategoryItem[]
+    questionnaireQuestions = (questionsData ?? []) as QuestionnaireTemplateQuestion[]
+    questionnaireResponses = (responsesData ?? []) as QuestionnaireResponse[]
   }
 
   let financialItems: ProjectFinancialItem[] = []
@@ -215,6 +230,8 @@ export default async function ProjectDetailPage({
         <PlanningTab projectId={id} milestones={milestones} />
       ) : tab === 'checklist' ? (
         <ChecklistTab projectId={id} items={checklistItems} />
+      ) : tab === 'vragenlijst' ? (
+        <VragenlijstTab projectId={id} categories={questionnaireCategories} questions={questionnaireQuestions} responses={questionnaireResponses} />
       ) : tab === 'aansluitschema' ? (
         <AansluitschemaTab
           projectId={id}
