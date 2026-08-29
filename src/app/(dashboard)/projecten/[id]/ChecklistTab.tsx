@@ -29,8 +29,15 @@ export default function ChecklistTab({
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
 
+  // Groeperen op het weergegeven label (categoryLabel), niet op de losse
+  // category-tekst zelf — zo vallen bv. oude items met category='verkoop'
+  // (vaste sleutel van vóór het templatemodel) en nieuwere items met
+  // category='Verkoop' (label-snapshot) samen in hetzelfde blokje i.p.v.
+  // twee identiek-ogende blokjes naast elkaar.
   function itemsFor(category: string) {
-    return items.filter((i) => i.category === category).sort((a, b) => a.sort_order - b.sort_order)
+    return items
+      .filter((i) => categoryLabel(i.category) === category)
+      .sort((a, b) => a.sort_order - b.sort_order)
   }
 
   // Kopjes zijn niet vast, maar data (instellingen) — de volgorde van de
@@ -39,10 +46,11 @@ export default function ChecklistTab({
   function categoriesInOrder(): string[] {
     const minOrder = new Map<string, number>()
     for (const item of items) {
-      const current = minOrder.get(item.category)
-      if (current === undefined || item.sort_order < current) minOrder.set(item.category, item.sort_order)
+      const label = categoryLabel(item.category)
+      const current = minOrder.get(label)
+      if (current === undefined || item.sort_order < current) minOrder.set(label, item.sort_order)
     }
-    return Array.from(minOrder.entries()).sort((a, b) => a[1] - b[1]).map(([category]) => category)
+    return Array.from(minOrder.entries()).sort((a, b) => a[1] - b[1]).map(([label]) => label)
   }
 
   // Een project heeft initieel geen checklist — pas op deze knop kopiëren we
@@ -178,7 +186,7 @@ export default function ChecklistTab({
         return (
           <div key={category} className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
             <div className="px-5 py-3 border-b border-[#DDD8D2] bg-[#F7F5F2]">
-              <h3 className="text-sm font-medium text-[#1C1B19]">{categoryLabel(category)}</h3>
+              <h3 className="text-sm font-medium text-[#1C1B19]">{category}</h3>
             </div>
             <div className="divide-y divide-[#DDD8D2]">
               {catItems.map((item) => (
