@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/appliance-utils'
 import { Appliance, ApparatuurOptionData, ApparatuurOptionItem, ConfiguratorOption, OfferAttachment } from '@/lib/types'
+import { selectOnFocus } from '@/lib/utils'
 import { FileText, Plus, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from '../offerte/AppliancePickerModal'
 
@@ -189,6 +190,7 @@ export default function ApparatuurOptionEditor({
                     step="1"
                     value={item.quantity}
                     onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
+                    onFocus={selectOnFocus}
                     className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                   />
                 </td>
@@ -199,6 +201,7 @@ export default function ApparatuurOptionEditor({
                     step="0.01"
                     value={item.unit_price}
                     onChange={(e) => updateItem(item.id, { unit_price: round2(Number(e.target.value)) })}
+                    onFocus={selectOnFocus}
                     className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </td>

@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Plus, Trash2 } from 'lucide-react'
-import { ChecklistCategory, ChecklistItem } from '@/lib/types'
-import { CHECKLIST_CATEGORY_LABELS, CHECKLIST_CATEGORY_ORDER, checklistItemLabel } from '@/lib/checklist'
+import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem } from '@/lib/types'
+import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 
 // Elk vinkje/label slaat meteen op (geen aparte "Opslaan"-knop) — zelfde
 // aanpak als NotesPanel: bij een checklist voelt direct blijven staan
@@ -21,15 +21,73 @@ export default function ChecklistTab({
 }) {
   const supabase = createClient()
   const [items, setItems] = useState<ChecklistItem[]>(initialItems)
-  const [addingCategory, setAddingCategory] = useState<ChecklistCategory | null>(null)
+  const [addingCategory, setAddingCategory] = useState<string | null>(null)
   const [newLabel, setNewLabel] = useState('')
   const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
 
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
 
-  function itemsFor(category: ChecklistCategory) {
+  function itemsFor(category: string) {
     return items.filter((i) => i.category === category).sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  // Kopjes zijn niet vast, maar data (instellingen) — de volgorde van de
+  // kopjes bij dit project volgt daarom uit de laagste sort_order per kopje
+  // (die volgorde is een snapshot vanaf het moment van aanmaken hieronder).
+  function categoriesInOrder(): string[] {
+    const minOrder = new Map<string, number>()
+    for (const item of items) {
+      const current = minOrder.get(item.category)
+      if (current === undefined || item.sort_order < current) minOrder.set(item.category, item.sort_order)
+    }
+    return Array.from(minOrder.entries()).sort((a, b) => a[1] - b[1]).map(([category]) => category)
+  }
+
+  // Een project heeft initieel geen checklist — pas op deze knop kopiëren we
+  // de instellingen (finka_checklist_categories/finka_checklist_templates,
+  // beheerd via /instellingen/checklist) naar dit project. Latere
+  // wijzigingen aan die instellingen raken deze kopie niet meer aan.
+  async function createChecklist() {
+    setCreating(true)
+    setError('')
+    const [{ data: categories, error: catError }, { data: template, error: tplError }] = await Promise.all([
+      supabase.from('finka_checklist_categories').select('*').order('sort_order', { ascending: true }),
+      supabase.from('finka_checklist_templates').select('*').order('sort_order', { ascending: true }),
+    ])
+    if (catError || tplError) {
+      setError((catError ?? tplError)!.message)
+      setCreating(false)
+      return
+    }
+    const categoryItems = (categories ?? []) as ChecklistCategoryItem[]
+    const templateItems = (template ?? []) as ChecklistTemplateItem[]
+    if (categoryItems.length === 0 || templateItems.length === 0) {
+      setError('Geen standaardlijst gevonden — stel deze eerst in via Instellingen > Checklist-items.')
+      setCreating(false)
+      return
+    }
+    const categoryOrder = new Map(categoryItems.map((c, index) => [c.id, index]))
+    const categoryLabels = new Map(categoryItems.map((c) => [c.id, c.label]))
+    const sortedTemplate = [...templateItems].sort((a, b) => {
+      const catDiff = (categoryOrder.get(a.category_id) ?? 0) - (categoryOrder.get(b.category_id) ?? 0)
+      return catDiff !== 0 ? catDiff : a.sort_order - b.sort_order
+    })
+    const rows = sortedTemplate.map((t, index) => ({
+      project_id: projectId,
+      item_key: null,
+      category: categoryLabels.get(t.category_id) ?? 'Overig',
+      label: t.label,
+      sort_order: index,
+    }))
+    const { data, error: insError } = await supabase.from('finka_checklist_items').insert(rows).select()
+    setCreating(false)
+    if (insError) {
+      setError(insError.message)
+      return
+    }
+    setItems((data ?? []) as ChecklistItem[])
   }
 
   async function toggleChecked(item: ChecklistItem) {
@@ -54,7 +112,7 @@ export default function ChecklistTab({
     if (updError) setError(updError.message)
   }
 
-  async function addItem(category: ChecklistCategory) {
+  async function addItem(category: string) {
     if (!newLabel.trim()) {
       setAddingCategory(null)
       return
@@ -82,6 +140,22 @@ export default function ChecklistTab({
 
   const percentage = total > 0 ? Math.round((doneCount / total) * 100) : 0
 
+  if (total === 0) {
+    return (
+      <div className="space-y-4">
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
+        <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 flex flex-col items-center text-center gap-3">
+          <p className="text-sm text-[#6B6560] max-w-sm">
+            Dit project heeft nog geen checklist. Maak &apos;m aan op basis van het standaardlijstje uit Instellingen.
+          </p>
+          <Button onClick={createChecklist} disabled={creating}>
+            {creating ? 'Bezig...' : 'Checklist aanmaken'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-[#DDD8D2] p-4 space-y-2.5">
@@ -99,12 +173,12 @@ export default function ChecklistTab({
 
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
 
-      {CHECKLIST_CATEGORY_ORDER.map((category) => {
+      {categoriesInOrder().map((category) => {
         const catItems = itemsFor(category)
         return (
           <div key={category} className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
             <div className="px-5 py-3 border-b border-[#DDD8D2] bg-[#F7F5F2]">
-              <h3 className="text-sm font-medium text-[#1C1B19]">{CHECKLIST_CATEGORY_LABELS[category]}</h3>
+              <h3 className="text-sm font-medium text-[#1C1B19]">{categoryLabel(category)}</h3>
             </div>
             <div className="divide-y divide-[#DDD8D2]">
               {catItems.map((item) => (
@@ -117,10 +191,7 @@ export default function ChecklistTab({
                     onBlur={() => saveLabel(item)}
                     className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${item.checked ? 'line-through text-[#9A948D]' : 'text-[#1C1B19]'}`}
                   />
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    title={item.item_key ? 'Verwijderen (geldt niet voor toekomstige projecten)' : 'Punt verwijderen'}
-                  >
+                  <button onClick={() => removeItem(item.id)} title="Punt verwijderen">
                     <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
                   </button>
                 </div>

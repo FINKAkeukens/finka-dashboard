@@ -11,6 +11,7 @@ import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
 import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
+import { selectOnFocus } from '@/lib/utils'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -1168,6 +1169,7 @@ export default function QuoteEditor({
                       step="1"
                       value={item.quantity}
                       onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
+                      onFocus={selectOnFocus}
                       className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                     />
                   </td>
@@ -1179,6 +1181,7 @@ export default function QuoteEditor({
                         step="0.01"
                         value={item.unit_price}
                         onChange={(e) => updateItem(item.id, { unit_price: round2(Number(e.target.value)), unit_price_source: 'in' })}
+                        onFocus={selectOnFocus}
                         className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <SourceTag source={item.unit_price_source} />
@@ -1192,6 +1195,7 @@ export default function QuoteEditor({
                         step="0.01"
                         value={lineTotal(item)}
                         onChange={(e) => updateItem(item.id, { line_total: round2(Number(e.target.value)), line_total_source: 'in' })}
+                        onFocus={selectOnFocus}
                         className="w-full min-w-0 text-sm text-right font-medium bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <SourceTag source={item.line_total_source} />
@@ -1252,6 +1256,7 @@ export default function QuoteEditor({
                         step="0.01"
                         value={displayedCost(row)}
                         onChange={(e) => updateCostRow(row.key, { werkelijke_kosten: round2(Number(e.target.value)), werkelijke_kosten_source: 'in' })}
+                        onFocus={selectOnFocus}
                         className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <SourceTag source={row.werkelijke_kosten_source} />
@@ -1268,6 +1273,7 @@ export default function QuoteEditor({
                       step="1"
                       value={row.marge_percentage}
                       onChange={(e) => updateCostRow(row.key, { marge_percentage: Number(e.target.value), marge_percentage_source: 'in' })}
+                      onFocus={selectOnFocus}
                       className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                     />
                   </td>
@@ -1667,6 +1673,7 @@ export default function QuoteEditor({
                           type="number"
                           value={line.amount}
                           onChange={(e) => updateCostLine(idx, { amount: round2(Number(e.target.value)) })}
+                          onFocus={selectOnFocus}
                           className="w-24 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                         />
                         <button onClick={() => removeCostLine(idx)} title="Regel verwijderen">

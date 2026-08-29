@@ -1017,3 +1017,181 @@ WHERE pf.project_id = sub.project_id AND pf.category = sub.category;
 ALTER TABLE finka_project_financials ADD COLUMN IF NOT EXISTS betaald BOOLEAN NOT NULL DEFAULT false;
 
 UPDATE finka_project_financials SET werkelijk_bedrag = begroot_bedrag WHERE werkelijk_bedrag IS NULL;
+
+-- =========================================================
+-- 41. Winst- en verliesrekening (/financieel) — bedrijfskosten die niet aan
+--    één project hangen (huur, personeel, ...), en één instellingenrij met
+--    het belastingpercentage om door te rekenen naar nettowinst.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_operating_expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  expense_date DATE NOT NULL,
+  category TEXT NOT NULL,
+  label TEXT,
+  bedrag NUMERIC(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_operating_expenses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_operating_expenses FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_operating_expenses TO anon, authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS finka_financial_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  belasting_percentage NUMERIC(5,2) NOT NULL DEFAULT 21,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Precies één instellingenrij (singleton).
+INSERT INTO finka_financial_settings (belasting_percentage)
+SELECT 21
+WHERE NOT EXISTS (SELECT 1 FROM finka_financial_settings);
+
+ALTER TABLE finka_financial_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_financial_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_financial_settings TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 42. Bedrijfskosten — voorgeschoten kosten bijhouden: wie het betaald
+--    heeft, of het al in Moneybird staat, en of het verrekend is met
+--    diegene. Zelfde mensen-lijst als Planning (Kieke/Merel/Leverancier/
+--    FINKA), geen nieuwe CHECK-constraint nodig.
+-- =========================================================
+
+ALTER TABLE finka_operating_expenses ADD COLUMN IF NOT EXISTS betaald_door TEXT;
+ALTER TABLE finka_operating_expenses ADD COLUMN IF NOT EXISTS ingeboekt_moneybird BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE finka_operating_expenses ADD COLUMN IF NOT EXISTS verrekend BOOLEAN NOT NULL DEFAULT false;
+
+-- =========================================================
+-- 43. Kosten-pagina — losse tabel voor vaste activa (laptops, inventaris,
+--    ...), naast de bedrijfskosten-tabel. Zelfde velden als
+--    finka_operating_expenses, maar bewust gescheiden: activa horen niet
+--    als kosten in de winst-en-verliesrekening (die telt alleen
+--    finka_operating_expenses mee).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  purchase_date DATE NOT NULL,
+  category TEXT NOT NULL,
+  label TEXT,
+  bedrag NUMERIC(10,2) NOT NULL DEFAULT 0,
+  betaald_door TEXT,
+  ingeboekt_moneybird BOOLEAN NOT NULL DEFAULT false,
+  verrekend BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_assets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_assets FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_assets TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 44. Checklist-instellingen (/instellingen/checklist) — het standaard-
+--    lijstje is niet langer hardcoded in een trigger, maar aanpasbare data.
+--    Nieuwe projecten krijgen niet langer automatisch een checklist: die
+--    wordt bewust aangemaakt via een knop op het Checklist-tabblad, die op
+--    dat moment een kopie maakt van deze instellingen. Latere wijzigingen
+--    aan de instellingen werken dus niet met terugwerkende kracht door op
+--    al aangemaakte project-checklists.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_checklist_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category TEXT NOT NULL,
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_checklist_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_checklist_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_checklist_templates TO anon, authenticated, service_role;
+
+-- Eenmalig gevuld met de huidige standaardlijst als startpunt, zodat
+-- bestaand gedrag behouden blijft totdat staff het aanpast.
+INSERT INTO finka_checklist_templates (category, label, sort_order)
+SELECT * FROM (VALUES
+  ('verkoop', 'Wensen en eisen genoteerd', 0),
+  ('verkoop', 'Eerste offerte verstuurd', 1),
+  ('verkoop', 'Finale offerte akkoord', 2),
+  ('verkoop', 'Aanbetaling ontvangen', 3),
+  ('ontwerp_meten', 'Keuken ingemeten', 4),
+  ('ontwerp_meten', 'Tekening/ontwerp goedgekeurd door klant', 5),
+  ('ontwerp_meten', 'Apparatuur definitief gekozen', 6),
+  ('ontwerp_meten', 'Werkblad definitief gekozen', 7),
+  ('bestellen', 'Kasten besteld', 8),
+  ('bestellen', 'Apparatuur besteld', 9),
+  ('bestellen', 'Werkblad besteld', 10),
+  ('bestellen', 'Accessoires besteld', 11),
+  ('bestellen', 'Aansluitschema gedeeld met klant/installateur', 12),
+  ('levering_montage', 'Levering ingepland', 13),
+  ('levering_montage', 'Keuken geleverd (zonder schade)', 14),
+  ('levering_montage', 'Montage ingepland', 15),
+  ('levering_montage', 'Montage afgerond', 16),
+  ('levering_montage', 'Eindcontrole met klant', 17),
+  ('afronding', 'Restbetaling ontvangen', 18),
+  ('afronding', 'Garantiepapieren overhandigd', 19)
+) AS defaults(category, label, sort_order)
+WHERE NOT EXISTS (SELECT 1 FROM finka_checklist_templates);
+
+-- Nieuwe projecten krijgen niet langer automatisch een checklist — die
+-- ontstaat nu bewust via de "Checklist aanmaken"-knop op het tabblad.
+DROP TRIGGER IF EXISTS set_default_checklist_items ON finka_projects;
+DROP FUNCTION IF EXISTS create_default_checklist_items();
+
+-- =========================================================
+-- 45. Checklist-instellingen — ook de kopjes (categorieën) zelf aanpasbaar
+--    maken (hernoemen/toevoegen/verwijderen), niet alleen de items erbinnen.
+--    finka_checklist_templates verwijst voortaan naar een categorie via
+--    category_id i.p.v. losse tekst, zodat een naamswijziging overal in
+--    één keer doorwerkt. Per-project finka_checklist_items blijft ongemoeid:
+--    category is daar bewust nog steeds losse tekst — een kopie/snapshot
+--    van het label op het moment van "Checklist aanmaken", zodat een
+--    kopje hernoemen/verwijderen geen al aangemaakte project-checklists
+--    raakt.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_checklist_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_checklist_categories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_checklist_categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_checklist_categories TO anon, authenticated, service_role;
+
+INSERT INTO finka_checklist_categories (label, sort_order)
+SELECT * FROM (VALUES
+  ('Verkoop', 0),
+  ('Ontwerp & meten', 1),
+  ('Bestellen', 2),
+  ('Levering & montage', 3),
+  ('Afronding', 4)
+) AS defaults(label, sort_order)
+WHERE NOT EXISTS (SELECT 1 FROM finka_checklist_categories);
+
+ALTER TABLE finka_checklist_templates ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES finka_checklist_categories(id) ON DELETE CASCADE;
+
+UPDATE finka_checklist_templates t
+SET category_id = c.id
+FROM finka_checklist_categories c
+WHERE t.category_id IS NULL
+  AND c.label = CASE t.category
+    WHEN 'verkoop' THEN 'Verkoop'
+    WHEN 'ontwerp_meten' THEN 'Ontwerp & meten'
+    WHEN 'bestellen' THEN 'Bestellen'
+    WHEN 'levering_montage' THEN 'Levering & montage'
+    WHEN 'afronding' THEN 'Afronding'
+    ELSE t.category
+  END;
+
+ALTER TABLE finka_checklist_templates ALTER COLUMN category_id SET NOT NULL;
+ALTER TABLE finka_checklist_templates DROP COLUMN category;

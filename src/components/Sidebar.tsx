@@ -14,7 +14,10 @@ import {
   Settings,
   Calculator,
   CalendarRange,
-  Euro,
+  TrendingUp,
+  Scale,
+  Receipt,
+  ListChecks,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -45,8 +48,15 @@ const groups: NavGroup[] = [
     label: 'Projecten',
     items: [
       { href: '/projecten', label: 'Projecten', icon: FolderKanban },
-      { href: '/financieel', label: 'Financieel', icon: Euro },
       { href: '/planning', label: 'Planning', icon: CalendarRange },
+    ],
+  },
+  {
+    label: 'Financieel',
+    items: [
+      { href: '/financieel', label: 'PNL', icon: TrendingUp },
+      { href: '/financieel/balans', label: 'Balans', icon: Scale },
+      { href: '/financieel/kosten', label: 'Kosten', icon: Receipt },
     ],
   },
   {
@@ -65,6 +75,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/instellingen/euroline', label: 'Euroline-tarieven', icon: Settings },
       { href: '/instellingen/werkblad', label: 'Werkblad-prijzen', icon: Settings },
+      { href: '/instellingen/checklist', label: 'Checklist-items', icon: ListChecks },
     ],
   },
 ]
@@ -73,6 +84,14 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+
+  // Actief item = de langste href die bij dit pad past — voorkomt dat bv.
+  // zowel "PNL" (/financieel) als "Kosten" (/financieel/kosten) allebei
+  // actief lijken op /financieel/kosten.
+  const activeHref = groups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((href) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0]
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -94,7 +113,7 @@ export default function Sidebar() {
             </div>
             <div className="space-y-0.5">
               {group.items.map(({ href, label, icon: Icon }) => {
-                const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
+                const active = href === activeHref
                 return (
                   <Link
                     key={href}

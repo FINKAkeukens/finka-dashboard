@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatPrice } from '@/lib/appliance-utils'
+import { selectOnFocus } from '@/lib/utils'
 import { CostCategoryKey, ProjectFinancialItem } from '@/lib/types'
 
 function round2(n: number) {
@@ -262,6 +263,7 @@ export default function FinancieelTab({
                             placeholder="—"
                             onChange={(e) => updateLocalWerkelijk(item.id, e.target.value === '' ? null : Number(e.target.value))}
                             onBlur={() => saveWerkelijk(item)}
+                            onFocus={selectOnFocus}
                             className={`w-full min-w-0 text-sm text-right bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
                               !item.betaald ? 'italic' : ''
                             }`}

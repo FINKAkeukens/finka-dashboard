@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ConfiguratorOption, KastenOptionData, OfferAttachment } from '@/lib/types'
+import { selectOnFocus } from '@/lib/utils'
 import { FileText, Upload, X } from 'lucide-react'
 
 function readData(data: ConfiguratorOption['data']): KastenOptionData {
@@ -109,6 +110,7 @@ export default function KastenOptionEditor({
             step="0.01"
             value={option.cost_total}
             onChange={(e) => onChange({ cost_total: Number(e.target.value) || 0 })}
+            onFocus={selectOnFocus}
             className="w-40 px-3 py-1.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
           />
         </div>

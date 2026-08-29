@@ -1,9 +1,11 @@
-import { ChecklistCategory, ChecklistItem } from './types'
+import { ChecklistItem } from './types'
 
-// Vaste volgorde + labels van de standaardpunten — elk project krijgt deze
-// automatisch (zie migratie-trigger create_default_checklist_items). Alleen
-// hier en in die trigger aanpassen als de standaardlijst wijzigt; de
-// database-kolom zelf heeft bewust geen CHECK-constraint op deze keys.
+// Historische standaardpunten van vóór het templatemodel (zie
+// finka_checklist_templates, beheerd via /instellingen/checklist). Alleen
+// nog gebruikt als fallback-label voor project-checklists die vóór die
+// migratie zijn aangemaakt (die dragen deze keys nog in item_key); nieuwe
+// checklists worden rechtstreeks met hun eigen label gekopieerd uit de
+// instellingen en raken deze lijst niet meer aan.
 export const CHECKLIST_ORDER: string[] = [
   'wensen_genoteerd',
   'eerste_offerte_verstuurd',
@@ -50,15 +52,12 @@ export const CHECKLIST_LABELS: Record<string, string> = {
   garantiepapieren: 'Garantiepapieren overhandigd',
 }
 
-export const CHECKLIST_CATEGORY_ORDER: ChecklistCategory[] = [
-  'verkoop',
-  'ontwerp_meten',
-  'bestellen',
-  'levering_montage',
-  'afronding',
-]
-
-export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
+// Historische kopjes van vóór het templatemodel (zie finka_checklist_categories,
+// beheerd via /instellingen/checklist). Alleen nog gebruikt als fallback-
+// label voor project-checklists die vóór die migratie zijn aangemaakt (die
+// dragen deze keys nog in category); nieuwe checklists dragen daar al het
+// volledige label van het kopje op het moment van aanmaken.
+export const CHECKLIST_CATEGORY_LABELS: Record<string, string> = {
   verkoop: 'Verkoop',
   ontwerp_meten: 'Ontwerp & meten',
   bestellen: 'Bestellen',
@@ -72,4 +71,11 @@ export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
 export function checklistItemLabel(item: Pick<ChecklistItem, 'item_key' | 'label'>): string {
   if (!item.item_key) return item.label?.trim() || 'Aangepast punt'
   return item.label?.trim() || CHECKLIST_LABELS[item.item_key] || item.item_key
+}
+
+// item.category is losse tekst (zie ChecklistItem in src/lib/types.ts) —
+// meestal al het volledige label, met een fallback voor de oude vaste
+// sleutels van vóór het templatemodel.
+export function categoryLabel(category: string): string {
+  return CHECKLIST_CATEGORY_LABELS[category] ?? category
 }

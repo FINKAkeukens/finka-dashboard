@@ -229,6 +229,53 @@ export interface ProjectFinancialItem {
   updated_at: string
 }
 
+// ---------------------------------------------------------------------------
+// Winst- en verliesrekening (/financieel) — bedrijfskosten die niet aan één
+// project hangen (huur, personeel, ...), plus het belastingpercentage om
+// door te rekenen naar nettowinst. category is bewust vrije tekst zonder
+// CHECK-constraint, zie src/lib/operating-expenses.ts voor de standaardlijst.
+// ---------------------------------------------------------------------------
+
+export interface OperatingExpense {
+  id: string
+  expense_date: string
+  category: string
+  label: string | null
+  bedrag: number
+  // Wie de kosten (persoonlijk) voorgeschoten heeft — MilestoneAssignee
+  // hergebruikt (zelfde mensen-lijst als Planning), null = nog niet
+  // toegewezen/rechtstreeks door het bedrijf betaald.
+  betaald_door: MilestoneAssignee | null
+  ingeboekt_moneybird: boolean
+  verrekend: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Vaste activa (laptops, inventaris, ...) — zelfde velden als
+// OperatingExpense, maar bewust een losse tabel: activa horen niet als
+// kosten in de winst-en-verliesrekening, maar op de balans (zie
+// src/lib/assets.ts voor de standaardcategorieën).
+export interface Asset {
+  id: string
+  purchase_date: string
+  category: string
+  label: string | null
+  bedrag: number
+  betaald_door: MilestoneAssignee | null
+  ingeboekt_moneybird: boolean
+  verrekend: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Eén rij (singleton) met bedrijfsbrede financiële instellingen.
+export interface FinancialSettings {
+  id: string
+  belasting_percentage: number
+  updated_at: string
+}
+
 // Losse disclaimer-tekst per paginatype (klantversie) — de prijspagina
 // (customer_disclaimer_text) en aansluitingenpagina
 // (customer_connections_disclaimer) hadden dit al als los veld, dit dekt de
@@ -677,25 +724,56 @@ export interface ProjectMilestone {
 }
 
 // ---------------------------------------------------------------------------
-// Checklist — voortgangschecklist per project (verkoop t/m afronding). Elk
-// project krijgt automatisch de vaste standaardpunten (zie migratie-trigger
-// create_default_checklist_items + CHECKLIST_ORDER in src/lib/checklist.ts);
-// staff kan daarnaast losse eigen punten toevoegen per categorie.
+// Checklist — voortgangschecklist per project (verkoop t/m afronding). Een
+// project heeft initieel géén checklist: die wordt bewust aangemaakt via een
+// knop op het Checklist-tabblad, die op dat moment een kopie maakt van de
+// instellingen in finka_checklist_categories/finka_checklist_templates (zie
+// hieronder, beheerd via /instellingen/checklist). Staff kan daarnaast per
+// project losse eigen punten toevoegen per categorie.
 // ---------------------------------------------------------------------------
-
-export type ChecklistCategory = 'verkoop' | 'ontwerp_meten' | 'bestellen' | 'levering_montage' | 'afronding'
 
 export interface ChecklistItem {
   id: string
   project_id: string
-  // NULL = vrij toegevoegd item; anders één van CHECKLIST_ORDER in
-  // src/lib/checklist.ts. Vrije tekst i.p.v. een vaste union + CHECK-
-  // constraint (zelfde aanpak als ConnectionItem.standard_key) — voorkomt
-  // dat de database-constraint uit de pas loopt zodra er een punt bijkomt.
+  // NULL = vrij toegevoegd item, of gekopieerd vanuit een template (die
+  // zelf al een eigen label meebrengt). Historisch (vóór het templatemodel)
+  // kwam hier één van een vaste hardcoded sleutelset in te staan — vrije
+  // tekst i.p.v. een vaste union + CHECK-constraint (zelfde aanpak als
+  // ConnectionItem.standard_key) voorkomt dat de database-constraint uit de
+  // pas loopt.
   item_key: string | null
-  category: ChecklistCategory
+  // Losse tekst, geen FK — een kopie/snapshot van het kopje-label op het
+  // moment van "Checklist aanmaken" (of, voor rijen van vóór dit model, een
+  // oude vaste sleutel — zie categoryLabel() in src/lib/checklist.ts).
+  // Kopjes hernoemen/verwijderen in Instellingen raakt deze kopie dus niet.
+  category: string
   label: string | null
   checked: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+// Instellingen-versie van een checklist-kopje (categorie) — beheerd via
+// /instellingen/checklist, hernoembaar/toevoegbaar/verwijderbaar. Een
+// project-checklist neemt bij aanmaken alleen het label over (zie
+// ChecklistItem.category); deze rij zelf leeft alleen in de instellingen.
+export interface ChecklistCategoryItem {
+  id: string
+  label: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+// Instellingen-versie van een checklist-item binnen een kopje: het
+// aanpasbare standaardlijstje waarvan een project-checklist een kopie is op
+// het moment van aanmaken. Geen project_id/checked — dit is een sjabloon,
+// geen projectdata.
+export interface ChecklistTemplateItem {
+  id: string
+  category_id: string
+  label: string
   sort_order: number
   created_at: string
   updated_at: string
