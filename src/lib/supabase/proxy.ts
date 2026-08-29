@@ -26,15 +26,31 @@ export async function updateSession(request: NextRequest) {
   // 'api' hoeft hier niet meer apart uitgesloten te worden — de proxy-matcher
   // in src/proxy.ts sluit /api al helemaal uit, API-routes komen hier dus
   // nooit meer binnen.
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login')
+  //
+  // Deze laag regelt alleen "is er een sessie" — welke rol (staff/klant) bij
+  // die sessie hoort en of die rol bij het gevraagde pad mag komen, wordt
+  // verderop in de layouts gecontroleerd ((dashboard)/layout.tsx resp.
+  // portaal/(authed)/layout.tsx), niet hier.
+  const pathname = request.nextUrl.pathname
+  const isPortalPath = pathname.startsWith('/portaal')
+  const isStaffLoginPage = pathname === '/login'
+  const isPortalLoginPage = pathname === '/portaal/login'
+  const isAuthPage = isStaffLoginPage || isPortalLoginPage
 
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
+    url.pathname = isPortalPath ? '/portaal/login' : '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthPage) {
+  // Alleen het interne /login stuurt een reeds-ingelogde gebruiker weg. Bij
+  // /portaal/login doen we dat bewust NIET: een sessie is hier "geldig" in
+  // de zin van ingelogd, maar zegt niets over de rol (staff-sessie zonder
+  // klantkoppeling, of een klant die per ongeluk hier terechtkomt) — die
+  // check zit al in portaal/(authed)/layout.tsx. Wél hier redirecten gaf een
+  // oneindige lus: die layout stuurt een niet-gekoppelde sessie ná /portaal
+  // hierheen, en deze regel stuurde 'm dan weer terug naar /portaal.
+  if (user && isStaffLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

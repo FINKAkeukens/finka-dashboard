@@ -8,6 +8,7 @@ import EditCustomerForm from './EditCustomerForm'
 import TabBar from './TabBar'
 import OfferteEditor from './OfferteEditor'
 import CustomerProjectsTab from './CustomerProjectsTab'
+import InvitePortalButton from './InvitePortalButton'
 import { Offer, Project } from '@/lib/types'
 
 const statusColors: Record<string, string> = {
@@ -98,6 +99,10 @@ export default async function KlantDetailPage({
             <span className="text-[#1C1B19] truncate">{[customer.address, customer.city].filter(Boolean).join(', ')}</span>
           </div>
         )}
+      </div>
+
+      <div className="mb-6">
+        <InvitePortalButton customerId={id} hasPortalAccount={!!customer.auth_user_id} />
       </div>
 
       <TabBar activeTab={tab} />

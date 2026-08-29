@@ -1195,3 +1195,38 @@ WHERE t.category_id IS NULL
 
 ALTER TABLE finka_checklist_templates ALTER COLUMN category_id SET NOT NULL;
 ALTER TABLE finka_checklist_templates DROP COLUMN category;
+
+-- =========================================================
+-- 46. Klantportaal — fundament (login, alleen-lezen planning + status).
+--    Klant-accounts leven in dezelfde Supabase Auth-pool als staff, maar
+--    het klantportaal praat nooit rechtstreeks (met de open "authenticated"
+--    RLS die dit hele project gebruikt) met de tabellen — elke
+--    portaalpagina/actie loopt server-side via de service-role client en
+--    controleert zelf of het opgevraagde project bij de ingelogde klant
+--    hoort (zelfde aanpak als de bestaande finka_portal_tokens-routes:
+--    "token wordt in de route zelf gevalideerd", nu met een sessie i.p.v.
+--    een token). finka_staff_users is de expliciete allowlist voor het
+--    interne dashboard — zonder deze tabel zou een ingelogde klant zomaar
+--    bij /klanten, /financieel etc. kunnen komen, want de RLS-policies in
+--    dit hele project staan overal open voor "authenticated".
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_staff_users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_staff_users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_staff_users FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_staff_users TO anon, authenticated, service_role;
+
+-- Backfill: alle bestaande auth-accounts zijn op dit moment staff (er
+-- bestaan nog geen klant-accounts). Nieuwe accounts na deze migratie
+-- (klant-uitnodigingen) komen hier NIET automatisch bij te staan.
+INSERT INTO finka_staff_users (id, email)
+SELECT id, email FROM auth.users
+WHERE NOT EXISTS (SELECT 1 FROM finka_staff_users s WHERE s.id = auth.users.id);
+
+ALTER TABLE finka_customers ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS finka_customers_auth_user_id_idx ON finka_customers(auth_user_id) WHERE auth_user_id IS NOT NULL;

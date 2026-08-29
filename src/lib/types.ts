@@ -18,6 +18,9 @@ export interface Customer {
   city: string | null
   notes: string | null
   status: CustomerStatus
+  // Gekoppeld Supabase Auth-account voor het klantportaal (/portaal) — NULL
+  // zolang de klant nog niet is uitgenodigd. Zie src/lib/portal.ts.
+  auth_user_id: string | null
   created_at: string
   updated_at: string
 }
