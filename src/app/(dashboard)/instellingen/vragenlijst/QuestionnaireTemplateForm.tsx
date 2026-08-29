@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react'
 import { QuestionnaireCategoryItem, QuestionnaireQuestionType, QuestionnaireTemplateQuestion } from '@/lib/types'
-import { QUESTIONNAIRE_TYPE_LABELS } from '@/lib/questionnaire'
+import { MULTI_SELECT_OTHER_OPTION, QUESTIONNAIRE_TYPE_LABELS } from '@/lib/questionnaire'
 
 // Zelfde aanpak als ChecklistTemplateForm: elke wijziging slaat direct op,
 // kopjes (categorieën) en de vragen erbinnen zijn allebei aan te passen.
@@ -121,6 +121,10 @@ export default function QuestionnaireTemplateForm({
   function addOption(questionId: string) {
     if (!newOption.trim()) {
       setAddingOptionFor(null)
+      return
+    }
+    if (newOption.trim().toLowerCase().startsWith('anders')) {
+      setError(`"${MULTI_SELECT_OTHER_OPTION}" wordt al automatisch bij elke vraag toegevoegd — geen aparte optie nodig.`)
       return
     }
     const q = questions.find((q) => q.id === questionId)
@@ -296,6 +300,11 @@ export default function QuestionnaireTemplateForm({
                         </button>
                       )}
                     </div>
+                  )}
+                  {q.type === 'multi_select' && (
+                    <p className="mt-1.5 ml-7 text-xs text-[#9A948D]">
+                      &quot;{MULTI_SELECT_OTHER_OPTION}&quot; wordt hier altijd automatisch bij getoond, met een invulveld voor de klant.
+                    </p>
                   )}
                 </div>
               ))}

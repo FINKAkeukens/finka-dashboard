@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { FileText, Image as ImageIcon, Upload, X } from 'lucide-react'
 import { QuestionnaireCategoryItem, QuestionnaireTemplateQuestion } from '@/lib/types'
 import {
+  MULTI_SELECT_OTHER_OPTION,
   parseFileAnswer,
   parseMultiSelectAnswer,
   QUESTIONNAIRE_FILE_ACCEPT,
@@ -53,12 +54,26 @@ export default function PortalQuestionnaireForm({
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
   }
 
-  function toggleOption(question: QuestionnaireTemplateQuestion, option: string) {
-    const current = parseMultiSelectAnswer(answers[question.id] ?? '')
-    const next = current.includes(option) ? current.filter((v) => v !== option) : [...current, option]
-    const serialized = serializeMultiSelectAnswer(next)
-    updateLocal(question.id, serialized)
-    save(question.id, serialized)
+  function toggleOption(questionId: string, option: string) {
+    const current = parseMultiSelectAnswer(answers[questionId] ?? '')
+    const isSelected = current.selected.includes(option)
+    const nextSelected = isSelected ? current.selected.filter((v) => v !== option) : [...current.selected, option]
+    // Vinkje "Anders, namelijk..." uit? Dan ook het eigen antwoord wissen —
+    // anders blijft er een tekst hangen die niet meer bij een aangevinkt
+    // hokje hoort.
+    const nextOther = option === MULTI_SELECT_OTHER_OPTION && isSelected ? '' : current.other
+    const serialized = serializeMultiSelectAnswer({ selected: nextSelected, other: nextOther })
+    updateLocal(questionId, serialized)
+    save(questionId, serialized)
+  }
+
+  function updateOtherText(questionId: string, other: string) {
+    const current = parseMultiSelectAnswer(answers[questionId] ?? '')
+    updateLocal(questionId, serializeMultiSelectAnswer({ ...current, other }))
+  }
+
+  function saveOtherText(questionId: string) {
+    save(questionId, answers[questionId] ?? '')
   }
 
   async function uploadFile(questionId: string, file: File) {
@@ -117,24 +132,36 @@ export default function PortalQuestionnaireForm({
                 <div key={q.id}>
                   <label className="block text-sm font-medium text-[#1C1B19] mb-1.5">{q.question}</label>
                   {q.type === 'multi_select' ? (
-                    <div className="flex flex-wrap gap-2">
-                      {q.options.map((option) => {
-                        const checked = parseMultiSelectAnswer(answers[q.id] ?? '').includes(option)
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => toggleOption(q, option)}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                              checked
-                                ? 'bg-[#1C1B19] border-[#1C1B19] text-white'
-                                : 'bg-white border-[#DDD8D2] text-[#1C1B19] hover:border-[#C9A96E]'
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        )
-                      })}
+                    <div>
+                      <div className="flex flex-wrap gap-2">
+                        {[...q.options, MULTI_SELECT_OTHER_OPTION].map((option) => {
+                          const checked = parseMultiSelectAnswer(answers[q.id] ?? '').selected.includes(option)
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => toggleOption(q.id, option)}
+                              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                                checked
+                                  ? 'bg-[#1C1B19] border-[#1C1B19] text-white'
+                                  : 'bg-white border-[#DDD8D2] text-[#1C1B19] hover:border-[#C9A96E]'
+                              }`}
+                            >
+                              {option}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {parseMultiSelectAnswer(answers[q.id] ?? '').selected.includes(MULTI_SELECT_OTHER_OPTION) && (
+                        <input
+                          autoFocus
+                          value={parseMultiSelectAnswer(answers[q.id] ?? '').other}
+                          onChange={(e) => updateOtherText(q.id, e.target.value)}
+                          onBlur={() => saveOtherText(q.id)}
+                          placeholder="Vul hier je antwoord in..."
+                          className="mt-2 w-full text-sm px-3 py-2 border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+                        />
+                      )}
                     </div>
                   ) : q.type === 'lange_tekst' ? (
                     <textarea

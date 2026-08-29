@@ -1419,3 +1419,19 @@ WHERE question = 'Foto''s, moodboards of Pinterest-borden (upload of link)';
 -- =========================================================
 
 ALTER TABLE finka_questionnaire_responses ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT false;
+
+-- =========================================================
+-- 53. Vragenlijst — "Anders, namelijk..." (met een los invulveld zodra
+--    gekozen) is voortaan een ingebakken optie bij élke multi_select-vraag
+--    (zie MULTI_SELECT_OTHER_OPTION in src/lib/questionnaire.ts), niet iets
+--    dat losstaand in q.options hoeft te staan. Bestaande vragen die 'm al
+--    letterlijk als optie hadden staan ("Anders"/"Anders, namelijk...")
+--    worden hier opgeschoond, anders zou hij dubbel verschijnen.
+-- =========================================================
+
+UPDATE finka_questionnaire_templates
+SET options = COALESCE(
+  (SELECT jsonb_agg(opt) FROM jsonb_array_elements_text(options) AS opt WHERE opt NOT IN ('Anders', 'Anders, namelijk...')),
+  '[]'::jsonb
+)
+WHERE type = 'multi_select';

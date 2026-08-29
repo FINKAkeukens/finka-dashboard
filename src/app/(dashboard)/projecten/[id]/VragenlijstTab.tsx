@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff, FileText, Image as ImageIcon } from 'lucide-react'
 import { QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion } from '@/lib/types'
-import { parseFileAnswer, parseMultiSelectAnswer } from '@/lib/questionnaire'
+import { multiSelectDisplayValues, parseFileAnswer, parseMultiSelectAnswer } from '@/lib/questionnaire'
 
 // Alleen-lezen wat de antwoorden betreft — de klant vult dit zelf in via
 // het klantportaal (/portaal/projecten/[id]) — maar het oog-icoontje per
@@ -75,7 +75,7 @@ export default function VragenlijstTab({
                 const response = responseFor(q.id)
                 const answer = response?.answer ?? null
                 const hidden = response?.hidden ?? false
-                const selected = q.type === 'multi_select' ? parseMultiSelectAnswer(answer) : []
+                const selected = q.type === 'multi_select' ? multiSelectDisplayValues(parseMultiSelectAnswer(answer)) : []
                 const files = q.type === 'bestand' ? parseFileAnswer(answer) : []
                 return (
                   <div key={q.id} className="px-5 py-3">

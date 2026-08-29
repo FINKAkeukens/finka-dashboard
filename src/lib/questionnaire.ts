@@ -7,22 +7,52 @@ export const QUESTIONNAIRE_TYPE_LABELS: Record<QuestionnaireQuestionType, string
   bestand: 'Bestand (foto/pdf)',
 }
 
-// answer is bij multi_select een JSON-array-string, bij bestand een JSON-
-// array van {url, name} — deze helpers houden de (de)serialisatie op één
-// plek zodat het formulier en de staff-weergave 'm niet allebei los hoeven
-// te implementeren.
-export function parseMultiSelectAnswer(answer: string | null): string[] {
-  if (!answer) return []
+// Elke multi_select-vraag krijgt deze optie automatisch erbij (niet als
+// losse rij in q.options — zo kan hij niet per ongeluk verwijderd worden en
+// hoeft-ie niet bij elke bestaande/nieuwe vraag apart toegevoegd te
+// worden). Bij selectie verschijnt er een kort-antwoordveld.
+export const MULTI_SELECT_OTHER_OPTION = 'Anders, namelijk...'
+
+export interface MultiSelectAnswer {
+  selected: string[]
+  other: string
+}
+
+// answer is bij multi_select een JSON-object {selected, other}, bij bestand
+// een JSON-array van {url, name} — deze helpers houden de (de)serialisatie
+// op één plek zodat het formulier en de staff-weergave 'm niet allebei los
+// hoeven te implementeren. Oude antwoorden (vóór het "Anders, namelijk..."-
+// veld) stonden als kale JSON-array — die vorm blijft ondersteund.
+export function parseMultiSelectAnswer(answer: string | null): MultiSelectAnswer {
+  if (!answer) return { selected: [], other: '' }
   try {
     const parsed = JSON.parse(answer)
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+    if (Array.isArray(parsed)) {
+      return { selected: parsed.filter((v): v is string => typeof v === 'string'), other: '' }
+    }
+    if (parsed && typeof parsed === 'object') {
+      const selected = Array.isArray(parsed.selected)
+        ? parsed.selected.filter((v: unknown): v is string => typeof v === 'string')
+        : []
+      const other = typeof parsed.other === 'string' ? parsed.other : ''
+      return { selected, other }
+    }
+    return { selected: [], other: '' }
   } catch {
-    return []
+    return { selected: [], other: '' }
   }
 }
 
-export function serializeMultiSelectAnswer(values: string[]): string {
-  return JSON.stringify(values)
+export function serializeMultiSelectAnswer(value: MultiSelectAnswer): string {
+  return JSON.stringify(value)
+}
+
+// Voor weergave (staff-tabblad): toont de eigen tekst i.p.v. de generieke
+// "Anders, namelijk..."-tekst zodra die is ingevuld.
+export function multiSelectDisplayValues({ selected, other }: MultiSelectAnswer): string[] {
+  return selected.map((value) =>
+    value === MULTI_SELECT_OTHER_OPTION && other.trim() ? `Anders: ${other.trim()}` : value
+  )
 }
 
 export interface QuestionnaireFile {
