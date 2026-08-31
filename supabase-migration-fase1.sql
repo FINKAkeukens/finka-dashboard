@@ -1489,3 +1489,29 @@ ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS filename TEXT;
 -- =========================================================
 
 ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS visible_to_customer BOOLEAN NOT NULL DEFAULT false;
+
+-- =========================================================
+-- 57. Checklist — datum bijhouden waarop een punt is afgevinkt, zichtbaar
+--    zowel intern (project-tabblad) als in het klantportaal. Wordt gezet
+--    zodra checked op true gaat, en weer op NULL gezet zodra iemand het
+--    vinkje uitzet (geen geschiedenis van eerdere keren, gewoon de laatste
+--    afvink-datum).
+-- =========================================================
+
+ALTER TABLE finka_checklist_items ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ;
+
+-- =========================================================
+-- 58. Klant-akkoord op een document — staff kan per gedownloade offerte
+--    aangeven dat de klant 'm officieel moet accorderen (bv. de offerte-PDF
+--    zelf), naast het oog-knopje dat alleen zichtbaarheid regelt. De klant
+--    accordeert in het portaal via /api/portaal/documenten/akkoord, die dan
+--    approved_at/approved_by hier vastlegt. Diezelfde route zet — als het om
+--    de nog actieve (niet-gearchiveerde) offerte van het project gaat — ook
+--    de offerte zelf op status 'akkoord' (akkoord_at), zodat het meteen
+--    meetelt in de omzet-rapportage (/financieel), net als wanneer staff dat
+--    handmatig in de Offerte-tab zou zetten.
+-- =========================================================
+
+ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS approval_required BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS approved_by TEXT;

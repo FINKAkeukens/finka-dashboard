@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { format } from 'date-fns'
+import { nl } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -101,10 +103,11 @@ export default function ChecklistTab({
 
   async function toggleChecked(item: ChecklistItem) {
     const checked = !item.checked
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, checked } : i)))
+    const checked_at = checked ? new Date().toISOString() : null
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, checked, checked_at } : i)))
     const { error: updError } = await supabase
       .from('finka_checklist_items')
-      .update({ checked, updated_at: new Date().toISOString() })
+      .update({ checked, checked_at, updated_at: new Date().toISOString() })
       .eq('id', item.id)
     if (updError) setError(updError.message)
   }
@@ -210,6 +213,11 @@ export default function ChecklistTab({
                     onBlur={() => saveLabel(item)}
                     className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${item.checked ? 'line-through text-[#9A948D]' : 'text-[#1C1B19]'}`}
                   />
+                  {item.checked && item.checked_at && (
+                    <span className="text-xs text-[#9A948D] shrink-0" title="Afgevinkt op">
+                      {format(new Date(item.checked_at), 'd MMM yyyy', { locale: nl })}
+                    </span>
+                  )}
                   <button
                     onClick={() => toggleVisible(item)}
                     title={item.visible_to_customer ? 'Zichtbaar voor klant — klik om te verbergen' : 'Verborgen voor klant — klik om te tonen'}

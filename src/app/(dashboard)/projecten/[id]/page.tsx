@@ -197,7 +197,7 @@ export default async function ProjectDetailPage({
   }
 
   return (
-    <div className={`p-8 ${tab === 'financieel' ? 'max-w-6xl' : 'max-w-4xl'}`}>
+    <div className="p-8 max-w-7xl">
       <Link href="/projecten" className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19] mb-6">
         <ArrowLeft size={14} />
         Terug naar projecten

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { differenceInCalendarDays, format, isSameMonth, startOfDay } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -95,6 +95,41 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
     >
       {children}
     </button>
+  )
+}
+
+// Notitieveld dat vanzelf meegroeit met de inhoud i.p.v. één vaste regel —
+// alleen hier op het overkoepelende planningsoverzicht (niet bij het
+// Planning-tabblad van een los project, dat blijft bewust bij één vaste
+// regel per veld in de rij).
+function NotesField({
+  value,
+  onChange,
+  onBlur,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onBlur: () => void
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [value])
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      placeholder="Notitie..."
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
+      className="w-full min-h-7 px-2 py-1 text-xs bg-[#FAF8F5] border border-transparent rounded-md focus:outline-none focus:border-[#DDD8D2] focus:bg-white placeholder:text-[#9A948D] resize-none overflow-hidden"
+    />
   )
 }
 
@@ -444,12 +479,10 @@ export default function PlanningAgenda({
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <input
-                  placeholder="Notitie..."
+                <NotesField
                   value={noteValue}
-                  onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                  onChange={(value) => setNoteDrafts((prev) => ({ ...prev, [m.id]: value }))}
                   onBlur={() => saveNoteIfChanged(null, m)}
-                  className="w-full h-7 px-2 text-xs bg-[#FAF8F5] border border-transparent rounded-md focus:outline-none focus:border-[#DDD8D2] focus:bg-white placeholder:text-[#9A948D]"
                 />
               </div>
             )
@@ -597,12 +630,10 @@ export default function PlanningAgenda({
                       </select>
                     </div>
                   </div>
-                  <input
-                    placeholder="Notitie..."
+                  <NotesField
                     value={noteValue}
-                    onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [entry.milestone.id]: e.target.value }))}
+                    onChange={(value) => setNoteDrafts((prev) => ({ ...prev, [entry.milestone.id]: value }))}
                     onBlur={() => saveNoteIfChanged(entry.project.id, entry.milestone)}
-                    className="w-full h-7 px-2 text-xs bg-[#FAF8F5] border border-transparent rounded-md focus:outline-none focus:border-[#DDD8D2] focus:bg-white placeholder:text-[#9A948D]"
                   />
                 </div>
               </div>

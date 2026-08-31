@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Trash2 } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { ProjectNote } from '@/lib/types'
 
 function formatTimestamp(iso: string) {
@@ -27,6 +27,8 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -67,6 +69,22 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
     setSaving(false)
   }
 
+  function startEdit(note: ProjectNote) {
+    setEditingId(note.id)
+    setEditText(note.body)
+  }
+
+  async function saveEdit(noteId: string) {
+    const trimmed = editText.trim()
+    setEditingId(null)
+    if (!trimmed) return
+    const original = notes.find((n) => n.id === noteId)?.body
+    if (trimmed === original) return
+    setNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, body: trimmed } : n)))
+    const { error: updError } = await supabase.from('finka_project_notes').update({ body: trimmed }).eq('id', noteId)
+    if (updError) setError(updError.message)
+  }
+
   async function handleDelete(noteId: string) {
     setError('')
     const { error: delError } = await supabase.from('finka_project_notes').delete().eq('id', noteId)
@@ -105,16 +123,35 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
         <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
           {notes.map((note) => (
             <div key={note.id} className="px-5 py-4 flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm text-[#1C1B19] whitespace-pre-wrap">{note.body}</p>
+              <div className="min-w-0 flex-1">
+                {editingId === note.id ? (
+                  <textarea
+                    autoFocus
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onBlur={() => saveEdit(note.id)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setEditingId(null) }}
+                    rows={3}
+                    className="w-full text-sm px-2 py-1.5 border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19] resize-none"
+                  />
+                ) : (
+                  <p className="text-sm text-[#1C1B19] whitespace-pre-wrap">{note.body}</p>
+                )}
                 <p className="text-xs text-[#9A948D] mt-1.5">
                   {formatTimestamp(note.created_at)}
                   {note.created_by ? ` · ${note.created_by}` : ''}
                 </p>
               </div>
-              <button onClick={() => handleDelete(note.id)} title="Aantekening verwijderen" className="shrink-0">
-                <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
-              </button>
+              {editingId !== note.id && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => startEdit(note)} title="Aantekening bewerken">
+                    <Pencil size={14} className="text-[#9A948D] hover:text-[#1C1B19]" />
+                  </button>
+                  <button onClick={() => handleDelete(note.id)} title="Aantekening verwijderen">
+                    <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

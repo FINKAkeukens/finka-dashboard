@@ -223,7 +223,7 @@ export default function PlanningTab({
             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: MILESTONE_STATUS_COLORS[m.status] }} />
             <Input
               placeholder="Naam van dit item"
-              className="h-9 w-40"
+              className="h-9 w-56 shrink-0"
               value={m.label ?? ''}
               onChange={(e) => update(m.id, { label: e.target.value })}
             />

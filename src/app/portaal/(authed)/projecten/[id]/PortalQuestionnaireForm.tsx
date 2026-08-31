@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { FileText, Image as ImageIcon, Upload, X } from 'lucide-react'
+import { Check, FileText, Image as ImageIcon, Upload, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { QuestionnaireCategoryItem, QuestionnaireTemplateQuestion } from '@/lib/types'
 import {
   MULTI_SELECT_OTHER_OPTION,
@@ -31,10 +32,13 @@ export default function PortalQuestionnaireForm({
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers)
   const [uploading, setUploading] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
-  async function save(questionId: string, answer: string) {
+  async function save(questionId: string, answer: string): Promise<boolean> {
     setError('')
+    setSaved(false)
     try {
       const res = await fetch('/api/portaal/antwoord', {
         method: 'POST',
@@ -44,10 +48,25 @@ export default function PortalQuestionnaireForm({
       if (!res.ok) {
         const data = await res.json()
         setError(data.error ?? 'Opslaan mislukt')
+        return false
       }
+      return true
     } catch {
       setError('Opslaan mislukt')
+      return false
     }
+  }
+
+  // De knop hieronder is vooral bedoeld als geruststelling (elk veld slaat
+  // al zelfstandig op bij verlaten/aanklikken) — schrijft voor de zekerheid
+  // alsnog alles in één keer weg, ook een veld waar de klant nog in aan het
+  // typen was zonder er al uit geklikt te hebben.
+  async function saveAll() {
+    setSaving(true)
+    setSaved(false)
+    const results = await Promise.all(questions.map((q) => save(q.id, answers[q.id] ?? '')))
+    setSaving(false)
+    if (results.every(Boolean)) setSaved(true)
   }
 
   function updateLocal(questionId: string, value: string) {
@@ -218,6 +237,18 @@ export default function PortalQuestionnaireForm({
           </div>
         )
       })}
+      <div className="flex items-center gap-3">
+        <Button onClick={saveAll} disabled={saving}>
+          {saving ? 'Opslaan...' : 'Opslaan'}
+        </Button>
+        {saved && (
+          <span className="flex items-center gap-1 text-sm text-green-700">
+            <Check size={14} />
+            Opgeslagen
+          </span>
+        )}
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   )

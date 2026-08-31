@@ -549,6 +549,14 @@ export interface QuoteDownload {
   // ChecklistItem.visible_to_customer) — standaard false, staff moet een
   // download expliciet zichtbaar maken voor het klantenportaal.
   visible_to_customer: boolean
+  // Staff geeft hiermee aan dat de klant dit document officieel moet
+  // accorderen in het portaal (bv. bij een offerte). approved_at/approved_by
+  // worden gezet zodra de klant daar op "Akkoord geven" klikt — zie
+  // /api/portaal/documenten/akkoord/route.ts, die bij goedkeuring ook de
+  // gekoppelde offerte op status 'akkoord' zet (voor de omzet-rapportage).
+  approval_required: boolean
+  approved_at: string | null
+  approved_by: string | null
 }
 
 // Compacte kopie van een interne regel (finka_quote_items), alleen de velden
@@ -766,6 +774,9 @@ export interface ChecklistItem {
   category: string
   label: string | null
   checked: boolean
+  // Gezet op het moment dat checked op true gaat, weer NULL zodra het
+  // vinkje uit gaat — geen geschiedenis, alleen de laatste afvinkdatum.
+  checked_at: string | null
   // Bepaalt of dit punt meetelt op de klantportaal-statuspagina
   // (/portaal/projecten/[id]) — interne stappen (bv. "Kasten betaald")
   // hoeven klanten niet te zien. Startwaarde komt van het sjabloon-item op

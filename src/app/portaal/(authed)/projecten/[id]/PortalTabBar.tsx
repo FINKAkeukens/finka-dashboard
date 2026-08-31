@@ -15,7 +15,7 @@ export default function PortalTabBar({ activeTab }: { activeTab: string }) {
   const pathname = usePathname()
 
   return (
-    <div className="flex border-b border-[#DDD8D2] mb-6 overflow-x-auto">
+    <div className="flex border-b border-[#DDD8D2] mb-6">
       {tabs.map((tab) => (
         <Link
           key={tab.id}

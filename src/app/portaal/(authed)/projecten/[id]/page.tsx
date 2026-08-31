@@ -1,14 +1,14 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, Check, FileText } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
 import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
+import PortalDocumentenList from './PortalDocumentenList'
 
 export default async function PortalProjectPage({
   params,
@@ -78,11 +78,6 @@ export default async function PortalProjectPage({
 
   return (
     <div className="space-y-6">
-      <Link href="/portaal" className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19]">
-        <ArrowLeft size={14} />
-        Terug
-      </Link>
-
       <h1 className="text-xl font-semibold text-[#1C1B19]">{(project as Project).title}</h1>
 
       <PortalTabBar activeTab={tab} />
@@ -118,9 +113,14 @@ export default async function PortalProjectPage({
                       >
                         {item.checked && <Check size={11} className="text-white" strokeWidth={3} />}
                       </div>
-                      <span className={`text-sm ${item.checked ? 'text-[#9A948D] line-through' : 'text-[#1C1B19]'}`}>
+                      <span className={`flex-1 text-sm ${item.checked ? 'text-[#9A948D] line-through' : 'text-[#1C1B19]'}`}>
                         {item.label ?? (item.item_key ? checklistItemLabel(item) : '')}
                       </span>
+                      {item.checked && item.checked_at && (
+                        <span className="text-xs text-[#9A948D] shrink-0">
+                          {new Date(item.checked_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -135,31 +135,7 @@ export default async function PortalProjectPage({
           )}
         </div>
       ) : tab === 'documenten' ? (
-        documents.length > 0 ? (
-          <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
-            <div className="divide-y divide-[#DDD8D2]">
-              {documents.map((d) => (
-                <a
-                  key={d.id}
-                  href={d.pdf_url ?? '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 px-5 py-3 text-sm text-[#1C1B19] hover:bg-[#F7F5F2]"
-                >
-                  <FileText size={14} className="text-[#6B6560] shrink-0" />
-                  <span className="flex-1 truncate">{d.filename ?? 'Offerte'}.pdf</span>
-                  <span className="text-xs text-[#9A948D] shrink-0">
-                    {new Date(d.downloaded_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                </a>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 text-center">
-            Nog geen documenten beschikbaar.
-          </p>
-        )
+        <PortalDocumentenList downloads={documents} />
       ) : (
         <PortalQuestionnaireForm
           projectId={id}

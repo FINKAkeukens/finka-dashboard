@@ -24,7 +24,7 @@ export default function TabBar({ activeTab }: { activeTab: string }) {
   const pathname = usePathname()
 
   return (
-    <div className="flex border-b border-[#DDD8D2] mb-6 overflow-x-auto">
+    <div className="flex flex-wrap border-b border-[#DDD8D2] mb-6">
       {tabs.map((tab) => (
         <Link
           key={tab.id}
