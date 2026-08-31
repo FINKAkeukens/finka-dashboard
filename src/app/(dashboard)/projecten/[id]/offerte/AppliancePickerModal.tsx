@@ -33,11 +33,21 @@ export default function AppliancePickerModal({
   onOpenChange,
   appliances,
   onSelect,
+  initialSelectedIds,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   appliances: Appliance[]
-  onSelect: (appliance: Appliance) => void
+  // Krijgt bij bevestigen in één keer de volledige geselecteerde lijst
+  // (i.p.v. één keer per apparaat) — anders overschrijft elke afzonderlijke
+  // aanroep de vorige met dezelfde verouderde staat, zodat er alsnog maar
+  // één apparaat blijft hangen.
+  onSelect: (appliances: Appliance[]) => void
+  // Al toegevoegde apparaten (bv. een eerder samengestelde apparatuur-optie)
+  // staan bij het openen meteen aangevinkt, zodat je de lijst hier verder
+  // kan bewerken — toevoegen én weer uitvinken om te verwijderen — i.p.v.
+  // dat opnieuw openen altijd bij een lege selectie begint.
+  initialSelectedIds?: string[]
 }) {
   const [search, setSearch] = useState('')
   const [brandFilter, setBrandFilter] = useState('alle')
@@ -47,6 +57,18 @@ export default function AppliancePickerModal({
   const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set())
   const [productLineOnly, setProductLineOnly] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const hadInitialSelection = (initialSelectedIds?.length ?? 0) > 0
+
+  // Bij elke keer openen opnieuw seeden vanuit de huidige lijst — niet alleen
+  // bij mount, want dezelfde modal-instantie blijft bestaan tussen keren
+  // open/dicht gaan. setState tijdens render i.p.v. in een effect ("adjusting
+  // state when a prop changes"), zodat dit in dezelfde render al klaar is —
+  // geen extra doorgaande render nodig.
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) setSelectedIds(new Set(initialSelectedIds ?? []))
+  }
 
   const brands = useMemo(
     () => Array.from(new Set(appliances.map((a) => a.brand))).sort((a, b) => a.localeCompare(b)),
@@ -127,7 +149,7 @@ export default function AppliancePickerModal({
   }, [])
 
   function handleConfirm() {
-    selected.forEach((a) => onSelect(a))
+    onSelect(selected)
     reset()
     onOpenChange(false)
   }
@@ -136,7 +158,7 @@ export default function AppliancePickerModal({
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
       <DialogContent className="w-[95vw] max-w-5xl h-[85vh] max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Apparaat uit bibliotheek toevoegen</DialogTitle>
+          <DialogTitle>{hadInitialSelection ? 'Apparaten uit bibliotheek bewerken' : 'Apparaat uit bibliotheek toevoegen'}</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-5 flex-1 min-h-0">
@@ -295,8 +317,8 @@ export default function AppliancePickerModal({
                 <span className="text-[#6B6560]">Totaal</span>
                 <span className="font-semibold text-[#1C1B19]">{formatPrice(totalPrice)}</span>
               </div>
-              <Button onClick={handleConfirm} disabled={!selected.length} className="w-full">
-                Toevoegen{selected.length ? ` (${selected.length})` : ''}
+              <Button onClick={handleConfirm} disabled={!selected.length && !hadInitialSelection} className="w-full">
+                {hadInitialSelection ? `Bijwerken (${selected.length})` : `Toevoegen${selected.length ? ` (${selected.length})` : ''}`}
               </Button>
             </div>
           </div>

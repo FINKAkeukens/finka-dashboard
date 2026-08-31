@@ -917,8 +917,10 @@ export default function QuoteEditor({
         open={accessoirePickerSectionIdx !== null}
         onOpenChange={(open) => { if (!open) setAccessoirePickerSectionIdx(null) }}
         appliances={appliances.filter((a) => ACCESSOIRE_APPLIANCE_TYPES.includes(a.type))}
-        onSelect={(appliance) => {
-          if (accessoirePickerSectionIdx !== null) addAccessoireToSection(accessoirePickerSectionIdx, appliance)
+        onSelect={(selectedAppliances) => {
+          if (accessoirePickerSectionIdx !== null) {
+            selectedAppliances.forEach((appliance) => addAccessoireToSection(accessoirePickerSectionIdx, appliance))
+          }
         }}
       />
 

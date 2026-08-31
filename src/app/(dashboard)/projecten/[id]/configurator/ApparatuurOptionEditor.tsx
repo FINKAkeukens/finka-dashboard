@@ -71,23 +71,35 @@ export default function ApparatuurOptionEditor({
   const [uploadError, setUploadError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  function addAppliance(appliance: Appliance) {
-    const alreadyAdded = data.items.some((i) => i.appliance_id === appliance.id)
-    if (alreadyAdded && !confirm(`${appliance.brand} ${appliance.model} staat al in deze optie. Toch nog een keer toevoegen?`)) {
-      return
-    }
-    const nextItems = [
-      ...data.items,
-      newItem({
-        appliance_id: appliance.id,
-        description: `${appliance.brand} ${appliance.model}`,
-        brand: appliance.brand,
-        model: appliance.model,
-        unit_price: appliance.price ?? 0,
-      }),
-    ]
+  // De picker toont de al gekozen apparaten meteen aangevinkt (zie
+  // libraryApplianceIds hieronder) en geeft bij bevestigen de vólledige
+  // gewenste selectie terug — niet alleen de nieuw aangevinkte. Dit
+  // reconcilieert die selectie met de huidige lijst in één keer:
+  // - niet meer aangevinkte apparaten verdwijnen (verwijderen kan dus ook)
+  // - nieuw aangevinkte apparaten worden toegevoegd
+  // - nog steeds aangevinkte apparaten blijven ongemoeid, incl. een eventueel
+  //   handmatig aangepast aantal/prijs
+  // Losse (niet-bibliotheek) regels raakt dit nooit aan.
+  function applyApplianceSelection(selectedAppliances: Appliance[]) {
+    const selectedIds = new Set(selectedAppliances.map((a) => a.id))
+    const currentApplianceIds = new Set(data.items.filter((i) => i.appliance_id).map((i) => i.appliance_id))
+    const kept = data.items.filter((i) => !i.appliance_id || selectedIds.has(i.appliance_id))
+    const added = selectedAppliances
+      .filter((a) => !currentApplianceIds.has(a.id))
+      .map((a) =>
+        newItem({
+          appliance_id: a.id,
+          description: `${a.brand} ${a.model}`,
+          brand: a.brand,
+          model: a.model,
+          unit_price: a.price ?? 0,
+        })
+      )
+    const nextItems = [...kept, ...added]
     onChange({ data: { ...data, items: nextItems }, cost_total: itemsTotal(nextItems) })
   }
+
+  const libraryApplianceIds = data.items.filter((i) => i.appliance_id).map((i) => i.appliance_id as string)
 
   function addManualItem() {
     onChange({ data: { ...data, items: [...data.items, newItem({})] } })
@@ -158,7 +170,13 @@ export default function ApparatuurOptionEditor({
 
   return (
     <div className="space-y-4">
-      <AppliancePickerModal open={pickerOpen} onOpenChange={setPickerOpen} appliances={appliances} onSelect={addAppliance} />
+      <AppliancePickerModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        appliances={appliances}
+        onSelect={applyApplianceSelection}
+        initialSelectedIds={libraryApplianceIds}
+      />
 
       <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
         <table className="w-full text-sm">
