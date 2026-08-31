@@ -371,14 +371,19 @@ export default function PlanningAgenda({
     </div>
   )
 
+  // Zelfde aanpak als de project-mijlpalen hierboven (regel 249): een taak
+  // op 'klaar' verdwijnt uit het overzicht i.p.v. voor altijd te blijven
+  // staan. Blijft gewoon in de database, telt alleen niet meer mee hier.
+  const visibleGeneralTasks = generalTasks.filter((m) => m.status !== 'klaar')
+
   const generalTasksSection = (
     <div className="w-full lg:w-1/3 shrink-0 space-y-3">
       <h2 className="text-sm font-medium text-[#1C1B19]">Algemene taken</h2>
-      {!generalTasks.length ? (
+      {!visibleGeneralTasks.length ? (
         <p className="text-xs text-[#9A948D]">Geen algemene taken — gebruik &quot;Nieuwe taak&quot; hierboven met &quot;Algemeen&quot; als project.</p>
       ) : (
         <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#EFEBE4]">
-          {generalTasks.map((m) => {
+          {visibleGeneralTasks.map((m) => {
             const noteValue = noteDrafts[m.id] ?? m.notes ?? ''
             const titleValue = titleDrafts[m.id] ?? m.label ?? ''
             return (

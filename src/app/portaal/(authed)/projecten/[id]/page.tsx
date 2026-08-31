@@ -2,15 +2,23 @@ export const dynamic = 'force-dynamic'
 
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Check } from 'lucide-react'
+import { ArrowLeft, Check, FileText } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion } from '@/lib/types'
+import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
+import PortalTabBar from './PortalTabBar'
 
-export default async function PortalProjectPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PortalProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ tab?: string }>
+}) {
   const { id } = await params
+  const { tab = 'vragenlijst' } = await searchParams
   const session = await getPortalCustomer()
   if (!session) redirect('/portaal/login')
 
@@ -39,6 +47,23 @@ export default async function PortalProjectPage({ params }: { params: Promise<{ 
   const questions = ((questionsData ?? []) as QuestionnaireTemplateQuestion[]).filter((q) => !hiddenQuestionIds.has(q.id))
   const initialAnswers = Object.fromEntries(responses.map((r) => [r.question_id, r.answer ?? '']))
 
+  // Alleen downloads die staff expliciet zichtbaar heeft gezet — zie de
+  // oog-knop op het Documenten-tabblad (finka_quote_downloads.visible_to_customer,
+  // migratie-sectie 56, standaard false).
+  const { data: quotesForProject } = await service.from('finka_quotes').select('id').eq('project_id', id)
+  const quoteIds = (quotesForProject ?? []).map((q) => q.id)
+  let documents: QuoteDownload[] = []
+  if (quoteIds.length) {
+    const { data: documentsData } = await service
+      .from('finka_quote_downloads')
+      .select('*')
+      .in('quote_id', quoteIds)
+      .eq('visible_to_customer', true)
+      .not('pdf_url', 'is', null)
+      .order('downloaded_at', { ascending: false })
+    documents = (documentsData ?? []) as QuoteDownload[]
+  }
+
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
   const percentage = total > 0 ? Math.round((doneCount / total) * 100) : 0
@@ -60,56 +85,88 @@ export default async function PortalProjectPage({ params }: { params: Promise<{ 
 
       <h1 className="text-xl font-semibold text-[#1C1B19]">{(project as Project).title}</h1>
 
-      <PortalQuestionnaireForm
-        projectId={id}
-        categories={questionnaireCategories}
-        questions={questions}
-        initialAnswers={initialAnswers}
-      />
+      <PortalTabBar activeTab={tab} />
 
-      {total > 0 && (
-        <div className="bg-white rounded-xl border border-[#DDD8D2] p-4 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-[#1C1B19]">Voortgang</span>
-            <span className="text-sm text-[#6B6560]">{doneCount} van {total} afgerond · {percentage}%</span>
-          </div>
-          <div className="h-2 rounded-full bg-[#F0EDE9] overflow-hidden">
-            <div className="h-full rounded-full bg-[#C9A96E] transition-all" style={{ width: `${percentage}%` }} />
-          </div>
-        </div>
-      )}
-
-      {checklistCategories.map((category) => {
-        const catItems = items
-          .filter((i) => categoryLabel(i.category) === category)
-          .sort((a, b) => a.sort_order - b.sort_order)
-        return (
-          <div key={category} className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#DDD8D2] bg-[#F7F5F2]">
-              <h2 className="text-sm font-medium text-[#1C1B19]">{category}</h2>
+      {tab === 'checklist' ? (
+        <div className="space-y-4">
+          {total > 0 && (
+            <div className="bg-white rounded-xl border border-[#DDD8D2] p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[#1C1B19]">Voortgang</span>
+                <span className="text-sm text-[#6B6560]">{doneCount} van {total} afgerond · {percentage}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-[#F0EDE9] overflow-hidden">
+                <div className="h-full rounded-full bg-[#C9A96E] transition-all" style={{ width: `${percentage}%` }} />
+              </div>
             </div>
-            <div className="divide-y divide-[#DDD8D2]">
-              {catItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 px-5 py-3">
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${item.checked ? 'bg-[#C9A96E] border-[#C9A96E]' : 'border-[#DDD8D2]'}`}
-                  >
-                    {item.checked && <Check size={11} className="text-white" strokeWidth={3} />}
-                  </div>
-                  <span className={`text-sm ${item.checked ? 'text-[#9A948D] line-through' : 'text-[#1C1B19]'}`}>
-                    {item.label ?? (item.item_key ? checklistItemLabel(item) : '')}
-                  </span>
+          )}
+
+          {checklistCategories.map((category) => {
+            const catItems = items
+              .filter((i) => categoryLabel(i.category) === category)
+              .sort((a, b) => a.sort_order - b.sort_order)
+            return (
+              <div key={category} className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#DDD8D2] bg-[#F7F5F2]">
+                  <h2 className="text-sm font-medium text-[#1C1B19]">{category}</h2>
                 </div>
+                <div className="divide-y divide-[#DDD8D2]">
+                  {catItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 px-5 py-3">
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${item.checked ? 'bg-[#C9A96E] border-[#C9A96E]' : 'border-[#DDD8D2]'}`}
+                      >
+                        {item.checked && <Check size={11} className="text-white" strokeWidth={3} />}
+                      </div>
+                      <span className={`text-sm ${item.checked ? 'text-[#9A948D] line-through' : 'text-[#1C1B19]'}`}>
+                        {item.label ?? (item.item_key ? checklistItemLabel(item) : '')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+
+          {total === 0 && (
+            <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 text-center">
+              Er is nog geen status beschikbaar voor dit project.
+            </p>
+          )}
+        </div>
+      ) : tab === 'documenten' ? (
+        documents.length > 0 ? (
+          <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
+            <div className="divide-y divide-[#DDD8D2]">
+              {documents.map((d) => (
+                <a
+                  key={d.id}
+                  href={d.pdf_url ?? '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 px-5 py-3 text-sm text-[#1C1B19] hover:bg-[#F7F5F2]"
+                >
+                  <FileText size={14} className="text-[#6B6560] shrink-0" />
+                  <span className="flex-1 truncate">{d.filename ?? 'Offerte'}.pdf</span>
+                  <span className="text-xs text-[#9A948D] shrink-0">
+                    {new Date(d.downloaded_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </a>
               ))}
             </div>
           </div>
+        ) : (
+          <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 text-center">
+            Nog geen documenten beschikbaar.
+          </p>
         )
-      })}
-
-      {total === 0 && (
-        <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 text-center">
-          Er is nog geen status beschikbaar voor dit project.
-        </p>
+      ) : (
+        <PortalQuestionnaireForm
+          projectId={id}
+          categories={questionnaireCategories}
+          questions={questions}
+          initialAnswers={initialAnswers}
+        />
       )}
     </div>
   )

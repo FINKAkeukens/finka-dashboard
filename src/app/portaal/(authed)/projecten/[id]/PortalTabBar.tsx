@@ -3,24 +3,15 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+// Zelfde patroon als src/app/(dashboard)/projecten/[id]/TabBar.tsx —
+// klikbare tabjes bovenaan, huidige tab via ?tab= in de URL.
 const tabs = [
-  { id: 'configurator', label: 'Configurator' },
-  { id: 'offerte', label: 'Offerte' },
-  { id: 'financieel', label: 'Financieel' },
-  // 'klantkeuzes' bewust verborgen (nog geen echte module, alleen een
-  // ComingSoonTab-placeholder) — makkelijk terug te zetten door deze regel
-  // te herstellen.
-  { id: 'planning', label: 'Planning' },
-  { id: 'checklist', label: 'Checklist' },
   { id: 'vragenlijst', label: 'Vragenlijst' },
-  { id: 'aansluitschema', label: 'Aansluitschema' },
-  { id: 'facturen', label: 'Facturen' },
+  { id: 'checklist', label: 'Checklist' },
   { id: 'documenten', label: 'Documenten' },
-  { id: 'notities', label: 'Notities' },
-  { id: 'historie', label: 'Historie' },
 ]
 
-export default function TabBar({ activeTab }: { activeTab: string }) {
+export default function PortalTabBar({ activeTab }: { activeTab: string }) {
   const pathname = usePathname()
 
   return (

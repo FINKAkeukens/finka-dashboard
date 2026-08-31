@@ -535,6 +535,20 @@ export interface QuoteDownload {
   downloaded_by: string | null
   snapshot: QuoteDownloadSnapshot
   changes: string[]
+  // De daadwerkelijk gegenereerde PDF van dit downloadmoment, opgeslagen in de
+  // 'offerte-pdfs' bucket — zodat 'm terugvinden kan via het
+  // "Documenten"-tabblad. Null bij downloads van vóór deze functionaliteit,
+  // of als de upload destijds onverwacht mislukte (best-effort, zie route).
+  pdf_url: string | null
+  // "Titel - Klantnaam - Datum - vN" — opgebouwd op het moment van downloaden
+  // (zie buildQuoteFilename in de PDF-route), dus onafhankelijk van latere
+  // wijzigingen aan bv. customer_document_label. Null bij downloads van vóór
+  // deze functionaliteit.
+  filename: string | null
+  // Oog-knop op het Documenten-tabblad (zelfde patroon als
+  // ChecklistItem.visible_to_customer) — standaard false, staff moet een
+  // download expliciet zichtbaar maken voor het klantenportaal.
+  visible_to_customer: boolean
 }
 
 // Compacte kopie van een interne regel (finka_quote_items), alleen de velden

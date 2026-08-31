@@ -419,6 +419,9 @@ export default function ConfiguratorTab({
                 applying={applyingIds.has(scenario.id)}
                 applied={appliedIds.has(scenario.id)}
                 applyError={applyErrors[scenario.id] ?? ''}
+                costBreakdown={quote?.cost_breakdown?.length ? quote.cost_breakdown : DEFAULT_COST_BREAKDOWN}
+                btwPercentage={quote?.btw_percentage ?? 21}
+                eurolineRates={eRates}
               />
             ))}
             <Button variant="outline" size="sm" onClick={createScenario}>

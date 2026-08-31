@@ -314,10 +314,31 @@ export default function QuoteEditor({
     setCostBreakdown((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   }
 
+  // De kostprijs-opbouw hierboven werd tot nu toe alleen lokaal bijgehouden
+  // en pas naar de database geschreven bij "Offerte opslaan" verderop. De
+  // Configurator's "Toepassen op Offerte" haalt de kostprijs-opbouw echter
+  // altijd vers uit de database op (zie applyScenario in ConfiguratorTab) —
+  // een handmatige marge-wijziging die nog niet expliciet is opgeslagen,
+  // leek daardoor "overschreven" zodra daarna een andere Configurator-optie
+  // werd toegepast, terwijl 'm eigenlijk nooit was opgeslagen. Daarom slaat
+  // een marge-/kosten-wijziging hier voortaan direct op (autosave), net als
+  // op de meeste andere plekken in het dashboard.
+  async function saveCostBreakdownNow(rows: CostBreakdownItem[] = costBreakdown) {
+    if (!quote) return
+    const finalRows = rows.map((r) => ({ ...r, werkelijke_kosten: displayedCost(r) }))
+    const { error: updError } = await supabase
+      .from('finka_quotes')
+      .update({ cost_breakdown: finalRows, updated_at: new Date().toISOString() })
+      .eq('id', quote.id)
+    if (updError) setError(updError.message)
+  }
+
   // Zet dezelfde marge% op alle categorieën in de tabel hierboven — dit ís
   // de marge die de tabel gebruikt, geen los/parallel getal.
   function applyMarginToAllRows() {
-    setCostBreakdown((prev) => prev.map((r) => ({ ...r, marge_percentage: overallMarginPercentage, marge_percentage_source: 'in' })))
+    const next = costBreakdown.map((r) => ({ ...r, marge_percentage: overallMarginPercentage, marge_percentage_source: 'in' as const }))
+    setCostBreakdown(next)
+    saveCostBreakdownNow(next)
   }
 
   const totaalKostenExclMarge = round2(costBreakdown.reduce((sum, r) => sum + displayedCost(r), 0))
@@ -1257,11 +1278,18 @@ export default function QuoteEditor({
                         value={displayedCost(row)}
                         onChange={(e) => updateCostRow(row.key, { werkelijke_kosten: round2(Number(e.target.value)), werkelijke_kosten_source: 'in' })}
                         onFocus={selectOnFocus}
+                        onBlur={() => saveCostBreakdownNow()}
                         className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <SourceTag source={row.werkelijke_kosten_source} />
                       {row.werkelijke_kosten_source === 'in' && (row.key === 'keukenkastjes' || row.key === 'apparatuur') && (
-                        <button title="Terug naar automatisch" onClick={() => updateCostRow(row.key, { werkelijke_kosten_source: 'auto' })}>
+                        <button
+                          title="Terug naar automatisch"
+                          onClick={() => {
+                            updateCostRow(row.key, { werkelijke_kosten_source: 'auto' })
+                            saveCostBreakdownNow(costBreakdown.map((r) => (r.key === row.key ? { ...r, werkelijke_kosten_source: 'auto' as const } : r)))
+                          }}
+                        >
                           <RotateCcw size={12} className="text-[#9A948D] hover:text-[#1C1B19]" />
                         </button>
                       )}
@@ -1274,6 +1302,7 @@ export default function QuoteEditor({
                       value={row.marge_percentage}
                       onChange={(e) => updateCostRow(row.key, { marge_percentage: Number(e.target.value), marge_percentage_source: 'in' })}
                       onFocus={selectOnFocus}
+                      onBlur={() => saveCostBreakdownNow()}
                       className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                     />
                   </td>

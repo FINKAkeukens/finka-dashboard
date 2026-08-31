@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatPrice } from '@/lib/appliance-utils'
-import { ConfiguratorOption, ConfiguratorScenario, ConfiguratorSection } from '@/lib/types'
+import { ConfiguratorOption, ConfiguratorScenario, ConfiguratorSection, CostBreakdownItem, CostCategoryKey, EurolineRates, OpslagOptionData } from '@/lib/types'
+import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS } from '@/lib/euroline-calc'
 import { Trash2 } from 'lucide-react'
 
 const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'werkblad', 'opslag']
@@ -40,6 +41,9 @@ export default function ScenarioCard({
   applying,
   applied,
   applyError,
+  costBreakdown,
+  btwPercentage,
+  eurolineRates,
 }: {
   scenario: ConfiguratorScenario
   optionsBySection: Record<ConfiguratorSection, ConfiguratorOption[]>
@@ -51,6 +55,12 @@ export default function ScenarioCard({
   applying: boolean
   applied: boolean
   applyError: string
+  // Voor de klantprijs-indicatie hieronder — dezelfde marges/btw als de
+  // Offerte-tab, zodat dit getal alvast klopt met wat "Toepassen op
+  // Offerte" straks daadwerkelijk oplevert.
+  costBreakdown: CostBreakdownItem[]
+  btwPercentage: number
+  eurolineRates: EurolineRates
 }) {
   const [editingName, setEditingName] = useState(false)
 
@@ -60,6 +70,35 @@ export default function ScenarioCard({
   })
   const total = selected.reduce((sum, o) => sum + (o?.cost_total ?? 0), 0)
   const missing = SECTIONS.filter((_, i) => !selected[i] && optionsBySection[SECTIONS[i]].length > 0)
+
+  // Marge komt uit de kostprijs-opbouw van de Offerte-tab, niet uit de
+  // Configurator zelf — die kent alleen kostprijzen per onderdeel. "Opslag"
+  // is hier één samengevoegde optie maar in de kostprijs-opbouw 4 losse
+  // regels met elk hun eigen marge (opslag/levering/installatie/service),
+  // dus die worden hier uit elkaar gehaald via dezelfde berekening als
+  // "Toepassen op Offerte" gebruikt.
+  const marginFor = (key: CostCategoryKey) => costBreakdown.find((r) => r.key === key)?.marge_percentage ?? 0
+
+  let klantprijsExclBtw = 0
+  const kastenOpt = selected[0]
+  if (kastenOpt) klantprijsExclBtw += kastenOpt.cost_total * (1 + marginFor('keukenkastjes') / 100)
+  const apparatuurOpt = selected[1]
+  if (apparatuurOpt) klantprijsExclBtw += apparatuurOpt.cost_total * (1 + marginFor('apparatuur') / 100)
+  const werkbladOpt = selected[2]
+  if (werkbladOpt) klantprijsExclBtw += werkbladOpt.cost_total * (1 + marginFor('werkblad') / 100)
+  const opslagOpt = selected[3]
+  if (opslagOpt) {
+    const d = opslagOpt.data as Partial<OpslagOptionData>
+    const inputs = d.euroline_inputs && Object.keys(d.euroline_inputs).length
+      ? { ...DEFAULT_EUROLINE_INPUTS, ...d.euroline_inputs }
+      : DEFAULT_EUROLINE_INPUTS
+    const totals = computeEurolineTotals(inputs, eurolineRates)
+    klantprijsExclBtw += totals.opslag * (1 + marginFor('opslag') / 100)
+    klantprijsExclBtw += totals.levering * (1 + marginFor('levering') / 100)
+    klantprijsExclBtw += totals.installatie * (1 + marginFor('installatie') / 100)
+    klantprijsExclBtw += totals.service * (1 + marginFor('service') / 100)
+  }
+  const klantprijsInclBtw = klantprijsExclBtw * (1 + btwPercentage / 100)
 
   return (
     <div className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
@@ -118,8 +157,16 @@ export default function ScenarioCard({
 
       <div className="flex items-center justify-between gap-4 border-t border-[#DDD8D2] pt-3">
         <div>
-          <p className="text-xs text-[#6B6560]">Kostprijs (excl. marge en btw)</p>
-          <p className="text-lg font-semibold text-[#1C1B19]">{formatPrice(total)}</p>
+          <div className="flex items-start gap-6">
+            <div>
+              <p className="text-xs text-[#6B6560]">Kostprijs (excl. marge en btw)</p>
+              <p className="text-lg font-semibold text-[#1C1B19]">{formatPrice(total)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#6B6560]">Klantprijs (incl. marge en btw)</p>
+              <p className="text-lg font-semibold text-[#C9A96E]">{formatPrice(klantprijsInclBtw)}</p>
+            </div>
+          </div>
           {missing.length > 0 && (
             <p className="text-[10px] text-[#9A948D] mt-0.5">Nog geen keuze bij: {missing.map((s) => SECTION_LABELS[s]).join(', ')}</p>
           )}

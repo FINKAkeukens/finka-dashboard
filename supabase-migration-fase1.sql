@@ -1435,3 +1435,57 @@ SET options = COALESCE(
   '[]'::jsonb
 )
 WHERE type = 'multi_select';
+
+-- =========================================================
+-- 54. "Documenten"-tabblad — elke gedownloade offerte-PDF wordt nu ook zelf
+--    bewaard (naast de snapshot/diff die er al lag, zie sectie 28), zodat
+--    'm terug te vinden is op het project via het Documenten-tabblad, met de
+--    datum waarop 'm gedownload/toegevoegd is. Eigen storage-bucket, publiek
+--    (zelfde afweging als klant-uploads/offer-images: geen concurrentie-
+--    gevoelige data, obscuur pad via random UUID). Upload gebeurt server-side
+--    in /api/offerte/[projectId]/pdf/route.ts, altijd door een ingelogde
+--    staff-gebruiker — vandaar dezelfde policy-vorm als offer-images
+--    (sectie 11): alleen authenticated mag schrijven, lezen kan iedereen via
+--    de publieke bucket-URL.
+-- =========================================================
+
+ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('offerte-pdfs', 'offerte-pdfs', true)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Authenticated kunnen offerte-pdfs uploaden"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'offerte-pdfs');
+
+CREATE POLICY "Authenticated kunnen offerte-pdfs bijwerken"
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'offerte-pdfs');
+
+CREATE POLICY "Authenticated kunnen offerte-pdfs verwijderen"
+ON storage.objects FOR DELETE TO authenticated
+USING (bucket_id = 'offerte-pdfs');
+
+-- =========================================================
+-- 55. Leesbare bestandsnaam per download: "Titel - Klantnaam - Datum - vN"
+--    (Titel = customer_document_label, bv. "Prijsindicatie"/"Offerte"; vN =
+--    hoeveelste download van déze offerte op déze kalenderdag). Opgebouwd en
+--    weggeschreven op het moment van downloaden (zie buildQuoteFilename in
+--    /api/offerte/[projectId]/pdf/route.ts), zodat 'm ongewijzigd blijft ook
+--    als het documentlabel later verandert — en gebruikt voor zowel de
+--    daadwerkelijke download (Content-Disposition) als de weergave in het
+--    Documenten-tabblad.
+-- =========================================================
+
+ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS filename TEXT;
+
+-- =========================================================
+-- 56. Documenten in het klantenportaal — staff kan per gedownloade offerte
+--    kiezen of die ook in het portaal te zien is (zelfde oog-knop-patroon
+--    als bij Checklist-items en Vragenlijst-vragen). Standaard verborgen:
+--    een download is in eerste instantie een intern werkexemplaar, pas
+--    expliciet aanzetten maakt 'm klant-zichtbaar.
+-- =========================================================
+
+ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS visible_to_customer BOOLEAN NOT NULL DEFAULT false;

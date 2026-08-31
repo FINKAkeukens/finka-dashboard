@@ -8,6 +8,7 @@ import EditProjectForm from './EditProjectForm'
 import TabBar from './TabBar'
 import ComingSoonTab from './ComingSoonTab'
 import HistoryTab from './HistoryTab'
+import DocumentenTab from './DocumentenTab'
 import QuoteEditor from './offerte/QuoteEditor'
 import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
@@ -132,6 +133,23 @@ export default async function ProjectDetailPage({
     vooraanzichtUrls = (latestQuote as { vooraanzicht_urls: string[] | null } | null)?.vooraanzicht_urls ?? []
   }
 
+  let documentDownloads: QuoteDownload[] = []
+  if (tab === 'documenten') {
+    const { data: quotesForProject } = await supabase
+      .from('finka_quotes')
+      .select('id')
+      .eq('project_id', id)
+    const quoteIds = (quotesForProject ?? []).map((q) => q.id)
+    if (quoteIds.length) {
+      const { data } = await supabase
+        .from('finka_quote_downloads')
+        .select('*')
+        .in('quote_id', quoteIds)
+        .order('downloaded_at', { ascending: false })
+      documentDownloads = (data ?? []) as QuoteDownload[]
+    }
+  }
+
   let quote: Quote | null = null
   let quoteItems: QuoteItem[] = []
   let quoteDownloads: QuoteDownload[] = []
@@ -242,10 +260,12 @@ export default async function ProjectDetailPage({
         />
       ) : tab === 'notities' ? (
         <NotesPanel projectId={id} />
+      ) : tab === 'documenten' ? (
+        <DocumentenTab downloads={documentDownloads} />
       ) : (
         <ComingSoonTab
           moduleName={
-            { klantkeuzes: 'Klantkeuzes (moodboard)', facturen: 'Facturen', documenten: 'Documenten' }[tab] ?? 'Deze module'
+            { klantkeuzes: 'Klantkeuzes (moodboard)', facturen: 'Facturen' }[tab] ?? 'Deze module'
           }
         />
       )}

@@ -2,6 +2,25 @@
 
 import { useState } from 'react'
 
+// Leest de bestandsnaam die de server heeft opgebouwd (zie
+// contentDispositionHeader in /api/offerte/[projectId]/pdf/route.ts) uit de
+// Content-Disposition-header, zodat de browser 'm ook echt zo opslaat i.p.v.
+// een generieke "offerte-<id>.pdf". filename* (UTF-8) heeft voorrang op de
+// ASCII-only filename-variant.
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      // val door naar de ASCII-variant hieronder
+    }
+  }
+  const asciiMatch = header.match(/filename="([^"]+)"/i)
+  return asciiMatch ? asciiMatch[1] : null
+}
+
 export default function DownloadButton({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(false)
 
@@ -14,11 +33,12 @@ export default function DownloadButton({ projectId }: { projectId: string }) {
         alert(`PDF-download mislukt: ${body.error ?? res.statusText}`)
         return
       }
+      const filename = filenameFromContentDisposition(res.headers.get('Content-Disposition')) ?? `offerte-${projectId}.pdf`
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `offerte-${projectId}.pdf`
+      a.download = filename
       a.click()
       URL.revokeObjectURL(url)
     } finally {

@@ -6,9 +6,9 @@ import { TYPE_LABELS as APPLIANCE_TYPE_LABELS, getSpecSummary } from './applianc
 // op Offerte" ook werkt op een offerte die nog nooit in het Offerte-tabblad
 // bewaard is (dus nog geen cost_breakdown in de database heeft).
 export const DEFAULT_COST_BREAKDOWN: CostBreakdownItem[] = [
-  { key: 'keukenkastjes', label: 'Keukenkastjes', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 50, marge_percentage_source: 'def' },
-  { key: 'apparatuur', label: 'Apparatuur', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 25, marge_percentage_source: 'def' },
-  { key: 'werkblad', label: 'Aanrechtblad', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 20, marge_percentage_source: 'def' },
+  { key: 'keukenkastjes', label: 'Keukenkastjes', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 75, marge_percentage_source: 'def' },
+  { key: 'apparatuur', label: 'Apparatuur', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 0, marge_percentage_source: 'def' },
+  { key: 'werkblad', label: 'Aanrechtblad', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 25, marge_percentage_source: 'def' },
   { key: 'accessoires', label: 'Accessoires', werkelijke_kosten: 0, werkelijke_kosten_source: 'def', marge_percentage: 10, marge_percentage_source: 'def' },
   { key: 'inmeten', label: 'Inmeten', werkelijke_kosten: 250, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'opslag', label: 'Opslag', werkelijke_kosten: 139.75, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
