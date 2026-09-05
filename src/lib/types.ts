@@ -467,6 +467,13 @@ export type ConfiguratorSection = 'kasten' | 'apparatuur' | 'werkblad' | 'opslag
 export interface KastenOptionData {
   attachments: OfferAttachment[]
   summary_lines: string[]
+  // Kostprijs vóór de standaardkortingen (zie KASTEN_DISCOUNTS in
+  // src/lib/configurator.ts) + welke daarvan zijn aangevinkt. De
+  // uiteindelijke, ná-korting kostprijs staat in ConfiguratorOption.cost_total
+  // — dat veld voedt de rest van de Configurator/Offerte-berekening al overal,
+  // dus die blijft ongewijzigd de bron van waarheid voor prijsberekeningen.
+  gross_cost_total: number
+  discount_keys: string[]
 }
 
 export interface WerkbladOptionData {

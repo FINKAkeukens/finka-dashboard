@@ -2,15 +2,23 @@
 
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ConfiguratorOption, KastenOptionData, OfferAttachment } from '@/lib/types'
 import { selectOnFocus } from '@/lib/utils'
+import { formatPrice } from '@/lib/appliance-utils'
+import { computeKastenNetCostTotal, KASTEN_DISCOUNTS } from '@/lib/configurator'
 import { FileText, Upload, X } from 'lucide-react'
 
-function readData(data: ConfiguratorOption['data']): KastenOptionData {
-  const d = data as unknown as Partial<KastenOptionData> | undefined
+// gross_cost_total valt terug op option.cost_total (niet 0) zodat een optie
+// die al vóór deze kortingen-feature was aangemaakt gewoon zijn bestaande
+// kostprijs als vertrekpunt houdt i.p.v. plotseling op €0 te staan.
+function readData(option: ConfiguratorOption): KastenOptionData {
+  const d = option.data as unknown as Partial<KastenOptionData> | undefined
   return {
     attachments: d?.attachments ?? [],
     summary_lines: d?.summary_lines ?? [],
+    gross_cost_total: d?.gross_cost_total ?? option.cost_total,
+    discount_keys: d?.discount_keys ?? [],
   }
 }
 
@@ -41,7 +49,7 @@ export default function KastenOptionEditor({
   option: ConfiguratorOption
   onChange: (patch: { data?: KastenOptionData; cost_total?: number }) => void
 }) {
-  const data = readData(option.data)
+  const data = readData(option)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -63,14 +71,21 @@ export default function KastenOptionEditor({
         setUploadError(`Verwerken mislukt: ${body.error ?? res.statusText}`)
       } else {
         // Vervangt (niet toevoegt): een nieuwe/gecorrigeerde uitdraai moet de
-        // vorige bijlage + samenvatting van déze optie overschrijven.
+        // vorige bijlage + samenvatting van déze optie overschrijven. De
+        // AI leest de kostprijs vóór korting — al aangevinkte kortingen
+        // (discount_keys) blijven staan en worden opnieuw doorgerekend.
+        const grossCostTotal = typeof body.totaalExclBtw === 'number' ? body.totaalExclBtw : data.gross_cost_total
         const patch: { data: KastenOptionData; cost_total?: number } = {
           data: {
             attachments: [body.attachment as OfferAttachment],
             summary_lines: body.summary?.length ? (body.summary as string[]) : data.summary_lines,
+            gross_cost_total: grossCostTotal,
+            discount_keys: data.discount_keys,
           },
         }
-        if (typeof body.totaalExclBtw === 'number') patch.cost_total = body.totaalExclBtw
+        if (typeof body.totaalExclBtw === 'number') {
+          patch.cost_total = computeKastenNetCostTotal(grossCostTotal, data.discount_keys)
+        }
         onChange(patch)
         if (body.summaryError) {
           setUploadError(`Bijlage geüpload, maar AI-verwerking mislukte: ${body.summaryError}`)
@@ -85,7 +100,21 @@ export default function KastenOptionEditor({
   }
 
   function removeAttachment(url: string) {
-    onChange({ data: { attachments: data.attachments.filter((a) => a.url !== url), summary_lines: [] }, cost_total: 0 })
+    onChange({
+      data: { attachments: data.attachments.filter((a) => a.url !== url), summary_lines: [], gross_cost_total: 0, discount_keys: [] },
+      cost_total: 0,
+    })
+  }
+
+  function updateGrossCostTotal(gross: number) {
+    onChange({ data: { ...data, gross_cost_total: gross }, cost_total: computeKastenNetCostTotal(gross, data.discount_keys) })
+  }
+
+  function toggleDiscount(key: string) {
+    const nextKeys = data.discount_keys.includes(key)
+      ? data.discount_keys.filter((k) => k !== key)
+      : [...data.discount_keys, key]
+    onChange({ data: { ...data, discount_keys: nextKeys }, cost_total: computeKastenNetCostTotal(data.gross_cost_total, nextKeys) })
   }
 
   function updateSummaryLine(index: number, value: string) {
@@ -102,17 +131,38 @@ export default function KastenOptionEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-1">
-          <label className="text-xs text-[#6B6560]">Kostprijs (excl. btw)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={option.cost_total}
-            onChange={(e) => onChange({ cost_total: Number(e.target.value) || 0 })}
-            onFocus={selectOnFocus}
-            className="w-40 px-3 py-1.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
-          />
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs text-[#6B6560]">Kostprijs vóór korting (excl. btw)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={data.gross_cost_total}
+              onChange={(e) => updateGrossCostTotal(Number(e.target.value) || 0)}
+              onFocus={selectOnFocus}
+              className="w-40 px-3 py-1.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+            />
+          </div>
+          <div className="space-y-1">
+            <span className="block text-xs text-[#6B6560]">Standaardkortingen</span>
+            <div className="flex flex-wrap gap-4">
+              {KASTEN_DISCOUNTS.map((discount) => (
+                <label key={discount.key} className="flex items-center gap-1.5 text-sm text-[#1C1B19] cursor-pointer">
+                  <Checkbox
+                    checked={data.discount_keys.includes(discount.key)}
+                    onCheckedChange={() => toggleDiscount(discount.key)}
+                  />
+                  {discount.label} — {discount.percentage}%
+                </label>
+              ))}
+            </div>
+          </div>
+          {data.discount_keys.length > 0 && (
+            <p className="text-xs text-[#6B6560]">
+              Kostprijs ná korting (excl. btw): <span className="font-medium text-[#1C1B19]">{formatPrice(option.cost_total)}</span>
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <input ref={inputRef} type="file" accept="application/pdf" hidden onChange={handleUpload} />

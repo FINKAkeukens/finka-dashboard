@@ -25,6 +25,37 @@ export function applianceCustomerText(appliance: Appliance): string {
   return `${typeLabel} — ${appliance.brand} ${appliance.model}${specSummary !== '—' ? ` (${specSummary})` : ''}`
 }
 
+export interface KastenDiscount {
+  key: string
+  label: string
+  percentage: number
+}
+
+// Vaste, standaard inkoopkortingen op de Kasten-kostprijs. Betaalkorting
+// wordt in computeKastenNetCostTotal hieronder altijd als laatste stap in de
+// keten toegepast (los van de aanvinkvolgorde) — gebruikelijke conventie bij
+// handelskortingen: betaalkorting geldt over het bedrag ná de overige
+// (inkoop/leverancier-)kortingen, niet over de oorspronkelijke kostprijs.
+export const KASTEN_DISCOUNTS: KastenDiscount[] = [
+  { key: 'kuchentreff_sachsen', label: 'Küchentreff korting Sachsen', percentage: 11 },
+  { key: 'betaalkorting', label: 'Betaalkorting', percentage: 5 },
+]
+
+const BETAALKORTING_KEY = 'betaalkorting'
+
+// Past de aangevinkte kortingen ná elkaar toe (elke korting over het bedrag
+// ná de vorige, niet gewoon opgeteld) — betaalkorting altijd als laatste
+// stap, zie KASTEN_DISCOUNTS hierboven.
+export function computeKastenNetCostTotal(grossCostTotal: number, discountKeys: string[]): number {
+  const active = KASTEN_DISCOUNTS.filter((d) => discountKeys.includes(d.key))
+  const ordered = [
+    ...active.filter((d) => d.key !== BETAALKORTING_KEY),
+    ...active.filter((d) => d.key === BETAALKORTING_KEY),
+  ]
+  const net = ordered.reduce((amount, d) => amount * (1 - d.percentage / 100), grossCostTotal)
+  return Math.round(net * 100) / 100
+}
+
 // Zet één categorie in de kostprijs-opbouw op een expliciet toegepast bedrag
 // ('in': een bewuste keuze via "Toepassen op Offerte", geen live/automatische
 // waarde meer).
