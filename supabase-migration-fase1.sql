@@ -1515,3 +1515,24 @@ ALTER TABLE finka_checklist_items ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPT
 ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS approval_required BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
 ALTER TABLE finka_quote_downloads ADD COLUMN IF NOT EXISTS approved_by TEXT;
+
+-- =========================================================
+-- 59. Doorlooptijd per project — datum van het eerste klantcontact, om de
+--    tijd tussen eerste contact en nu (of het verdere verloop) te kunnen
+--    bijhouden. Puur een los datumveld; de doorlooptijd zelf wordt in de
+--    applicatie berekend (vandaag - first_contact_date), niet opgeslagen.
+-- =========================================================
+
+ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS first_contact_date DATE;
+
+-- =========================================================
+-- 60. Extra projectstatus "On hold" — voor projecten die tijdelijk stilliggen
+--    en dus niet in de normale fase-volgorde thuishoren. Bewust achteraan
+--    (sort_order 6), zodat het faseoverzicht op het dashboard de gewone
+--    volgorde Lead → Opgeleverd houdt en On hold er als aparte kolom
+--    naast staat.
+-- =========================================================
+
+INSERT INTO finka_project_statuses (label, sort_order, color)
+SELECT 'On hold', 6, '#A855F7'
+WHERE NOT EXISTS (SELECT 1 FROM finka_project_statuses WHERE label = 'On hold');

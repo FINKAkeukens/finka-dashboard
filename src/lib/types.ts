@@ -181,6 +181,9 @@ export interface Project {
   reference_number: string
   title: string
   status_id: string | null
+  // Datum van het eerste klantcontact — basis voor de doorlooptijd
+  // (vandaag - first_contact_date), zie leadTimeDays() in src/lib/planning.ts.
+  first_contact_date: string | null
   archived_at: string | null
   created_at: string
   updated_at: string

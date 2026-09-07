@@ -36,12 +36,14 @@ export default function EditProjectForm({
       status_id: project.status_id,
       customer_id: project.customer_id,
       reference_number: project.reference_number,
+      first_contact_date: project.first_contact_date,
     }
     const after = {
       title: form.get('title') as string,
       status_id: form.get('status_id') as string,
       customer_id: form.get('customer_id') as string,
       reference_number: (form.get('reference_number') as string).trim(),
+      first_contact_date: (form.get('first_contact_date') as string) || null,
     }
 
     const { error } = await supabase
@@ -121,6 +123,11 @@ export default function EditProjectForm({
           ))}
         </select>
         <p className="text-xs text-[#9A948D]">Offerte, facturen en historie van dit project gaan mee naar de nieuwe klant.</p>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Eerste contact</Label>
+        <Input name="first_contact_date" type="date" defaultValue={project.first_contact_date ?? ''} />
+        <p className="text-xs text-[#9A948D]">Basis voor de doorlooptijd, bovenaan bij de projectgegevens.</p>
       </div>
       <div className="space-y-1.5">
         <Label>Status</Label>

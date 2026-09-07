@@ -77,7 +77,7 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
 
       const { data: existing } = await supabase
         .from('finka_appliances')
-        .select('id, price_history')
+        .select('id, price, price_history')
         .ilike('brand', a.brand)
         .ilike('model', a.model)
         .single()
@@ -88,7 +88,15 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
           const alreadyExists = history.some((h: { price: number }) => h.price === a.price)
           if (!alreadyExists) {
             history.push({ price: a.price, date: extracted?.quote_date ?? null, supplier_name: extracted?.supplier_name ?? null, email_subject: item.subject })
-            const { error } = await supabase.from('finka_appliances').update({ price_history: history, quote_date: extracted?.quote_date ?? null }).eq('id', existing.id)
+            // Hoofdprijs volgt altijd de hoogste van alle binnengekomen
+            // offertes (huidige prijs + hele geschiedenis) — niet meer
+            // "de eerste die ooit binnenkwam".
+            const allPrices = [existing.price, ...history.map((h) => h.price)].filter((p): p is number => p != null)
+            const maxPrice = allPrices.length ? Math.max(...allPrices) : null
+            const { error } = await supabase
+              .from('finka_appliances')
+              .update({ price_history: history, price: maxPrice, quote_date: extracted?.quote_date ?? null })
+              .eq('id', existing.id)
             if (error) errors.push(`${a.brand} ${a.model}: ${error.message}`)
           }
         }

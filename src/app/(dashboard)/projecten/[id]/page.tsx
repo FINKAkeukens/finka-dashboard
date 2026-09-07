@@ -19,6 +19,7 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
+import { leadTimeDays } from '@/lib/planning'
 
 export default async function ProjectDetailPage({
   params,
@@ -215,7 +216,14 @@ export default async function ProjectDetailPage({
             </span>
           )}
         </div>
-        <p className="text-sm font-mono text-[#6B6560]">{project.reference_number}</p>
+        <p className="text-sm font-mono text-[#6B6560]">
+          {project.reference_number}
+          {project.first_contact_date && (
+            <span className="ml-2 font-sans text-[#9A948D]">
+              · Eerste contact {new Date(project.first_contact_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })} · Doorlooptijd {leadTimeDays(project.first_contact_date)} dagen
+            </span>
+          )}
+        </p>
         {project.customer && (
           <Link href={`/klanten/${project.customer.id}`} className="text-sm text-[#C9A96E] hover:underline">
             {project.customer.first_name} {project.customer.last_name} →

@@ -632,6 +632,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                       <th className="cursor-pointer px-3 py-2.5 font-medium hover:text-[#1C1B19]" onClick={() => toggleSort('brand')}>
                         Product {sortKey === 'brand' && (sortAsc ? '↑' : '↓')}
                       </th>
+                      <th className="hidden px-3 py-2.5 font-medium xl:table-cell">Beschrijving</th>
                       <th className="hidden px-3 py-2.5 font-medium lg:table-cell">Kernspec</th>
                       <th className="cursor-pointer px-3 py-2.5 font-medium hover:text-[#1C1B19]" onClick={() => toggleSort('price')}>
                         Prijs {sortKey === 'price' && (sortAsc ? '↑' : '↓')}
@@ -662,6 +663,9 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                         <td className="px-3 py-2.5">
                           <p className="font-medium text-[#1C1B19]">{a.brand}</p>
                           <p className="text-xs text-[#6B6560]">{a.model}</p>
+                        </td>
+                        <td className="hidden px-3 py-2.5 text-xs text-[#6B6560] xl:table-cell">
+                          {a.notes || '—'}
                         </td>
                         <td className="hidden px-3 py-2.5 text-xs text-[#6B6560] lg:table-cell">
                           {getSpecSummary(a)}

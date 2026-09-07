@@ -229,10 +229,6 @@ export default function EditApplianceForm({
         {(type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') && <>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Inhoud (L)"><Input type="number" value={String(specs.fridge_liters ?? '')} onChange={e => updateSpec('fridge_liters', Number(e.target.value))} /></Field>
-            <Field label="Vriezer">
-              <Select value={specs.freezer === true ? 'ja' : 'nee'} onChange={v => updateSpec('freezer', v === 'ja')}
-                options={[{value:'nee',label:'Nee'},{value:'ja',label:'Ja'}]} />
-            </Field>
             <Field label="Geluid (dB)"><Input type="number" step="0.1" value={String(specs.db_sound ?? '')} onChange={e => updateSpec('db_sound', Number(e.target.value))} /></Field>
           </div>
         </>}

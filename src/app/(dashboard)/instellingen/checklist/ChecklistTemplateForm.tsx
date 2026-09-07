@@ -26,6 +26,7 @@ export default function ChecklistTemplateForm({
   const [addingCategory, setAddingCategory] = useState(false)
   const [newCategoryLabel, setNewCategoryLabel] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
 
   const orderedCategories = [...categories].sort((a, b) => a.sort_order - b.sort_order)
 
@@ -66,9 +67,48 @@ export default function ChecklistTemplateForm({
       setError(insError.message)
       return
     }
-    setItems((prev) => [...prev, data as ChecklistTemplateItem])
+    const newTemplateItem = data as ChecklistTemplateItem
+    setItems((prev) => [...prev, newTemplateItem])
     setNewLabel('')
     setAddingCategoryId(null)
+    await fanOutNewItem(categoryId, newTemplateItem)
+  }
+
+  // Anders dan een kopje hernoemen of een bestaand item aanpassen (die
+  // blijven bewust een momentopname per project), moet een nieuw item hier
+  // wél meteen bij alle projecten komen die al een checklist hebben —
+  // nieuwe projecten krijgen 'm vanzelf mee zodra ze op "Checklist
+  // aanmaken" drukken, dus die hoeven hier niet apart behandeld te worden.
+  async function fanOutNewItem(categoryId: string, newTemplateItem: ChecklistTemplateItem) {
+    const categoryLabelText = categories.find((c) => c.id === categoryId)?.label ?? 'Overig'
+    const { data: existingRows, error: fetchError } = await supabase
+      .from('finka_checklist_items')
+      .select('project_id, sort_order')
+    if (fetchError) {
+      setError(fetchError.message)
+      return
+    }
+    const maxSortByProject = new Map<string, number>()
+    for (const row of existingRows ?? []) {
+      maxSortByProject.set(row.project_id, Math.max(maxSortByProject.get(row.project_id) ?? -1, row.sort_order))
+    }
+    if (maxSortByProject.size === 0) return
+
+    const rows = Array.from(maxSortByProject.entries()).map(([projectId, maxSort]) => ({
+      project_id: projectId,
+      item_key: null,
+      category: categoryLabelText,
+      label: newTemplateItem.label,
+      visible_to_customer: newTemplateItem.visible_to_customer,
+      sort_order: maxSort + 1,
+    }))
+    const { error: insError } = await supabase.from('finka_checklist_items').insert(rows)
+    if (insError) {
+      setError(insError.message)
+      return
+    }
+    setInfo(`Toegevoegd aan ${rows.length} bestaande project(en).`)
+    setTimeout(() => setInfo(''), 4000)
   }
 
   async function removeItem(id: string) {
@@ -179,6 +219,7 @@ export default function ChecklistTemplateForm({
   return (
     <div className="space-y-4">
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
+      {info && <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-2.5">{info}</p>}
 
       {orderedCategories.map((category, catIndex) => {
         const catItems = itemsFor(category.id)

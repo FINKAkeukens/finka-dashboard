@@ -17,8 +17,10 @@ export default async function ChecklistInstellingenPage() {
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Checklist-items</h1>
         <p className="text-sm text-[#6B6560] mt-1">
           Dit is het standaardlijstje voor de Checklist-tab bij projecten. Zowel de kopjes als de items erbinnen zijn
-          aan te passen. Een wijziging hier geldt alleen voor checklists die vanaf nu worden aangemaakt — al
-          aangemaakte project-checklists veranderen niet mee.
+          aan te passen. Een nieuw item wordt automatisch toegevoegd bij alle projecten die al een checklist hebben
+          (en bij nieuwe checklists die vanaf nu worden aangemaakt). Een bestaand item hernoemen, verbergen of
+          verwijderen werkt wel alleen voor nieuw aan te maken checklists — al aangemaakte project-checklists blijven
+          daarin ongewijzigd.
         </p>
       </div>
       <ChecklistTemplateForm

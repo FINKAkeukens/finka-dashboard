@@ -70,7 +70,6 @@ export default function NieuweApparatuurPage() {
     }
     if (type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') {
       if (form.get('fridge_liters')) specs.fridge_liters = Number(form.get('fridge_liters'))
-      specs.freezer = form.get('freezer') === 'ja'
     }
     if (type === 'kokendwaterkraan') {
       if (form.get('functions_count')) specs.functions_count = Number(form.get('functions_count'))
@@ -289,12 +288,6 @@ export default function NieuweApparatuurPage() {
           {(type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Inhoud (L)</Label><Input name="fridge_liters" type="number" /></div>
-              <div className="space-y-1.5">
-                <Label>Vriezer</Label>
-                <select name="freezer" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
-                  <option value="nee">Nee</option><option value="ja">Ja</option>
-                </select>
-              </div>
             </div>
           )}
 

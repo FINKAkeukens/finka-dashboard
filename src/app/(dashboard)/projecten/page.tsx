@@ -6,7 +6,7 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { ArrowRight, Plus } from 'lucide-react'
 import { Project, ProjectMilestone, ProjectStatus } from '@/lib/types'
-import { milestoneLabel, urgencyClass } from '@/lib/planning'
+import { leadTimeDays, milestoneLabel, urgencyClass } from '@/lib/planning'
 
 // Eerstvolgende nog-niet-afgeronde mijlpaal met een datum — bepaalt zowel de
 // sortering (dringendste bovenaan) als de "Volgende mijlpaal"-kolom.
@@ -67,7 +67,7 @@ export default async function ProjectenPage({
     })
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-8 max-w-7xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#1C1B19]">Projecten</h1>
@@ -129,6 +129,7 @@ export default async function ProjectenPage({
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Project</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Klant</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Status</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Doorlooptijd</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Volgende mijlpaal</th>
               </tr>
             </thead>
@@ -163,6 +164,9 @@ export default async function ProjectenPage({
                         {p.status.label}
                       </span>
                     )}
+                  </td>
+                  <td className="px-5 py-3.5 text-xs text-[#6B6560]">
+                    {p.first_contact_date ? `${leadTimeDays(p.first_contact_date)} dagen` : '—'}
                   </td>
                   <td className="px-5 py-3.5 text-xs">
                     {next ? (

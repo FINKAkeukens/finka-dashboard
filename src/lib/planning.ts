@@ -62,3 +62,10 @@ export function urgencyClass(dateStr: string): string {
   if (days <= 7) return 'text-[#8A6A2E] font-medium'
   return 'text-[#6B6560]'
 }
+
+// Doorlooptijd tot nu toe, in dagen — het project loopt per definitie nog
+// (er is geen apart "afgerond op"-veld), dus dit is altijd "sinds het
+// eerste contact", niet een vaste einddatum.
+export function leadTimeDays(firstContactDate: string): number {
+  return differenceInCalendarDays(new Date(), new Date(firstContactDate))
+}

@@ -50,7 +50,6 @@ function ApplianceSpecs({ type, specs }: { type: string; specs: ApplianceSpecs }
   if (type === 'koelkast') return (
     <>
       <SpecItem label="Inhoud" value={specs.fridge_liters ? `${specs.fridge_liters}L` : undefined} />
-      <SpecItem label="Vriezer" value={specs.freezer} />
     </>
   )
   return null

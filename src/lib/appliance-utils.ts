@@ -108,7 +108,6 @@ export function getSpecSummary(appliance: Appliance): string {
     case 'vriezer':
     case 'wijnklimaatkast':
       if (s.fridge_liters) parts.push(`${s.fridge_liters}L`)
-      if (s.freezer) parts.push('vriezer')
       break
     case 'kokendwaterkraan':
       if (s.functions_count) parts.push(`${s.functions_count}-in-1`)
@@ -200,7 +199,6 @@ export function specEntries(type: string, specs: ApplianceSpecs): { label: strin
     case 'wijnklimaatkast':
       entries.push(
         { label: 'Inhoud', value: specs.fridge_liters ? `${specs.fridge_liters}L` : null },
-        { label: 'Vriezer', value: fmt(specs.freezer) },
       )
       break
     case 'kokendwaterkraan':
