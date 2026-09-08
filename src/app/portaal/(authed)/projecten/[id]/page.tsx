@@ -103,6 +103,9 @@ export default async function PortalProjectPage({
   ])
   const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)
   const maatformulierSignoff = signoffData as MaatformulierSignoff | null
+  // Het tabblad verschijnt zodra staff het formulier heeft klaargezet — ook
+  // als élke regel verborgen staat, want dan bestaat het formulier wél.
+  const hasMaatformulier = (maatformulierData ?? []).length > 0
 
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
@@ -120,7 +123,7 @@ export default async function PortalProjectPage({
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-[#1C1B19]">{(project as Project).title}</h1>
 
-      <PortalTabBar activeTab={tab} />
+      <PortalTabBar activeTab={tab} hasMaatformulier={hasMaatformulier} />
 
       {tab === 'checklist' ? (
         <div className="space-y-4">

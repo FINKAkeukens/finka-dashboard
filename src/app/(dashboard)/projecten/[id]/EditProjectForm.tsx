@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { logFieldChanges, logAudit } from '@/lib/audit'
 import { Customer, Project, ProjectStatus } from '@/lib/types'
 import { ON_HOLD_STATUS_LABEL } from '@/lib/project-dates'
+import { AKKOORD_STATUS_LABEL, createMaatformulierForProject } from '@/lib/maatformulier-create'
 import { Edit, Archive } from 'lucide-react'
 
 export default function EditProjectForm({
@@ -83,6 +84,26 @@ export default function EditProjectForm({
     }
 
     await logFieldChanges(supabase, 'finka_projects', project.id, before, after, user?.email)
+
+    // Zodra een project op "Akkoord" komt te staan, gaat de voorbereiding van
+    // de ruimte lopen — dan hoort het formulier klaar te staan voor de klant.
+    // Bewust op de overgáng naar Akkoord (en niet bij elke opslag terwijl de
+    // status al Akkoord is): zo komt een formulier dat staff bewust heeft
+    // verwijderd niet bij de eerstvolgende bewerking weer terug. De functie
+    // zelf slaat een project met een bestaand formulier ook over, dus een
+    // ingevuld formulier kan hier nooit door overschreven worden.
+    const becameAkkoord =
+      statuses.find((s) => s.id === newStatusId)?.label === AKKOORD_STATUS_LABEL &&
+      statuses.find((s) => s.id === project.status_id)?.label !== AKKOORD_STATUS_LABEL
+    if (becameAkkoord) {
+      const result = await createMaatformulierForProject(supabase, project.id)
+      if (result.status === 'no-template') {
+        setError('Project opgeslagen, maar "Voorbereiding ruimte gereed" kon niet automatisch worden klaargezet: er is nog geen standaardformulier ingesteld.')
+      } else if (result.status === 'error') {
+        setError(`Project opgeslagen, maar "Voorbereiding ruimte gereed" kon niet automatisch worden klaargezet: ${result.message}`)
+      }
+    }
+
     setEditing(false)
     router.refresh()
   }

@@ -1,20 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CheckCircle2, Eye, EyeOff, MessageSquare, Plus, Trash2, X } from 'lucide-react'
 import {
-  MaatformulierCategoryItem,
   MaatformulierFieldType,
   MaatformulierItem,
   MaatformulierSignoff,
-  MaatformulierTemplateItem,
 } from '@/lib/types'
 import { categoriesInOrder, formatAnswer, itemsInTreeOrder, MAATFORMULIER_OTHER_OPTION, MAATFORMULIER_TYPE_LABELS } from '@/lib/maatformulier'
 import AutoTextarea from '@/components/ui/auto-textarea'
 import MaatformulierSubQuestionControl from '@/components/MaatformulierSubQuestionControl'
+import { createMaatformulierForProject } from '@/lib/maatformulier-create'
 
 // Het formulier "Voorbereiding ruimte gereed" van dít project: een kopie van het sjabloon uit
 // Instellingen, hier per klant aan te passen. De antwoorden vult de klant
@@ -30,6 +30,7 @@ export default function MaatformulierTab({
   signoff: MaatformulierSignoff | null
 }) {
   const supabase = createClient()
+  const router = useRouter()
   const [items, setItems] = useState<MaatformulierItem[]>(initialItems)
   const [signoff, setSignoff] = useState<MaatformulierSignoff | null>(initialSignoff)
   const [creating, setCreating] = useState(false)
@@ -51,56 +52,25 @@ export default function MaatformulierTab({
   const answeredCount = answerableItems.filter((i) => i.answer).length
 
   // Zelfde principe als "Checklist aanmaken": pas op deze knop wordt het
-  // sjabloon gekopieerd, waarna dit project z'n eigen versie heeft.
+  // sjabloon gekopieerd, waarna dit project z'n eigen versie heeft. Bij de
+  // status "Akkoord" gebeurt dit automatisch (zie EditProjectForm) — deze
+  // knop blijft voor projecten waar dat niet is gebeurd, of waar het
+  // formulier bewust is verwijderd en later toch weer nodig blijkt.
   async function createForm() {
     setCreating(true)
     setError('')
-    const [{ data: categories, error: catError }, { data: template, error: tplError }] = await Promise.all([
-      supabase.from('finka_maatformulier_categories').select('*').order('sort_order', { ascending: true }),
-      supabase.from('finka_maatformulier_templates').select('*').order('sort_order', { ascending: true }),
-    ])
-    if (catError || tplError) {
-      setError((catError ?? tplError)!.message)
-      setCreating(false)
-      return
-    }
-    const categoryItems = (categories ?? []) as MaatformulierCategoryItem[]
-    const templateItems = (template ?? []) as MaatformulierTemplateItem[]
-    if (categoryItems.length === 0 || templateItems.length === 0) {
-      setError('Geen standaardformulier gevonden — stel dit eerst in via Instellingen > Voorbereiding ruimte gereed.')
-      setCreating(false)
-      return
-    }
-    const categoryOrder = new Map(categoryItems.map((c, index) => [c.id, index]))
-    const categoryLabels = new Map(categoryItems.map((c) => [c.id, c.label]))
-    const sorted = [...templateItems].sort((a, b) => {
-      const catDiff = (categoryOrder.get(a.category_id) ?? 0) - (categoryOrder.get(b.category_id) ?? 0)
-      return catDiff !== 0 ? catDiff : a.sort_order - b.sort_order
-    })
-    // Id's vooraf zelf genereren, zodat de ouder-kind-koppelingen van het
-    // sjabloon (sub-vragen, zie migratie-sectie 67) in dezelfde insert
-    // kunnen worden meegegeven — anders zouden we de nieuwe id's pas ná het
-    // wegschrijven kennen en een tweede ronde updates nodig hebben.
-    const newIdByTemplateId = new Map(sorted.map((t) => [t.id, crypto.randomUUID()]))
-    const rows = sorted.map((t, index) => ({
-      id: newIdByTemplateId.get(t.id)!,
-      project_id: projectId,
-      category: categoryLabels.get(t.category_id) ?? 'Overig',
-      label: t.label,
-      type: t.type,
-      options: t.options,
-      unit: t.unit,
-      parent_id: t.parent_id ? newIdByTemplateId.get(t.parent_id) ?? null : null,
-      show_when_answer: t.show_when_answer,
-      sort_order: index,
-    }))
-    const { data, error: insError } = await supabase.from('finka_maatformulier_items').insert(rows).select()
+    const result = await createMaatformulierForProject(supabase, projectId)
     setCreating(false)
-    if (insError) {
-      setError(insError.message)
-      return
+    if (result.status === 'created') {
+      setItems(result.items)
+    } else if (result.status === 'no-template') {
+      setError('Geen standaardformulier gevonden — stel dit eerst in via Instellingen > Voorbereiding ruimte gereed.')
+    } else if (result.status === 'error') {
+      setError(result.message)
+    } else {
+      // Iemand anders was net voor — gewoon tonen wat er nu staat.
+      router.refresh()
     }
-    setItems((data ?? []) as MaatformulierItem[])
   }
 
   // Het hele formulier van dit project weggooien, zodat er daarna een verse

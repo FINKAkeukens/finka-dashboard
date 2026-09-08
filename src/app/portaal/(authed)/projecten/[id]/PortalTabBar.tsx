@@ -12,12 +12,23 @@ const tabs = [
   { id: 'documenten', label: 'Documenten' },
 ]
 
-export default function PortalTabBar({ activeTab }: { activeTab: string }) {
+export default function PortalTabBar({
+  activeTab,
+  // Het formulier verschijnt pas in het portaal zodra staff 'm heeft
+  // klaargezet (automatisch bij de status "Akkoord", of handmatig) — een
+  // leeg tabblad met "er staat nog niets klaar" is voor de klant alleen maar
+  // verwarrend. Daarna blijft 'ie staan tot staff het formulier verwijdert.
+  hasMaatformulier,
+}: {
+  activeTab: string
+  hasMaatformulier: boolean
+}) {
   const pathname = usePathname()
+  const visibleTabs = tabs.filter((tab) => tab.id !== 'maatformulier' || hasMaatformulier)
 
   return (
     <div className="flex border-b border-[#DDD8D2] mb-6">
-      {tabs.map((tab) => (
+      {visibleTabs.map((tab) => (
         <Link
           key={tab.id}
           href={`${pathname}?tab=${tab.id}`}
