@@ -206,20 +206,20 @@ interface ConnectionCatalogEntry {
 export interface ConnectionSuggestionResult {
   items: Array<{ standard_key: string; van_toepassing?: boolean; aantal?: string; hoogte_cm?: string; positie_toelichting?: string }>
   nieuwe_regels: Array<{ category: 'water_afvoer' | 'elektra' | 'overig'; omschrijving: string; aantal?: string; hoogte_cm?: string; positie_toelichting?: string }>
-  cabinets_suggestie: Array<{ breedte_mm: number; artikelcode: string; label?: string }>
-  pins_suggestie: Array<{ type: 'warm_water' | 'koud_water' | 'afvoer' | 'elektra'; label: string; hoogte_cm?: string; x?: number }>
+  pins_suggestie: Array<{ standard_key?: string; type: 'warm_water' | 'koud_water' | 'afvoer' | 'elektra'; label: string; hoogte_cm?: string; x?: number; y?: number }>
 }
 
 // Stelt een concept-invulling voor het aansluitschema voor — vult NOOIT iets
 // automatisch in de database. De aanroepende route/UI toont dit altijd als
-// een door Merel te beoordelen voorstel (zie AansluitschemaTab.tsx). Maten
-// komen alleen uit wat zij zelf typt/aanlevert of wat rechtstreeks van de
-// bijgevoegde tekening af te lezen is — de AI verzint geen posities zonder
-// brontekst (zie de "geen AI-beeldgeneratie op technische
-// tekeningen"-afspraak in het offerte-module-geheugen). Zowel de kastenrij
-// als de pin-posities worden uit de tekening zelf gelezen, zodat Merel alleen
-// hoeft aan te vinken wélke aansluitingen nodig zijn — niet waar ze komen.
-const CONNECTION_SUGGESTION_PROMPT = (catalogus: ConnectionCatalogEntry[]) => `Je bent een assistent voor een Nederlandse keukenontwerper (FINKA Keukens). Je helpt een aansluitschema (leidingwerk + elektra) voor de installateur invullen, op basis van vrije tekst van de keukenontwerper en/of een bijgevoegde tekening/plattegrond (bv. een Winner Flex/CAD-uitdraai van de kastenwand).
+// een door Merel te beoordelen voorstel (zie AansluitschemaTab.tsx en
+// AansluitschemaTekening.tsx). De bijgevoegde tekening is Merels eigen
+// uitgedraaide aanzicht (mét maatlat/kastindeling al ingetekend) — de pins
+// komen er gewoon bovenop te staan, dus x/y zijn simpelweg de zichtbare
+// positie in de afbeelding zelf, geen berekening. De AI verzint geen posities
+// zonder brontekst (zie de "geen AI-beeldgeneratie op technische
+// tekeningen"-afspraak in het offerte-module-geheugen) — bij twijfel wordt
+// een pin weggelaten, dat is aan Merel om er zelf een te plaatsen.
+const CONNECTION_SUGGESTION_PROMPT = (catalogus: ConnectionCatalogEntry[]) => `Je bent een assistent voor een Nederlandse keukenontwerper (FINKA Keukens). Je helpt een aansluitschema (leidingwerk + elektra) voor de installateur invullen, op basis van vrije tekst van de keukenontwerper en/of een bijgevoegde tekening (een aanzicht van de kastenwand, door Merel zelf uitgedraaid uit haar ontwerpsoftware, mét maatlat).
 
 De vaste standaardcatalogus met regels (per project aan/uit te vinken) is:
 ${catalogus.map((c) => `- ${c.standard_key ?? '(eigen regel)'}: ${c.omschrijving}`).join('\n')}
@@ -227,14 +227,12 @@ ${catalogus.map((c) => `- ${c.standard_key ?? '(eigen regel)'}: ${c.omschrijving
 Analyseer de input en stel voor:
 1. "items": voor elke standaardregel die overduidelijk van toepassing is, een object met standard_key, van_toepassing: true, en indien te herleiden: aantal, hoogte_cm (in centimeter, vanaf afgewerkte vloer — vaste conventie), positie_toelichting. Laat regels die je niet kunt onderbouwen vanuit de input weg (geen giswerk).
 2. "nieuwe_regels": alleen als er een aansluiting genoemd wordt die niet in de standaardcatalogus past — category (water_afvoer/elektra/overig), omschrijving, en evt. aantal/hoogte_cm/positie_toelichting.
-3. "cabinets_suggestie": ALLEEN als er een tekening is bijgevoegd met een duidelijk herkenbare kastenrij (vooraanzicht) — lees de kasten van links naar rechts af: breedte_mm (schat op basis van de vermelde maten/maatlat), artikelcode (indien zichtbaar/leesbaar op de tekening), label (bv. "Spoelkast", "Vaatwasser" — alleen als herkenbaar). Dit vormt de basis waarop de pin-posities hieronder worden berekend.
-4. "pins_suggestie": ALLEEN als je uit de tekening kunt aflezen wáár een aangevinkte aansluiting moet komen — {type: warm_water|koud_water|afvoer|elektra, label, hoogte_cm (indien af te lezen, anders leeg laten — nooit verzinnen), x (0-1 fractie van de totale breedte van de kastenrij hierboven, van links naar rechts)}. Baseer x op de zichtbare positie in de tekening (bv. "spoelbak in de 4e kast" → x op het midden van die kast). Bij twijfel: laat dit leeg, dit is een startpunt dat de gebruiker zelf corrigeert, nooit een gok.
+3. "pins_suggestie": ALLEEN als er een tekening is bijgevoegd EN je er een concrete aansluiting op kunt aanwijzen — één object per aansluiting: {standard_key (indien het overeenkomt met een regel uit de catalogus hierboven, anders weglaten), type: warm_water|koud_water|afvoer|elektra, label (korte omschrijving, bv. "Stopcontact oven"), hoogte_cm (alléén als dat af te lezen is uit de tekening/maatlat, anders leeg laten — nooit een getal verzinnen), x (0-1, horizontale positie in de afbeelding gemeten vanaf de linkerrand), y (0-1, verticale positie in de afbeelding gemeten vanaf de bovenrand)}. Plaats de pin zo precies mogelijk op de zichtbare locatie van het apparaat/de aansluiting in de afbeelding. Bij twijfel over een positie: laat die pin weg — de gebruiker plaatst en corrigeert zelf, dit is alleen een startpunt.
 
 Antwoord ALLEEN met geldige JSON:
 {
   "items": [...],
   "nieuwe_regels": [...],
-  "cabinets_suggestie": [...],
   "pins_suggestie": [...]
 }`
 
@@ -266,10 +264,9 @@ export async function extractConnectionSuggestions(
     return {
       items: Array.isArray(parsed.items) ? parsed.items : [],
       nieuwe_regels: Array.isArray(parsed.nieuwe_regels) ? parsed.nieuwe_regels : [],
-      cabinets_suggestie: Array.isArray(parsed.cabinets_suggestie) ? parsed.cabinets_suggestie : [],
       pins_suggestie: Array.isArray(parsed.pins_suggestie) ? parsed.pins_suggestie : [],
     }
   } catch {
-    return { items: [], nieuwe_regels: [], cabinets_suggestie: [], pins_suggestie: [] }
+    return { items: [], nieuwe_regels: [], pins_suggestie: [] }
   }
 }

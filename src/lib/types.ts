@@ -910,13 +910,16 @@ export interface ConnectionItem {
 
 export type PinType = 'warm_water' | 'koud_water' | 'afvoer' | 'elektra'
 
-// Eén aansluitpunt op de visuele vooraanzicht-tekening. connection_item_id
-// koppelt 'm optioneel aan een checklistregel (om hoogte_cm over te nemen),
-// maar heeft altijd zijn eigen hoogte_cm zodat een pin ook los kan bestaan.
+// Eén aansluitpunt, geplaatst als bolletje bovenop de brontekening zelf
+// (Merels eigen uitgedraaide aanzicht, mét maatlat). connection_item_id
+// koppelt 'm optioneel aan een checklistregel — dat levert het vaste
+// volgnummer (zie itemNumber() in aansluitschema.ts) en de omschrijving
+// voor de legenda; een pin zonder koppeling gebruikt zijn eigen label.
 export interface ConnectionPin {
   id: string
   connection_item_id: string | null
-  x: number // 0-1 fractie van de breedte van de kastenrij
+  x: number // 0-1 fractie van de breedte van de afbeelding, vanaf links
+  y: number // 0-1 fractie van de hoogte van de afbeelding, vanaf boven
   type: PinType
   label: string
   hoogte_cm: string
@@ -937,10 +940,14 @@ export interface ConnectionSectionBlock {
   tekst: string
 }
 
-// Eén vooraanzicht-tekening met zijn eigen kastenrij + aansluitpunten — een
-// project kan er meerdere hebben (bv. hoofdwand + kookeiland van 2 kanten),
-// elk gekoppeld aan een eigen geüploade vooraanzicht-afbeelding
-// (Quote.vooraanzicht_urls) waaruit de AI kastbreedtes/posities leest.
+// Eén vooraanzicht-tekening met zijn eigen aansluitpunten — een project kan
+// er meerdere hebben (bv. hoofdwand + kookeiland van 2 kanten). Elke wand
+// heeft een eigen brontekening (bron_afbeelding_url, meestal een van Quote.
+// vooraanzicht_urls of een losse upload) — de tekening zelf bevat Merels
+// eigen maatlat/kastindeling al, dus de pins worden er gewoon bovenop
+// geplaatst i.p.v. herberekend uit cabinets. wand_hoogte_mm/plint_hoogte_mm/
+// cabinets zijn ongebruikt gelaten uit een eerdere opzet (zie git-historie)
+// en staan hier alleen nog voor bestaande data.
 export interface ConnectionWand {
   id: string
   label: string

@@ -71,6 +71,33 @@ export const DEFAULT_LET_OP_NOTITIES = `- Bij een kookeiland met daarboven een e
 - Wanneer er een kickspace op de cv-installatie komt, wordt vooraf een kogelafsluitkraan gemonteerd.
 - Oven en kookplaat moeten op verschillende groepen worden aangesloten.`
 
+// Vast volgnummer per standard_key — 1-op-1 de positie in DEFAULT_CONNECTION_ITEMS
+// (01 = warm_water_spoelbak, 02 = koud_water_spoelbak, ... 22 = vloerdoos_eiland).
+// Dit is exact de nummering die Merel zelf al gebruikt in haar handmatige
+// aansluittekeningen (bv. "07 Stopcontact oven", "18 Perilex kookplaat") —
+// blijft dus per project hetzelfde nummer, ongeacht welke regels zijn
+// aangevinkt, zodat nummers in de pin-legenda overeenkomen met haar eigen
+// tekeningen. Eigen (niet-standaard) regels krijgen een doorlopend nummer
+// na de vaste lijst, op volgorde van sort_order.
+const STANDARD_KEY_NUMBERS: Record<string, number> = Object.fromEntries(
+  DEFAULT_CONNECTION_ITEMS.map((item, i) => [item.standard_key, i + 1])
+)
+
+export function buildItemNumbers(items: ConnectionItem[]): Map<string, number> {
+  const numbers = new Map<string, number>()
+  let nextCustom = DEFAULT_CONNECTION_ITEMS.length + 1
+  const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order)
+  for (const item of sorted) {
+    const fixed = item.standard_key ? STANDARD_KEY_NUMBERS[item.standard_key] : undefined
+    numbers.set(item.id, fixed ?? nextCustom++)
+  }
+  return numbers
+}
+
+export function formatItemNumber(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
 export function seedConnectionItems(projectId: string): Omit<ConnectionItem, 'id' | 'created_at' | 'updated_at'>[] {
   return DEFAULT_CONNECTION_ITEMS.map((item, i) => ({
     project_id: projectId,

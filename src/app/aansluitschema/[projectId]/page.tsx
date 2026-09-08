@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { Fragment } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/aansluitschema'
+import { CATEGORY_LABELS, CATEGORY_ORDER, buildItemNumbers, formatItemNumber, PIN_TYPE_COLORS } from '@/lib/aansluitschema'
 import { ConnectionItem, ConnectionSchema, Project } from '@/lib/types'
 import PrintButton from './PrintButton'
 import DownloadButton from './DownloadButton'
@@ -32,6 +32,7 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
   const items = (itemsData ?? []) as ConnectionItem[]
   const schema = schemaData as ConnectionSchema | null
   const applicableItems = items.filter((i) => i.van_toepassing)
+  const itemNumbers = buildItemNumbers(items)
   const letOpLines = (schema?.let_op_notities ?? '').split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean)
   const today = new Date().toISOString()
 
@@ -129,9 +130,9 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
                     <tr className="cat-row">
                       <td colSpan={5}>{CATEGORY_LABELS[category]}</td>
                     </tr>
-                    {rows.map((item, idx) => (
+                    {rows.map((item) => (
                       <tr key={item.id}>
-                        <td>{idx + 1}</td>
+                        <td>{formatItemNumber(itemNumbers.get(item.id) ?? 0)}</td>
                         <td>{item.omschrijving}</td>
                         <td>{item.aantal || '—'}</td>
                         <td>{item.hoogte_cm || '—'}</td>
@@ -204,9 +205,71 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
           </div>
         )}
 
-        {/* De visuele kastenrij-tekening (voorheen hier gerenderd per wand)
-           is nog niet af, zie AansluitschemaTekening.tsx — komt terug zodra
-           die klaar is. */}
+        {(schema?.wanden ?? [])
+          .filter((wand) => wand.bron_afbeelding_url && wand.pins.length > 0)
+          .map((wand) => {
+            const pinRows = wand.pins
+              .map((pin) => {
+                const item = pin.connection_item_id ? items.find((i) => i.id === pin.connection_item_id) : null
+                const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
+                const omschrijving = item?.omschrijving || pin.label || '—'
+                return { pin, nummer, omschrijving }
+              })
+              .sort((a, b) => (a.nummer || 999) - (b.nummer || 999))
+            return (
+              <div className="a4" key={wand.id}>
+                <div className="watermark">Intern</div>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.08em' }}>FINKA KEUKENS</div>
+                  <div style={{ fontSize: 12, color: '#6B6560' }}>Aansluitschema — {wand.label}</div>
+                </div>
+                <div style={{ position: 'relative', width: '100%', border: '1px solid #DDD8D2', borderRadius: 6, overflow: 'hidden' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={wand.bron_afbeelding_url!} alt={wand.label} style={{ display: 'block', width: '100%', height: 'auto' }} />
+                  {wand.pins.map((pin) => {
+                    const item = pin.connection_item_id ? items.find((i) => i.id === pin.connection_item_id) : null
+                    const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
+                    return (
+                      <div
+                        key={pin.id}
+                        style={{
+                          position: 'absolute',
+                          left: `${pin.x * 100}%`,
+                          top: `${pin.y * 100}%`,
+                          transform: 'translate(-50%, -50%)',
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          background: '#fff',
+                          border: `2px solid ${PIN_TYPE_COLORS[pin.type]}`,
+                          color: PIN_TYPE_COLORS[pin.type],
+                          fontSize: 10,
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {nummer ? formatItemNumber(nummer) : '?'}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ marginTop: 16 }}>
+                  <p style={{ fontSize: 10.5, lineHeight: 1.7 }}>
+                    {pinRows.map(({ pin, nummer, omschrijving }, i) => (
+                      <span key={pin.id}>
+                        <strong>{nummer ? formatItemNumber(nummer) : '?'}</strong> {omschrijving}
+                        {pin.hoogte_cm ? `, ${pin.hoogte_cm} cm` : ''}
+                        {i < pinRows.length - 1 ? '  ·  ' : ''}
+                      </span>
+                    ))}
+                  </p>
+                </div>
+                <div className="watermark-bottom">Intern</div>
+              </div>
+            )
+          })}
       </div>
     </>
   )

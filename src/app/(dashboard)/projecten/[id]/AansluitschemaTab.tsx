@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Plus, Sparkles, Trash2 } from 'lucide-react'
-import { ConnectionCategory, ConnectionItem, ConnectionSchema, ConnectionSectionBlock, Project } from '@/lib/types'
+import { ConnectionCategory, ConnectionItem, ConnectionSchema, ConnectionSectionBlock, ConnectionWand, Project } from '@/lib/types'
 import { CATEGORY_LABELS, CATEGORY_ORDER, DEFAULT_LET_OP_NOTITIES, seedConnectionItems } from '@/lib/aansluitschema'
+import AansluitschemaTekening from './AansluitschemaTekening'
 
 type DraftItem = ConnectionItem & { isNew?: boolean }
 
@@ -65,6 +66,7 @@ export default function AansluitschemaTab({
   const [groepenverdelingTekst, setGroepenverdelingTekst] = useState(schema?.groepenverdeling_tekst ?? '')
   const [extraSecties, setExtraSecties] = useState<ConnectionSectionBlock[]>(schema?.extra_secties ?? [])
   const [letOpNotities, setLetOpNotities] = useState(schema?.let_op_notities ?? DEFAULT_LET_OP_NOTITIES)
+  const [wanden, setWanden] = useState<ConnectionWand[]>(schema?.wanden ?? [])
 
   const [customImageUrls, setCustomImageUrls] = useState<string[]>([])
   const imageOptions = [...vooraanzichtUrls, ...customImageUrls]
@@ -194,10 +196,30 @@ export default function AansluitschemaTab({
       }
     }
 
+    // Regels die net voor het eerst zijn opgeslagen wisselen hier van hun
+    // lokale, tijdelijke id (bv. "local-...") naar het echte database-id.
+    // Pins die zo'n regel al gekoppeld hadden vóórdat er ooit is opgeslagen
+    // (heel gangbaar: nieuw project, direct een pin koppelen, dan Opslaan)
+    // moeten dezelfde omwisseling krijgen, anders wijst hun koppeling na het
+    // opslaan naar een id dat nergens meer bestaat.
+    const idMap = new Map(toInsert.map((old, i) => [old.id, insertedRows[i]?.id]).filter((entry): entry is [string, string] => !!entry[1]))
+
     let insertIdx = 0
     const finalItems = items.map((i) => (i.isNew ? { ...(insertedRows[insertIdx++] ?? i), isNew: false } : i))
     setItems(finalItems)
     originalItemIds.current = new Set(finalItems.map((i) => i.id))
+
+    const finalWanden = idMap.size
+      ? wanden.map((w) => ({
+          ...w,
+          pins: w.pins.map((p) =>
+            p.connection_item_id && idMap.has(p.connection_item_id)
+              ? { ...p, connection_item_id: idMap.get(p.connection_item_id)! }
+              : p
+          ),
+        }))
+      : wanden
+    if (idMap.size) setWanden(finalWanden)
 
     const { error: schemaError } = await supabase.from('finka_connection_schema').upsert(
       {
@@ -210,12 +232,7 @@ export default function AansluitschemaTab({
         groepenverdeling_tekst: groepenverdelingTekst || null,
         extra_secties: extraSecties,
         let_op_notities: letOpNotities || null,
-        // De kastenrij-tekening ("wanden") wordt in deze versie van het
-        // aansluitschema nog niet via de UI bewerkt (zie AansluitschemaTekening.tsx
-        // — nog niet af). Ongewijzigd terugschrijven i.p.v. weglaten, anders
-        // overschrijft deze upsert bestaande wand-data (bv. al ingevoerd
-        // tijdens lokaal testen) met een lege array.
-        wanden: schema?.wanden ?? [],
+        wanden: finalWanden,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'project_id' }
@@ -246,9 +263,10 @@ export default function AansluitschemaTab({
   // los bijdragen aan de voorgestelde checklist-regels; de eerste afbeelding
   // (of de tekst-call, indien ingevuld) levert het items/nieuwe_regels-voorstel
   // zodat diezelfde regels niet per afbeelding dubbel worden voorgesteld. De
-  // AI leest ook een eventuele kastenrij/aansluitpunten uit de tekening,
-  // maar dat voorstel wordt in deze versie nog niet getoond/toegepast — de
-  // visuele tekening (AansluitschemaTekening.tsx) is nog niet af.
+  // Deze AI-hulp doet alleen de checklist (items/nieuwe_regels) — pin-posities
+  // op een specifieke wand-tekening vraag je los aan via de "AI-voorstel"-knop
+  // in AansluitschemaTekening.tsx, per wand, omdat dat een andere prompt
+  // (x/y-positie i.p.v. checklistregels) en ander toepassingsmoment is.
   async function handleAiHulp() {
     setAiLoading(true)
     setAiError('')
@@ -459,8 +477,14 @@ export default function AansluitschemaTab({
         )}
       </div>
 
-      {/* Nog alleen de checklist — de kastenrij-tekening (voorheen een tweede
-         tab hier) is nog niet af, zie AansluitschemaTekening.tsx. */}
+      <AansluitschemaTekening
+        projectId={projectId}
+        wanden={wanden}
+        onChange={setWanden}
+        items={items}
+        imageOptions={imageOptions}
+      />
+
       <div className="space-y-4">
           <div className="bg-white border border-[#DDD8D2] rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <Field label="Klant / referentie"><Input className="h-9" value={klantReferentie} onChange={(e) => setKlantReferentie(e.target.value)} /></Field>
