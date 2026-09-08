@@ -2,9 +2,9 @@
 
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { NumberInput } from '@/components/ui/number-input'
 import { formatPrice } from '@/lib/appliance-utils'
 import { Appliance, ApparatuurOptionData, ApparatuurOptionItem, ConfiguratorOption, OfferAttachment } from '@/lib/types'
-import { selectOnFocus } from '@/lib/utils'
 import { FileText, Plus, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from '../offerte/AppliancePickerModal'
 
@@ -202,25 +202,19 @@ export default function ApparatuurOptionEditor({
                   />
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
-                    step="1"
                     value={item.quantity}
-                    onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
-                    onFocus={selectOnFocus}
+                    onChange={(quantity) => updateItem(item.id, { quantity })}
                     className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                   />
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
-                    step="0.01"
                     value={item.unit_price}
-                    onChange={(e) => updateItem(item.id, { unit_price: round2(Number(e.target.value)) })}
-                    onFocus={selectOnFocus}
-                    className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    onChange={(unit_price) => updateItem(item.id, { unit_price: round2(unit_price) })}
+                    className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                   />
                 </td>
                 <td className="px-4 py-2 text-right text-sm font-medium text-[#1C1B19]">

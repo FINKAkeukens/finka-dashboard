@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
 import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
-import { selectOnFocus } from '@/lib/utils'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -1186,40 +1186,31 @@ export default function QuoteEditor({
                     {applianceType && <span className="block text-xs text-[#9A948D] px-2 mt-0.5">{applianceType}</span>}
                   </td>
                   <td className="px-4 py-2">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
-                      step="1"
                       value={item.quantity}
-                      onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
-                      onFocus={selectOnFocus}
+                      onChange={(quantity) => updateItem(item.id, { quantity })}
                       className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                     />
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1">
-                      <input
-                        type="number"
+                      <NumberInput
                         min={0}
-                        step="0.01"
                         value={item.unit_price}
-                        onChange={(e) => updateItem(item.id, { unit_price: round2(Number(e.target.value)), unit_price_source: 'in' })}
-                        onFocus={selectOnFocus}
-                        className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        onChange={(unit_price) => updateItem(item.id, { unit_price: round2(unit_price), unit_price_source: 'in' })}
+                        className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                       />
                       <SourceTag source={item.unit_price_source} />
                     </div>
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1">
-                      <input
-                        type="number"
+                      <NumberInput
                         min={0}
-                        step="0.01"
                         value={lineTotal(item)}
-                        onChange={(e) => updateItem(item.id, { line_total: round2(Number(e.target.value)), line_total_source: 'in' })}
-                        onFocus={selectOnFocus}
-                        className="w-full min-w-0 text-sm text-right font-medium bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        onChange={(line_total) => updateItem(item.id, { line_total: round2(line_total), line_total_source: 'in' })}
+                        className="w-full min-w-0 text-sm text-right font-medium bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                       />
                       <SourceTag source={item.line_total_source} />
                       {item.line_total_source === 'in' && (
@@ -1274,14 +1265,11 @@ export default function QuoteEditor({
                   <td className="px-4 py-2 text-[#1C1B19]">{row.label}</td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1">
-                      <input
-                        type="number"
-                        step="0.01"
+                      <NumberInput
                         value={displayedCost(row)}
-                        onChange={(e) => updateCostRow(row.key, { werkelijke_kosten: round2(Number(e.target.value)), werkelijke_kosten_source: 'in' })}
-                        onFocus={selectOnFocus}
+                        onChange={(werkelijke_kosten) => updateCostRow(row.key, { werkelijke_kosten: round2(werkelijke_kosten), werkelijke_kosten_source: 'in' })}
                         onBlur={() => saveCostBreakdownNow()}
-                        className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                       />
                       <SourceTag source={row.werkelijke_kosten_source} />
                       {row.werkelijke_kosten_source === 'in' && (row.key === 'keukenkastjes' || row.key === 'apparatuur') && (
@@ -1298,12 +1286,9 @@ export default function QuoteEditor({
                     </div>
                   </td>
                   <td className="px-4 py-2">
-                    <input
-                      type="number"
-                      step="1"
+                    <NumberInput
                       value={row.marge_percentage}
-                      onChange={(e) => updateCostRow(row.key, { marge_percentage: Number(e.target.value), marge_percentage_source: 'in' })}
-                      onFocus={selectOnFocus}
+                      onChange={(marge_percentage) => updateCostRow(row.key, { marge_percentage, marge_percentage_source: 'in' })}
                       onBlur={() => saveCostBreakdownNow()}
                       className="w-full text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                     />
@@ -1335,7 +1320,7 @@ export default function QuoteEditor({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">BTW (%)</Label>
-              <Input type="number" step="0.1" value={btwPercentage} onChange={(e) => setBtwPercentage(Number(e.target.value))} className="h-8" />
+              <NumberInput value={btwPercentage} onChange={setBtwPercentage} className="h-8" />
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-1">
@@ -1343,11 +1328,9 @@ export default function QuoteEditor({
                 <SourceTag source={totalSource} />
               </div>
               <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  step="0.01"
+                <NumberInput
                   value={liveTotal}
-                  onChange={(e) => { setTotalValue(round2(Number(e.target.value))); setTotalSource('in') }}
+                  onChange={(v) => { setTotalValue(round2(v)); setTotalSource('in') }}
                   className="h-8 font-semibold"
                 />
                 {totalSource === 'in' && (
@@ -1376,11 +1359,9 @@ export default function QuoteEditor({
           </div>
 
           <div className="flex items-center gap-2 pt-2 border-t border-[#DDD8D2]">
-            <Input
-              type="number"
-              step="1"
+            <NumberInput
               value={overallMarginPercentage}
-              onChange={(e) => setOverallMarginPercentage(Number(e.target.value))}
+              onChange={setOverallMarginPercentage}
               className="h-8 max-w-[70px]"
               placeholder="%"
             />
@@ -1700,11 +1681,9 @@ export default function QuoteEditor({
                           placeholder="Omschrijving..."
                           className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${markerClass(line.description)}`}
                         />
-                        <input
-                          type="number"
+                        <NumberInput
                           value={line.amount}
-                          onChange={(e) => updateCostLine(idx, { amount: round2(Number(e.target.value)) })}
-                          onFocus={selectOnFocus}
+                          onChange={(amount) => updateCostLine(idx, { amount: round2(amount) })}
                           className="w-24 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                         />
                         <button onClick={() => removeCostLine(idx)} title="Regel verwijderen">
@@ -1841,11 +1820,9 @@ export default function QuoteEditor({
 
         <FieldWithSource label="Prijsindicatie voor de klant" source={customerPriceSource}>
           <div className="flex items-center gap-2 max-w-xs">
-            <Input
-              type="number"
-              step="0.01"
+            <NumberInput
               value={customerPriceValue}
-              onChange={(e) => { setCustomerPriceValue(round2(Number(e.target.value))); setCustomerPriceSource('in') }}
+              onChange={(v) => { setCustomerPriceValue(round2(v)); setCustomerPriceSource('in') }}
               className="font-semibold"
             />
             {customerPriceSource === 'in' && (

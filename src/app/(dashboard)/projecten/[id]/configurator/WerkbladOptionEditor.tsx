@@ -4,9 +4,9 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import WerkbladCalculator from '@/components/WerkbladCalculator'
+import { NumberInput } from '@/components/ui/number-input'
 import { computeWerkbladTotals, defaultWerkbladCalcInputs, werkbladSummaryLines } from '@/lib/werkblad-calc'
 import { ConfiguratorOption, OfferAttachment, WerkbladCalcInputs, WerkbladOptionData, WerkbladRates } from '@/lib/types'
-import { selectOnFocus } from '@/lib/utils'
 import { Calculator, FileText, Upload, X } from 'lucide-react'
 
 function readData(data: ConfiguratorOption['data']): WerkbladOptionData {
@@ -122,12 +122,9 @@ export default function WerkbladOptionEditor({
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-1">
           <label className="text-xs text-[#6B6560]">Kostprijs (excl. btw)</label>
-          <input
-            type="number"
-            step="0.01"
+          <NumberInput
             value={option.cost_total}
-            onChange={(e) => onChange({ cost_total: Number(e.target.value) || 0 })}
-            onFocus={selectOnFocus}
+            onChange={(cost_total) => onChange({ cost_total })}
             className="w-40 px-3 py-1.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
           />
         </div>

@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { NumberInput } from '@/components/ui/number-input'
 import { ConfiguratorOption, KastenOptionData, OfferAttachment } from '@/lib/types'
-import { selectOnFocus } from '@/lib/utils'
 import { formatPrice } from '@/lib/appliance-utils'
 import { computeKastenNetCostTotal, KASTEN_DISCOUNTS } from '@/lib/configurator'
 import { FileText, Upload, X } from 'lucide-react'
@@ -135,12 +135,9 @@ export default function KastenOptionEditor({
         <div className="space-y-3">
           <div className="space-y-1">
             <label className="text-xs text-[#6B6560]">Kostprijs vóór korting (excl. btw)</label>
-            <input
-              type="number"
-              step="0.01"
+            <NumberInput
               value={data.gross_cost_total}
-              onChange={(e) => updateGrossCostTotal(Number(e.target.value) || 0)}
-              onFocus={selectOnFocus}
+              onChange={updateGrossCostTotal}
               className="w-40 px-3 py-1.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             />
           </div>

@@ -1,8 +1,8 @@
 'use client'
 
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { NumberInput } from '@/components/ui/number-input'
 import EurolineInfoButton from '@/components/EurolineInfoButton'
 import { formatPrice } from '@/lib/appliance-utils'
 import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, eurolineTotaalExclBtw } from '@/lib/euroline-calc'
@@ -48,11 +48,9 @@ export default function OpslagOptionEditor({
             <EurolineInfoButton category="installatie" />
           </div>
           <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              step="0.1"
+            <NumberInput
               value={inputs.montage_meters}
-              onChange={(e) => updateInput({ montage_meters: Number(e.target.value) })}
+              onChange={(montage_meters) => updateInput({ montage_meters })}
               className="h-8"
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.installatie)}</span>
@@ -75,11 +73,9 @@ export default function OpslagOptionEditor({
             <EurolineInfoButton category="opslag" />
           </div>
           <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              step="1"
+            <NumberInput
               value={inputs.opslag_extra_weken}
-              onChange={(e) => updateInput({ opslag_extra_weken: Number(e.target.value) })}
+              onChange={(opslag_extra_weken) => updateInput({ opslag_extra_weken })}
               className="h-8"
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.opslag)}</span>
@@ -123,11 +119,9 @@ export default function OpslagOptionEditor({
             </label>
             <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
               Extra lostijd (halve uren)
-              <Input
-                type="number"
-                step="1"
+              <NumberInput
                 value={inputs.levering_extra_lostijd_halfuren}
-                onChange={(e) => updateInput({ levering_extra_lostijd_halfuren: Number(e.target.value) })}
+                onChange={(levering_extra_lostijd_halfuren) => updateInput({ levering_extra_lostijd_halfuren })}
                 className="h-7 w-16"
               />
             </div>
@@ -151,11 +145,9 @@ export default function OpslagOptionEditor({
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs">Service — aantal uur nacalculatie</Label>
           <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              step="0.5"
+            <NumberInput
               value={inputs.service_uren}
-              onChange={(e) => updateInput({ service_uren: Number(e.target.value) })}
+              onChange={(service_uren) => updateInput({ service_uren })}
               className="h-8 max-w-[120px]"
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.service)}</span>
