@@ -18,8 +18,10 @@ import FinancieelTab from './FinancieelTab'
 import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates } from '@/lib/types'
+import PortalActivityPanel from './PortalActivityPanel'
+import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument } from '@/lib/types'
 import { leadTimeDays } from '@/lib/planning'
+import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 
 export default async function ProjectDetailPage({
   params,
@@ -49,6 +51,38 @@ export default async function ProjectDetailPage({
     .from('finka_customers')
     .select('id, first_name, last_name')
     .order('first_name')
+
+  // Bronnen voor de automatische mijlpaaldatums (akkoord/montage/afronding) —
+  // zie projectDates() in src/lib/project-dates.ts. Altijd ophalen, want de
+  // tijdlijn staat bovenaan bij elk tabblad.
+  const [{ data: akkoordQuote }, { data: timelineMilestonesData }] = await Promise.all([
+    supabase
+      .from('finka_quotes')
+      .select('akkoord_at')
+      .eq('project_id', id)
+      .not('akkoord_at', 'is', null)
+      .order('akkoord_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('finka_project_milestones')
+      .select('milestone_key, date')
+      .eq('project_id', id)
+      .in('milestone_key', ['montage_start', 'oplevering']),
+  ])
+  // Nog niet gezien door staff — voedt het meldingenblok bovenaan.
+  const { data: portalActivityData } = await supabase
+    .from('finka_portal_activity')
+    .select('*')
+    .eq('project_id', id)
+    .is('seen_at', null)
+    .order('created_at', { ascending: false })
+  const portalActivity = (portalActivityData ?? []) as PortalActivity[]
+
+  const dates = projectDates(project, {
+    quoteAkkoordAt: (akkoordQuote as { akkoord_at: string | null } | null)?.akkoord_at,
+    milestones: (timelineMilestonesData ?? []) as Pick<ProjectMilestone, 'milestone_key' | 'date'>[],
+  })
 
   let historyEntries: Array<{ id: string; field_name: string | null; old_value: string | null; new_value: string | null; action: string; changed_by: string | null; changed_at: string }> = []
   if (tab === 'historie') {
@@ -135,11 +169,17 @@ export default async function ProjectDetailPage({
   }
 
   let documentDownloads: QuoteDownload[] = []
+  let projectDocuments: ProjectDocument[] = []
   if (tab === 'documenten') {
-    const { data: quotesForProject } = await supabase
-      .from('finka_quotes')
-      .select('id')
-      .eq('project_id', id)
+    const [{ data: quotesForProject }, { data: documentsData }] = await Promise.all([
+      supabase.from('finka_quotes').select('id').eq('project_id', id),
+      supabase
+        .from('finka_project_documents')
+        .select('*')
+        .eq('project_id', id)
+        .order('uploaded_at', { ascending: false }),
+    ])
+    projectDocuments = (documentsData ?? []) as ProjectDocument[]
     const quoteIds = (quotesForProject ?? []).map((q) => q.id)
     if (quoteIds.length) {
       const { data } = await supabase
@@ -216,20 +256,71 @@ export default async function ProjectDetailPage({
             </span>
           )}
         </div>
-        <p className="text-sm font-mono text-[#6B6560]">
-          {project.reference_number}
-          {project.first_contact_date && (
-            <span className="ml-2 font-sans text-[#9A948D]">
-              · Eerste contact {new Date(project.first_contact_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })} · Doorlooptijd {leadTimeDays(project.first_contact_date)} dagen
-            </span>
-          )}
-        </p>
+        <p className="text-sm font-mono text-[#6B6560]">{project.reference_number}</p>
         {project.customer && (
           <Link href={`/klanten/${project.customer.id}`} className="text-sm text-[#C9A96E] hover:underline">
             {project.customer.first_name} {project.customer.last_name} →
           </Link>
         )}
+
+        {/* Tijdlijn: eerste contact → akkoord → montage → afronding, met per
+            fase de doorlooptijd sinds de vorige. De laatste drie datums komen
+            automatisch uit offerte/Planning tenzij handmatig ingevuld — zie
+            projectDates() in src/lib/project-dates.ts. */}
+        <div className="mt-4 bg-white rounded-xl border border-[#DDD8D2] overflow-hidden max-w-md">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#DDD8D2] bg-[#F7F5F2] text-xs text-[#6B6560]">
+                <th className="text-left px-5 py-2 font-medium">Fase</th>
+                <th className="text-left px-5 py-2 font-medium">Datum</th>
+                <th className="text-right px-5 py-2 font-medium">Doorlooptijd</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F0EDE9]">
+              {projectPhaseRows(dates).map((row) => (
+                <tr key={row.label}>
+                  <td className="px-5 py-2 text-[#6B6560]">{row.label}</td>
+                  <td className={`px-5 py-2 ${row.date ? 'text-[#1C1B19]' : 'text-[#9A948D]'}`}>
+                    {formatProjectDate(row.date)}
+                  </td>
+                  <td className="px-5 py-2 text-right tabular-nums text-[#6B6560]">
+                    {row.daysSincePrevious !== null ? `${row.daysSincePrevious} dagen` : '—'}
+                  </td>
+                </tr>
+              ))}
+              {/* Ligt het project stil, dan telt die tijd los mee — tot
+                  vandaag, want er is geen einddatum zolang het on hold staat. */}
+              {isOnHold(project) && (
+                <tr>
+                  <td className="px-5 py-2 text-[#C9A96E]">On hold sinds</td>
+                  <td className={`px-5 py-2 ${project.on_hold_since ? 'text-[#1C1B19]' : 'text-[#9A948D]'}`}>
+                    {formatProjectDate(project.on_hold_since)}
+                  </td>
+                  <td className="px-5 py-2 text-right tabular-nums text-[#6B6560]">
+                    {onHoldDays(project.on_hold_since) !== null ? `${onHoldDays(project.on_hold_since)} dagen` : '—'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {project.first_contact_date && (
+              <tfoot>
+                <tr className="border-t border-[#DDD8D2] bg-[#F7F5F2]">
+                  <td className="px-5 py-2 text-xs font-medium text-[#1C1B19]" colSpan={2}>
+                    {dates.afronding.date ? 'Totale doorlooptijd' : 'Loopt nu'}
+                  </td>
+                  <td className="px-5 py-2 text-right text-xs font-medium tabular-nums text-[#1C1B19]">
+                    {dates.afronding.date
+                      ? `${leadTimeDays(project.first_contact_date) - leadTimeDays(dates.afronding.date)} dagen`
+                      : `${leadTimeDays(project.first_contact_date)} dagen`}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
+
+      <PortalActivityPanel activity={portalActivity} />
 
       <div className="mb-6">
         <EditProjectForm project={project} statuses={statuses ?? []} customers={customers ?? []} />
@@ -269,7 +360,7 @@ export default async function ProjectDetailPage({
       ) : tab === 'notities' ? (
         <NotesPanel projectId={id} />
       ) : tab === 'documenten' ? (
-        <DocumentenTab downloads={documentDownloads} />
+        <DocumentenTab projectId={id} downloads={documentDownloads} documents={projectDocuments} />
       ) : (
         <ComingSoonTab
           moduleName={

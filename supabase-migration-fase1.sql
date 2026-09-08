@@ -1536,3 +1536,113 @@ ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS first_contact_date DATE;
 INSERT INTO finka_project_statuses (label, sort_order, color)
 SELECT 'On hold', 6, '#A855F7'
 WHERE NOT EXISTS (SELECT 1 FROM finka_project_statuses WHERE label = 'On hold');
+
+-- =========================================================
+-- 61. Mijlpaaldatums per project (akkoord op offerte / montage / afronding),
+--    naast first_contact_date uit sectie 59 — samen vormen ze de tijdlijn van
+--    een project.
+--
+--    Deze drie kolommen zijn bewust alleen een HANDMATIGE OVERSCHRIJVING:
+--    NULL betekent "gebruik de automatische bron", namelijk
+--      akkoord    -> finka_quotes.akkoord_at (moment van accorderen)
+--      montage    -> mijlpaal 'montage_start' in finka_project_milestones
+--      afronding  -> mijlpaal 'oplevering'   in finka_project_milestones
+--    Zie projectDates() in src/lib/project-dates.ts, dat die samenvoeging op
+--    één plek doet zodat elke pagina dezelfde datums laat zien.
+-- =========================================================
+
+ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS akkoord_date DATE;
+ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS montage_date DATE;
+ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS afronding_date DATE;
+
+-- =========================================================
+-- 62. "On hold sinds"-datum — wordt automatisch op vandaag gezet zodra een
+--    project de status On hold krijgt, en weer leeggemaakt zodra het er weer
+--    af gaat (zie EditProjectForm). Handmatig aanpasbaar voor het geval het
+--    project al eerder stil kwam te liggen. De tijd dat een project stilligt
+--    is altijd "tot vandaag" — er is bewust geen einddatum, want zodra het
+--    weer loopt is de status (en dus deze datum) niet meer van toepassing.
+-- =========================================================
+
+ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS on_hold_since DATE;
+
+-- =========================================================
+-- 63. Klantportaal-activiteit — wat de klant zélf heeft gedaan (vragenlijst
+--    ingevuld, document geaccordeerd), zodat staff dat op het project ziet
+--    zonder alles na te lopen.
+--
+--    Bewust een eigen tabel i.p.v. afgaan op updated_at van de onderliggende
+--    rijen: staff werkt diezelfde rijen ook bij (bv. een vraag verbergen),
+--    wat dan als "klant heeft iets gedaan" zou tellen. Alleen de
+--    portaal-API-routes schrijven hier.
+--
+--    UNIQUE(project_id, type, reference) houdt het per onderwerp bij één
+--    regel: blijft de klant dezelfde vraag bijwerken, dan verschuift die ene
+--    melding mee i.p.v. dat de lijst volloopt. seen_at NULL = nog niet door
+--    staff gezien (het groene bolletje).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_portal_activity (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('vragenlijst','document_akkoord')),
+  reference TEXT NOT NULL,
+  description TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  seen_at TIMESTAMPTZ,
+  UNIQUE(project_id, type, reference)
+);
+
+CREATE INDEX IF NOT EXISTS finka_portal_activity_unseen_idx
+  ON finka_portal_activity (project_id)
+  WHERE seen_at IS NULL;
+
+ALTER TABLE finka_portal_activity ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_portal_activity FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_portal_activity TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 64. Zelf geüploade documenten per project (tekeningen, leidingwerkschema's,
+--    facturen, ...) naast de automatisch bewaarde offerte-PDF's uit sectie 54.
+--    Bewust een eigen tabel: finka_quote_downloads hangt aan een offerte-
+--    versie met snapshot/diff, terwijl dit losse bestanden zijn zonder die
+--    context. Beide verschijnen samen op het Documenten-tabblad en, indien
+--    zichtbaar gemaakt, in het klantportaal — met dezelfde oog- en
+--    akkoord-knoppen (visible_to_customer / approval_required).
+-- =========================================================
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('project-documenten', 'project-documenten', true)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Authenticated kunnen project-documenten uploaden"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'project-documenten');
+
+CREATE POLICY "Authenticated kunnen project-documenten bijwerken"
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'project-documenten');
+
+CREATE POLICY "Authenticated kunnen project-documenten verwijderen"
+ON storage.objects FOR DELETE TO authenticated
+USING (bucket_id = 'project-documenten');
+
+CREATE TABLE IF NOT EXISTS finka_project_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  uploaded_by TEXT,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  visible_to_customer BOOLEAN NOT NULL DEFAULT false,
+  approval_required BOOLEAN NOT NULL DEFAULT false,
+  approved_at TIMESTAMPTZ,
+  approved_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS finka_project_documents_project_idx
+  ON finka_project_documents (project_id, uploaded_at DESC);
+
+ALTER TABLE finka_project_documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_project_documents FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_project_documents TO anon, authenticated, service_role;

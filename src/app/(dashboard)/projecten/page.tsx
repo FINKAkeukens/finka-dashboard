@@ -40,6 +40,18 @@ export default async function ProjectenPage({
   const { data: projectsData } = await query as { data: Project[] | null }
   const projects = projectsData ?? []
 
+  // Projecten waar de klant iets heeft gedaan dat staff nog niet gezien
+  // heeft — zie migratie-sectie 63 / het meldingenblok op de projectpagina.
+  const projectsWithPortalActivity = new Set<string>()
+  if (projects.length) {
+    const { data: activityData } = await supabase
+      .from('finka_portal_activity')
+      .select('project_id')
+      .in('project_id', projects.map((p) => p.id))
+      .is('seen_at', null)
+    for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
+  }
+
   const milestonesByProject = new Map<string, ProjectMilestone[]>()
   if (projects.length) {
     const { data: milestonesData } = await supabase
@@ -142,9 +154,17 @@ export default async function ProjectenPage({
                     </Link>
                   </td>
                   <td className="px-5 py-3.5">
-                    <Link href={`/projecten/${p.id}`} className="font-medium text-[#1C1B19] hover:underline">
-                      {p.title}
-                    </Link>
+                    <span className="flex items-center gap-2">
+                      <Link href={`/projecten/${p.id}`} className="font-medium text-[#1C1B19] hover:underline">
+                        {p.title}
+                      </Link>
+                      {projectsWithPortalActivity.has(p.id) && (
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full bg-green-500"
+                          title="De klant heeft wijzigingen doorgevoerd in het portaal"
+                        />
+                      )}
+                    </span>
                   </td>
                   <td className="px-5 py-3.5">
                     {p.customer ? (

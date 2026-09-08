@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { recordPortalActivity } from '@/lib/portal-activity'
 
 // Enige schrijfpad voor vragenlijst-antwoorden vanuit het klantportaal — de
 // klant-browser praat nooit rechtstreeks met de tabellen (zie migratie-
@@ -32,6 +33,22 @@ export async function POST(request: Request) {
       { onConflict: 'project_id,question_id' }
     )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Melding voor staff op het project — de vraagtekst erbij, zodat meteen
+  // duidelijk is wát de klant heeft ingevuld.
+  const { data: question } = await service
+    .from('finka_questionnaire_templates')
+    .select('question')
+    .eq('id', questionId)
+    .maybeSingle()
+  await recordPortalActivity(service, {
+    projectId,
+    type: 'vragenlijst',
+    reference: questionId,
+    description: question?.question
+      ? `Vragenlijst ingevuld: ${question.question}`
+      : 'Vragenlijst bijgewerkt',
+  })
 
   return NextResponse.json({ success: true })
 }

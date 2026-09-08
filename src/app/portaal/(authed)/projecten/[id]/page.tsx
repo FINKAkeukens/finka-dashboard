@@ -4,11 +4,11 @@ import { redirect, notFound } from 'next/navigation'
 import { Check } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload } from '@/lib/types'
+import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload, ProjectDocument } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
-import PortalDocumentenList from './PortalDocumentenList'
+import PortalDocumentenList, { type PortalDocumentRow } from './PortalDocumentenList'
 
 export default async function PortalProjectPage({
   params,
@@ -50,9 +50,17 @@ export default async function PortalProjectPage({
   // Alleen downloads die staff expliciet zichtbaar heeft gezet — zie de
   // oog-knop op het Documenten-tabblad (finka_quote_downloads.visible_to_customer,
   // migratie-sectie 56, standaard false).
-  const { data: quotesForProject } = await service.from('finka_quotes').select('id').eq('project_id', id)
+  const [{ data: quotesForProject }, { data: uploadedDocsData }] = await Promise.all([
+    service.from('finka_quotes').select('id').eq('project_id', id),
+    service
+      .from('finka_project_documents')
+      .select('*')
+      .eq('project_id', id)
+      .eq('visible_to_customer', true)
+      .order('uploaded_at', { ascending: false }),
+  ])
   const quoteIds = (quotesForProject ?? []).map((q) => q.id)
-  let documents: QuoteDownload[] = []
+  let quoteDownloads: QuoteDownload[] = []
   if (quoteIds.length) {
     const { data: documentsData } = await service
       .from('finka_quote_downloads')
@@ -61,8 +69,31 @@ export default async function PortalProjectPage({
       .eq('visible_to_customer', true)
       .not('pdf_url', 'is', null)
       .order('downloaded_at', { ascending: false })
-    documents = (documentsData ?? []) as QuoteDownload[]
+    quoteDownloads = (documentsData ?? []) as QuoteDownload[]
   }
+
+  // Offerte-downloads en zelf geüploade documenten samen, nieuwste eerst —
+  // voor de klant is het allebei gewoon "een document bij mijn project".
+  const documents: PortalDocumentRow[] = [
+    ...quoteDownloads.map((d) => ({
+      kind: 'download' as const,
+      id: d.id,
+      name: `${d.filename ?? 'Offerte'}.pdf`,
+      url: d.pdf_url as string,
+      date: d.downloaded_at,
+      approval_required: d.approval_required,
+      approved_at: d.approved_at,
+    })),
+    ...((uploadedDocsData ?? []) as ProjectDocument[]).map((d) => ({
+      kind: 'document' as const,
+      id: d.id,
+      name: d.filename,
+      url: d.file_url,
+      date: d.uploaded_at,
+      approval_required: d.approval_required,
+      approved_at: d.approved_at,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
@@ -135,7 +166,7 @@ export default async function PortalProjectPage({
           )}
         </div>
       ) : tab === 'documenten' ? (
-        <PortalDocumentenList downloads={documents} />
+        <PortalDocumentenList documents={documents} />
       ) : (
         <PortalQuestionnaireForm
           projectId={id}

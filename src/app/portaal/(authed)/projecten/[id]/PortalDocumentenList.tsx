@@ -2,21 +2,31 @@
 
 import { useState } from 'react'
 import { CheckCircle2, FileText } from 'lucide-react'
-import type { QuoteDownload } from '@/lib/types'
 
 // Documenten die staff zichtbaar heeft gemaakt (zie het oogje op het
-// Documenten-tabblad). Sommige vragen daarnaast een officieel akkoord — de
-// klant tekent daar hier voor, via /api/portaal/documenten/akkoord (nooit
-// rechtstreeks naar Supabase vanuit de klant-browser, zelfde model als de
-// vragenlijst).
-export default function PortalDocumentenList({ downloads: initialDownloads }: { downloads: QuoteDownload[] }) {
-  const [downloads, setDownloads] = useState<QuoteDownload[]>(initialDownloads)
+// Documenten-tabblad). Zowel automatisch bewaarde offerte-PDF's als zelf
+// geüploade bestanden — voor de klant is dat hetzelfde, alleen het `kind`
+// bepaalt welk id de akkoord-route krijgt. Sommige vragen om een officieel
+// akkoord; de klant tekent daarvoor via /api/portaal/documenten/akkoord
+// (nooit rechtstreeks naar Supabase vanuit de klant-browser).
+export interface PortalDocumentRow {
+  kind: 'download' | 'document'
+  id: string
+  name: string
+  url: string
+  date: string
+  approval_required: boolean
+  approved_at: string | null
+}
+
+export default function PortalDocumentenList({ documents: initialDocuments }: { documents: PortalDocumentRow[] }) {
+  const [documents, setDocuments] = useState<PortalDocumentRow[]>(initialDocuments)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
-  async function approve(d: QuoteDownload) {
+  async function approve(d: PortalDocumentRow) {
     const confirmed = window.confirm(
-      `Ga je akkoord met "${d.filename ?? 'dit document'}"? Dit wordt geregistreerd als officieel akkoord.`
+      `Ga je akkoord met "${d.name}"? Dit wordt geregistreerd als officieel akkoord.`
     )
     if (!confirmed) return
 
@@ -26,16 +36,14 @@ export default function PortalDocumentenList({ downloads: initialDownloads }: { 
       const res = await fetch('/api/portaal/documenten/akkoord', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ downloadId: d.id }),
+        body: JSON.stringify(d.kind === 'download' ? { downloadId: d.id } : { documentId: d.id }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Akkoord geven mislukt')
         return
       }
-      setDownloads((prev) =>
-        prev.map((x) => (x.id === d.id ? { ...x, approved_at: data.approved_at, approved_by: data.approved_by } : x))
-      )
+      setDocuments((prev) => prev.map((x) => (x.id === d.id ? { ...x, approved_at: data.approved_at } : x)))
     } catch {
       setError('Akkoord geven mislukt')
     } finally {
@@ -43,7 +51,7 @@ export default function PortalDocumentenList({ downloads: initialDownloads }: { 
     }
   }
 
-  if (!downloads.length) {
+  if (!documents.length) {
     return (
       <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 text-center">
         Nog geen documenten beschikbaar.
@@ -56,19 +64,19 @@ export default function PortalDocumentenList({ downloads: initialDownloads }: { 
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
 
       <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
-        {downloads.map((d) => (
-          <div key={d.id} className="flex items-center gap-2.5 px-5 py-3 text-sm">
+        {documents.map((d) => (
+          <div key={`${d.kind}-${d.id}`} className="flex items-center gap-2.5 px-5 py-3 text-sm">
             <FileText size={14} className="text-[#6B6560] shrink-0" />
             <a
-              href={d.pdf_url ?? '#'}
+              href={d.url}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 truncate text-[#1C1B19] hover:underline"
             >
-              {d.filename ?? 'Offerte'}.pdf
+              {d.name}
             </a>
             <span className="text-xs text-[#9A948D] shrink-0">
-              {new Date(d.downloaded_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+              {new Date(d.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
             {d.approval_required && (
               d.approved_at ? (

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { logAudit } from '@/lib/audit'
-import type { CostBreakdownItem, Quote, QuoteDownload } from '@/lib/types'
+import { recordPortalActivity } from '@/lib/portal-activity'
+import type { CostBreakdownItem, ProjectDocument, Quote, QuoteDownload } from '@/lib/types'
 
 type DownloadWithQuote = QuoteDownload & {
   quote: Pick<Quote, 'id' | 'project_id' | 'status' | 'akkoord_at' | 'cost_breakdown' | 'archived_at'> | null
@@ -31,8 +32,56 @@ export async function POST(request: Request) {
     .maybeSingle()
   if (!customer) return NextResponse.json({ error: 'Geen klant-account' }, { status: 403 })
 
-  const { downloadId } = await request.json()
-  if (!downloadId) return NextResponse.json({ error: 'downloadId ontbreekt' }, { status: 400 })
+  const { downloadId, documentId } = await request.json()
+  if (!downloadId && !documentId) {
+    return NextResponse.json({ error: 'downloadId of documentId ontbreekt' }, { status: 400 })
+  }
+
+  // Zelf geüpload document (finka_project_documents): geen offerte eraan
+  // gekoppeld, dus alleen het akkoord vastleggen — de offerte-status-koppeling
+  // hieronder geldt uitsluitend voor offerte-downloads.
+  if (documentId) {
+    const { data: document } = await service
+      .from('finka_project_documents')
+      .select('*')
+      .eq('id', documentId)
+      .maybeSingle()
+    const doc = document as ProjectDocument | null
+    if (!doc) return NextResponse.json({ error: 'Document niet gevonden' }, { status: 404 })
+
+    const { data: docProject } = await service
+      .from('finka_projects')
+      .select('customer_id')
+      .eq('id', doc.project_id)
+      .maybeSingle()
+    if (!docProject || docProject.customer_id !== customer.id) {
+      return NextResponse.json({ error: 'Geen toegang tot dit document' }, { status: 403 })
+    }
+    if (!doc.visible_to_customer || !doc.approval_required) {
+      return NextResponse.json({ error: 'Dit document vraagt geen akkoord' }, { status: 400 })
+    }
+
+    const docApproverName = `${customer.first_name} ${customer.last_name}`.trim()
+    if (doc.approved_at) {
+      return NextResponse.json({ approved_at: doc.approved_at, approved_by: doc.approved_by })
+    }
+
+    const docApprovedAt = new Date().toISOString()
+    const { error: docError } = await service
+      .from('finka_project_documents')
+      .update({ approved_at: docApprovedAt, approved_by: docApproverName })
+      .eq('id', documentId)
+    if (docError) return NextResponse.json({ error: docError.message }, { status: 500 })
+
+    await recordPortalActivity(service, {
+      projectId: doc.project_id,
+      type: 'document_akkoord',
+      reference: documentId,
+      description: `Akkoord gegeven op ${doc.filename}`,
+    })
+
+    return NextResponse.json({ approved_at: docApprovedAt, approved_by: docApproverName })
+  }
 
   const { data } = await service
     .from('finka_quote_downloads')
@@ -72,6 +121,13 @@ export async function POST(request: Request) {
     .update({ approved_at: approvedAt, approved_by: approverName })
     .eq('id', downloadId)
   if (updError) return NextResponse.json({ error: updError.message }, { status: 500 })
+
+  await recordPortalActivity(service, {
+    projectId: quote.project_id,
+    type: 'document_akkoord',
+    reference: downloadId,
+    description: `Akkoord gegeven op ${download.filename ?? 'document'}`,
+  })
 
   // Best-effort: de koppeling met de offerte-status mag een geslaagd
   // document-akkoord nooit blokkeren. Bij een gearchiveerde (vervangen)

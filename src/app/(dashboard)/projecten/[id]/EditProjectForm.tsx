@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { logFieldChanges, logAudit } from '@/lib/audit'
 import { Customer, Project, ProjectStatus } from '@/lib/types'
+import { ON_HOLD_STATUS_LABEL } from '@/lib/project-dates'
 import { Edit, Archive } from 'lucide-react'
 
 export default function EditProjectForm({
@@ -22,6 +23,10 @@ export default function EditProjectForm({
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Alleen om het "On hold sinds"-veld te tonen zodra die status gekozen is —
+  // de opgeslagen waarde komt gewoon uit het formulier.
+  const [statusId, setStatusId] = useState(project.status_id ?? '')
+  const selectedIsOnHold = statuses.find((s) => s.id === statusId)?.label === ON_HOLD_STATUS_LABEL
   const router = useRouter()
   const supabase = createClient()
 
@@ -37,13 +42,32 @@ export default function EditProjectForm({
       customer_id: project.customer_id,
       reference_number: project.reference_number,
       first_contact_date: project.first_contact_date,
+      akkoord_date: project.akkoord_date,
+      montage_date: project.montage_date,
+      afronding_date: project.afronding_date,
+      on_hold_since: project.on_hold_since,
     }
+
+    // "On hold sinds" volgt de status: gaat het project nu pas op hold, dan
+    // is dat vanaf vandaag; gaat het er weer af, dan vervalt de datum. Staat
+    // het al op hold, dan blijft de bestaande (of handmatig aangepaste) datum.
+    const newStatusId = form.get('status_id') as string
+    const wasOnHold = statuses.find((s) => s.id === project.status_id)?.label === ON_HOLD_STATUS_LABEL
+    const isNowOnHold = statuses.find((s) => s.id === newStatusId)?.label === ON_HOLD_STATUS_LABEL
+    const onHoldSince = !isNowOnHold
+      ? null
+      : (form.get('on_hold_since') as string) || (wasOnHold ? project.on_hold_since : null) || new Date().toISOString().slice(0, 10)
+
     const after = {
       title: form.get('title') as string,
-      status_id: form.get('status_id') as string,
+      status_id: newStatusId,
       customer_id: form.get('customer_id') as string,
       reference_number: (form.get('reference_number') as string).trim(),
       first_contact_date: (form.get('first_contact_date') as string) || null,
+      akkoord_date: (form.get('akkoord_date') as string) || null,
+      montage_date: (form.get('montage_date') as string) || null,
+      afronding_date: (form.get('afronding_date') as string) || null,
+      on_hold_since: onHoldSince,
     }
 
     const { error } = await supabase
@@ -129,11 +153,31 @@ export default function EditProjectForm({
         <Input name="first_contact_date" type="date" defaultValue={project.first_contact_date ?? ''} />
         <p className="text-xs text-[#9A948D]">Basis voor de doorlooptijd, bovenaan bij de projectgegevens.</p>
       </div>
+
+      <div className="pt-2 border-t border-[#F0EDE9] space-y-4">
+        <p className="text-xs text-[#9A948D]">
+          Deze datums vullen zichzelf: akkoord komt uit de offerte, montage en afronding uit de mijlpalen in Planning.
+          Vul hier alleen iets in als je daarvan wilt afwijken — leeg laten betekent automatisch.
+        </p>
+        <div className="space-y-1.5">
+          <Label>Akkoord offerte</Label>
+          <Input name="akkoord_date" type="date" defaultValue={project.akkoord_date ?? ''} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Montage</Label>
+          <Input name="montage_date" type="date" defaultValue={project.montage_date ?? ''} />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Afronding project</Label>
+          <Input name="afronding_date" type="date" defaultValue={project.afronding_date ?? ''} />
+        </div>
+      </div>
       <div className="space-y-1.5">
         <Label>Status</Label>
         <select
           name="status_id"
-          defaultValue={project.status_id ?? ''}
+          value={statusId}
+          onChange={(e) => setStatusId(e.target.value)}
           className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
         >
           {statuses.map((s) => (
@@ -141,6 +185,15 @@ export default function EditProjectForm({
           ))}
         </select>
       </div>
+      {selectedIsOnHold && (
+        <div className="space-y-1.5">
+          <Label>On hold sinds</Label>
+          <Input name="on_hold_since" type="date" defaultValue={project.on_hold_since ?? ''} />
+          <p className="text-xs text-[#9A948D]">
+            Leeg laten = vanaf vandaag. Zodra het project weer een andere status krijgt, vervalt deze datum.
+          </p>
+        </div>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2 pt-1">
         <Button type="submit" size="sm" disabled={loading}>{loading ? 'Opslaan...' : 'Opslaan'}</Button>

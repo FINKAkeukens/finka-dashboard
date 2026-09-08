@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { TEST_CUSTOMER_ID } from '@/lib/constants'
 import PnlView, { ProjectFigures, Totals, YearData } from './PnlView'
 
 // Eén geaccordeerde offerte, met net genoeg projectgegevens om 'm in de
@@ -59,7 +58,7 @@ export default async function FinancieelPage() {
     supabase.from('finka_financial_settings').select('*').limit(1).maybeSingle(),
   ])
 
-  const rows = ((data ?? []) as unknown as AkkoordQuoteRow[]).filter((r) => r.project && r.project.customer_id !== TEST_CUSTOMER_ID)
+  const rows = ((data ?? []) as unknown as AkkoordQuoteRow[]).filter((r) => !!r.project)
   const belastingPercentage = (settingsData as { belasting_percentage: number } | null)?.belasting_percentage ?? 21
 
   const projects: ProjectFigures[] = rows

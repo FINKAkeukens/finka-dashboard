@@ -184,6 +184,15 @@ export interface Project {
   // Datum van het eerste klantcontact — basis voor de doorlooptijd
   // (vandaag - first_contact_date), zie leadTimeDays() in src/lib/planning.ts.
   first_contact_date: string | null
+  // Handmatige overschrijving van de mijlpaaldatums; NULL = automatisch
+  // afleiden uit de offerte (akkoord) resp. de mijlpalen montage_start /
+  // oplevering. Zie projectDates() in src/lib/project-dates.ts.
+  akkoord_date: string | null
+  montage_date: string | null
+  afronding_date: string | null
+  // Sinds wanneer dit project stilligt; automatisch gezet/gewist bij het
+  // wisselen van/naar de status On hold. NULL zodra het weer loopt.
+  on_hold_since: string | null
   archived_at: string | null
   created_at: string
   updated_at: string
@@ -959,4 +968,41 @@ export interface ConnectionSchema {
   wanden: ConnectionWand[]
   created_at: string
   updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Klantportaal-activiteit — wat de klant zelf heeft gedaan (vragenlijst
+// bijgewerkt, document geaccordeerd). Alleen geschreven door de portaal-
+// API-routes; zie migratie-sectie 63 en src/lib/portal-activity.ts.
+// ---------------------------------------------------------------------------
+
+export type PortalActivityType = 'vragenlijst' | 'document_akkoord'
+
+export interface PortalActivity {
+  id: string
+  project_id: string
+  type: PortalActivityType
+  // Waar de melding over gaat (vraag-id resp. download-id) — samen met type
+  // uniek per project, zodat herhaald bijwerken één melding blijft.
+  reference: string
+  description: string
+  created_at: string
+  // NULL = nog niet door staff gezien (het groene bolletje).
+  seen_at: string | null
+}
+
+// Zelf geüpload document bij een project (tekening, schema, factuur, ...) —
+// naast de automatisch bewaarde offerte-PDF's in finka_quote_downloads. Zie
+// migratie-sectie 64.
+export interface ProjectDocument {
+  id: string
+  project_id: string
+  filename: string
+  file_url: string
+  uploaded_by: string | null
+  uploaded_at: string
+  visible_to_customer: boolean
+  approval_required: boolean
+  approved_at: string | null
+  approved_by: string | null
 }

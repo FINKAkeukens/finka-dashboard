@@ -3,9 +3,9 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { Users, Zap, Mail, TrendingUp, FolderKanban } from 'lucide-react'
 import Link from 'next/link'
-import { TEST_CUSTOMER_ID } from '@/lib/constants'
-import { Project } from '@/lib/types'
+import { Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
+import { averageDays, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     { data: allProjectsData },
     { data: customersForStatus },
   ] = await Promise.all([
-    supabase.from('finka_customers').select('*', { count: 'exact', head: true }).neq('id', TEST_CUSTOMER_ID),
+    supabase.from('finka_customers').select('*', { count: 'exact', head: true }),
     supabase.from('finka_appliances').select('*', { count: 'exact', head: true }),
     supabase.from('finka_email_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('finka_project_statuses').select('id, label, color, sort_order').order('sort_order'),
@@ -26,9 +26,8 @@ export default async function DashboardPage() {
       .from('finka_projects')
       .select('*, customer:finka_customers(first_name, last_name), status:finka_project_statuses(id, label, color, sort_order)')
       .is('archived_at', null)
-      .neq('customer_id', TEST_CUSTOMER_ID)
       .order('created_at', { ascending: false }),
-    supabase.from('finka_customers').select('status').neq('id', TEST_CUSTOMER_ID),
+    supabase.from('finka_customers').select('status'),
   ])
   const allProjects = (allProjectsData ?? []) as Project[]
 
@@ -75,6 +74,84 @@ export default async function DashboardPage() {
     projectsByStatus.set(p.status_id, list)
   }
 
+  // Gemiddelde doorlooptijd per traject, onder het faseoverzicht. Zelfde
+  // datumbronnen als op de projectpagina (offerte-akkoord + de mijlpalen
+  // montage_start/oplevering, met handmatige overschrijving) — zie
+  // projectDates() in src/lib/project-dates.ts.
+  const akkoordAtByProject = new Map<string, string>()
+  const timelineMilestonesByProject = new Map<string, Pick<ProjectMilestone, 'milestone_key' | 'date'>[]>()
+  if (projectIds.length) {
+    const [{ data: quotesData }, { data: milestonesData }] = await Promise.all([
+      supabase
+        .from('finka_quotes')
+        .select('project_id, akkoord_at')
+        .in('project_id', projectIds)
+        .not('akkoord_at', 'is', null)
+        .order('akkoord_at', { ascending: true }),
+      supabase
+        .from('finka_project_milestones')
+        .select('project_id, milestone_key, date')
+        .in('project_id', projectIds)
+        .in('milestone_key', ['montage_start', 'oplevering']),
+    ])
+    // Eerste (vroegste) akkoord telt — bij een herziene offerte blijft het
+    // oorspronkelijke akkoordmoment de start van het traject.
+    for (const q of quotesData ?? []) {
+      if (!akkoordAtByProject.has(q.project_id)) akkoordAtByProject.set(q.project_id, q.akkoord_at)
+    }
+    for (const m of milestonesData ?? []) {
+      if (!m.project_id) continue
+      const list = timelineMilestonesByProject.get(m.project_id) ?? []
+      list.push(m)
+      timelineMilestonesByProject.set(m.project_id, list)
+    }
+  }
+
+  // Groen bolletje op de projectkaart — zie migratie-sectie 63.
+  const projectsWithPortalActivity = new Set<string>()
+  if (projectIds.length) {
+    const { data: activityData } = await supabase
+      .from('finka_portal_activity')
+      .select('project_id')
+      .in('project_id', projectIds)
+      .is('seen_at', null)
+    for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
+  }
+
+  const allProjectDates = allProjects.map((p) =>
+    projectDates(p, {
+      quoteAkkoordAt: akkoordAtByProject.get(p.id) ?? null,
+      milestones: timelineMilestonesByProject.get(p.id) ?? [],
+    })
+  )
+
+  // Elk traject loopt over de fases waarin dat werk plaatsvindt, zodat de
+  // gemiddelden onder de bijbehorende kolommen uitkomen.
+  // Stilliggende projecten hebben geen traject maar wél een lopende teller:
+  // gemiddeld aantal dagen dat ze al on hold staan.
+  const onHoldSpans = allProjects
+    .filter((p) => isOnHold(p))
+    .map((p) => onHoldDays(p.on_hold_since))
+    .filter((v): v is number => v !== null)
+  const onHoldAverage = {
+    days: onHoldSpans.length ? Math.round(onHoldSpans.reduce((sum, v) => sum + v, 0) / onHoldSpans.length) : null,
+    projectCount: onHoldSpans.length,
+  }
+
+  const leadTimeSegments = [
+    { labels: ['Lead', 'Offerte', 'Akkoord'], title: 'Eerste contact → Akkoord', value: averageDays(allProjectDates, 'eersteContact', 'akkoord') },
+    { labels: ['Gepland', 'In uitvoering'], title: 'Akkoord → Montage', value: averageDays(allProjectDates, 'akkoord', 'montage') },
+    { labels: ['Opgeleverd'], title: 'Montage → Afronding', value: averageDays(allProjectDates, 'montage', 'afronding') },
+    { labels: [ON_HOLD_STATUS_LABEL], title: 'Nu on hold', value: onHoldAverage },
+  ]
+    .map((segment) => ({
+      ...segment,
+      // Breedte volgt de daadwerkelijke kolommen, zodat een hernoemde of
+      // verplaatste status het overzicht niet stilzwijgend scheeftrekt.
+      span: (projectStatuses ?? []).filter((s) => segment.labels.includes(s.label)).length,
+    }))
+    .filter((segment) => segment.span > 0)
+
   const stats = [
     { label: 'Projecten', value: projectCount, icon: FolderKanban, href: '/projecten', color: 'text-[#C9A96E]' },
     { label: 'Klanten', value: customerCount ?? 0, icon: Users, href: '/klanten', color: 'text-blue-600' },
@@ -104,7 +181,6 @@ export default async function DashboardPage() {
   const { data: recentCustomers } = await supabase
     .from('finka_customers')
     .select('id, reference_number, first_name, last_name, status, created_at')
-    .neq('id', TEST_CUSTOMER_ID)
     .order('created_at', { ascending: false })
     .limit(5)
 
@@ -165,11 +241,27 @@ export default async function DashboardPage() {
                             href={`/projecten/${p.id}`}
                             className="block rounded-lg border border-[#DDD8D2] p-3 hover:border-[#C9A96E] transition-colors"
                           >
-                            <p className="text-sm font-medium text-[#1C1B19] truncate">{p.title}</p>
+                            <p className="flex items-center gap-2 text-sm font-medium text-[#1C1B19]">
+                              <span className="truncate">{p.title}</span>
+                              {projectsWithPortalActivity.has(p.id) && (
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-green-500"
+                                  title="De klant heeft wijzigingen doorgevoerd in het portaal"
+                                />
+                              )}
+                            </p>
                             <p className="text-xs text-[#6B6560] truncate">
                               {p.customer ? `${p.customer.first_name} ${p.customer.last_name}` : p.reference_number}
                             </p>
-                            {progress ? (
+                            {s.label === ON_HOLD_STATUS_LABEL ? (
+                              // Bij een stilliggend project zegt checklist-voortgang niets —
+                              // hoe lang het al stilligt wél.
+                              <p className="text-xs text-[#C9A96E] mt-2">
+                                {onHoldDays(p.on_hold_since) !== null
+                                  ? `${onHoldDays(p.on_hold_since)} dagen on hold`
+                                  : 'Datum on hold onbekend'}
+                              </p>
+                            ) : progress ? (
                               <div className="flex items-center gap-2 mt-2" title={`Checklist bij ${s.label}: ${progress.done} van ${progress.total} afgevinkt`}>
                                 <div className="flex-1 h-1.5 rounded-full bg-[#F0EDE9] overflow-hidden">
                                   <div className="h-full rounded-full bg-[#C9A96E]" style={{ width: `${progress.percentage}%` }} />
@@ -187,6 +279,35 @@ export default async function DashboardPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Gemiddelde doorlooptijd per traject, uitgelijnd onder de fases
+            waarin dat werk plaatsvindt. */}
+        {projectStatuses?.length && leadTimeSegments.length > 0 && (
+          <div
+            className="mt-3 grid gap-4"
+            style={{ gridTemplateColumns: `repeat(${projectStatuses.length}, minmax(0, 1fr))` }}
+          >
+            {leadTimeSegments.map((segment) => (
+              <div
+                key={segment.title}
+                className="min-w-0 rounded-xl border border-[#DDD8D2] bg-[#F7F5F2] px-4 py-2.5"
+                style={{ gridColumn: `span ${segment.span} / span ${segment.span}` }}
+              >
+                <p className="text-xs text-[#9A948D] truncate">{segment.title}</p>
+                {segment.value.days !== null ? (
+                  <>
+                    <p className="text-sm text-[#1C1B19]">gemiddeld {segment.value.days} dagen</p>
+                    <p className="text-xs text-[#9A948D]">
+                      ({segment.value.projectCount} project{segment.value.projectCount !== 1 ? 'en' : ''})
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-[#9A948D]">Nog geen gegevens</p>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
