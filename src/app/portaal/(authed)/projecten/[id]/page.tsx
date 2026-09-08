@@ -96,7 +96,7 @@ export default async function PortalProjectPage({
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Formulier "Afspraken voorbereiding gereed": alleen de regels die staff zichtbaar heeft gezet.
+  // Formulier "Voorbereiding ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
   const [{ data: maatformulierData }, { data: signoffData }] = await Promise.all([
     service.from('finka_maatformulier_items').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
     service.from('finka_maatformulier_signoff').select('*').eq('project_id', id).maybeSingle(),

@@ -1009,7 +1009,7 @@ export interface ProjectDocument {
 }
 
 // ---------------------------------------------------------------------------
-// Formulier "Afspraken voorbereiding gereed" — de klant bevestigt via het portaal de maten en
+// Formulier "Voorbereiding ruimte gereed" — de klant bevestigt via het portaal de maten en
 // afspraken van de keukenruimte en tekent daarvoor. Zelfde sjabloon-opzet
 // als de checklist: instellingen → kopie per project. Zie migratie-sectie 65.
 // ---------------------------------------------------------------------------

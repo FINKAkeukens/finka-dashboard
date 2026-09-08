@@ -4,7 +4,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { recordPortalActivity } from '@/lib/portal-activity'
 import type { MaatformulierItem } from '@/lib/types'
 
-// Antwoord van de klant op één regel van het formulier "Afspraken voorbereiding gereed", en het
+// Antwoord van de klant op één regel van het formulier "Voorbereiding ruimte gereed", en het
 // ondertekenen van het geheel. Zelfde beveiligingsmodel als de andere
 // portaal-routes: de klant-browser praat nooit rechtstreeks met de tabellen,
 // en hier wordt gevalideerd dat de regel bij een project van deze klant hoort.
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       projectId: signProjectId,
       type: 'maatformulier',
       reference: 'maatformulier',
-      description: 'Afspraken voorbereiding gereed ondertekend',
+      description: 'Voorbereiding ruimte gereed ondertekend',
     })
 
     return NextResponse.json({ signed_at: signedAt, signed_by: signedBy })
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     projectId: item.project_id,
     type: 'maatformulier',
     reference: 'maatformulier',
-    description: 'Afspraken voorbereiding gereed ingevuld of bijgewerkt',
+    description: 'Voorbereiding ruimte gereed ingevuld of bijgewerkt',
   })
 
   return NextResponse.json({ success: true })
