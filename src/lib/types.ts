@@ -976,14 +976,15 @@ export interface ConnectionSchema {
 // API-routes; zie migratie-sectie 63 en src/lib/portal-activity.ts.
 // ---------------------------------------------------------------------------
 
-export type PortalActivityType = 'vragenlijst' | 'document_akkoord'
+export type PortalActivityType = 'vragenlijst' | 'document_akkoord' | 'maatformulier'
 
 export interface PortalActivity {
   id: string
   project_id: string
   type: PortalActivityType
-  // Waar de melding over gaat (vraag-id resp. download-id) — samen met type
-  // uniek per project, zodat herhaald bijwerken één melding blijft.
+  // Het tabblad waar de klant iets deed ('vragenlijst' / 'maatformulier' /
+  // 'documenten') — samen met type uniek per project, zodat alle
+  // bewerkingen binnen dat tabblad één melding blijven (migratie-sectie 66).
   reference: string
   description: string
   created_at: string
@@ -1005,4 +1006,65 @@ export interface ProjectDocument {
   approval_required: boolean
   approved_at: string | null
   approved_by: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Formulier "Afspraken voorbereiding gereed" — de klant bevestigt via het portaal de maten en
+// afspraken van de keukenruimte en tekent daarvoor. Zelfde sjabloon-opzet
+// als de checklist: instellingen → kopie per project. Zie migratie-sectie 65.
+// ---------------------------------------------------------------------------
+
+export type MaatformulierFieldType = 'ja_nee' | 'ja_nee_nvt' | 'tekst' | 'getal' | 'keuze' | 'afspraak'
+
+export interface MaatformulierCategoryItem {
+  id: string
+  label: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface MaatformulierTemplateItem {
+  id: string
+  category_id: string
+  label: string
+  type: MaatformulierFieldType
+  // Alleen bij type 'keuze' — de opties waaruit de klant kiest.
+  options: string[]
+  // Alleen bij type 'getal', bv. 'cm'.
+  unit: string | null
+  // Sub-vraag: verschijnt alleen als de ouder-vraag met show_when_answer is
+  // beantwoord (zie migratie-sectie 67). NULL = gewone vraag op hoofdniveau.
+  parent_id: string | null
+  show_when_answer: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface MaatformulierItem {
+  id: string
+  project_id: string
+  // Label-snapshot van het kopje, net als bij ChecklistItem.category.
+  category: string
+  label: string
+  type: MaatformulierFieldType
+  options: string[]
+  unit: string | null
+  // Het antwoord van de klant; bij type 'afspraak' altijd leeg.
+  answer: string | null
+  visible_to_customer: boolean
+  // Sub-vraag: verschijnt alleen als de ouder-vraag met show_when_answer is
+  // beantwoord (zie migratie-sectie 67). NULL = gewone vraag op hoofdniveau.
+  parent_id: string | null
+  show_when_answer: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface MaatformulierSignoff {
+  project_id: string
+  signed_at: string
+  signed_by: string
 }

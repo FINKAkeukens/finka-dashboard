@@ -1646,3 +1646,174 @@ CREATE INDEX IF NOT EXISTS finka_project_documents_project_idx
 ALTER TABLE finka_project_documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated users only" ON finka_project_documents FOR ALL TO authenticated USING (true) WITH CHECK (true);
 GRANT ALL ON TABLE finka_project_documents TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 65. Maat-klopt-formulier — de klant bevestigt via het portaal de maten en
+--    afspraken van de keukenruimte, en tekent daarvoor.
+--
+--    Zelfde opzet als de checklist (secties 44/45): een standaardsjabloon in
+--    Instellingen (categories + templates), dat bij "Formulier aanmaken" als
+--    kopie naar het project gaat (finka_maatformulier_items). Vanaf dat
+--    moment is het per project aan te passen — regels verbergen, hernoemen of
+--    zelf toevoegen — zonder dat andere projecten of het sjabloon meebewegen.
+--
+--    type bepaalt hoe de klant antwoordt:
+--      ja_nee / ja_nee_nvt  -> keuzeknoppen
+--      tekst / getal        -> invulveld (getal met unit, bv. cm)
+--      keuze                -> eigen opties uit `options`
+--      afspraak             -> alleen tekst, geen antwoord (de afspraken
+--                              onderaan het formulier)
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_maatformulier_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_maatformulier_categories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_maatformulier_categories FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_maatformulier_categories TO anon, authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS finka_maatformulier_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id UUID NOT NULL REFERENCES finka_maatformulier_categories(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'tekst' CHECK (type IN ('ja_nee','ja_nee_nvt','tekst','getal','keuze','afspraak')),
+  options JSONB NOT NULL DEFAULT '[]'::jsonb,
+  unit TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_maatformulier_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_maatformulier_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_maatformulier_templates TO anon, authenticated, service_role;
+
+-- Per project: de kopie van het sjabloon plus het antwoord van de klant.
+-- category is losse tekst (label-snapshot), zelfde afweging als bij
+-- finka_checklist_items: het kopje hernoemen in Instellingen mag lopende
+-- formulieren niet veranderen.
+CREATE TABLE IF NOT EXISTS finka_maatformulier_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  label TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'tekst' CHECK (type IN ('ja_nee','ja_nee_nvt','tekst','getal','keuze','afspraak')),
+  options JSONB NOT NULL DEFAULT '[]'::jsonb,
+  unit TEXT,
+  answer TEXT,
+  -- Anders dan de checklist standaard zichtbaar: dit formulier is er juist
+  -- om door de klant ingevuld te worden. Staff kan losse regels verbergen.
+  visible_to_customer BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS finka_maatformulier_items_project_idx
+  ON finka_maatformulier_items (project_id, sort_order);
+
+ALTER TABLE finka_maatformulier_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_maatformulier_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_maatformulier_items TO anon, authenticated, service_role;
+
+-- Ondertekening: één rij per project, gezet zodra de klant in het portaal
+-- akkoord geeft ("Met ondertekening van dit document gaat u akkoord met
+-- bovenstaande gegevens en afspraken").
+CREATE TABLE IF NOT EXISTS finka_maatformulier_signoff (
+  project_id UUID PRIMARY KEY REFERENCES finka_projects(id) ON DELETE CASCADE,
+  signed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  signed_by TEXT NOT NULL
+);
+
+ALTER TABLE finka_maatformulier_signoff ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_maatformulier_signoff FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE finka_maatformulier_signoff TO anon, authenticated, service_role;
+
+INSERT INTO finka_maatformulier_categories (label, sort_order)
+SELECT * FROM (VALUES
+  ('In te vullen velden', 0),
+  ('Gemaakte afspraken', 1),
+  ('Overige afspraken', 2)
+) AS seed(label, sort_order)
+WHERE NOT EXISTS (SELECT 1 FROM finka_maatformulier_categories);
+
+INSERT INTO finka_maatformulier_templates (category_id, label, type, options, unit, sort_order)
+SELECT c.id, t.label, t.type, to_jsonb(t.options), t.unit, t.sort_order
+FROM (VALUES
+  ('In te vullen velden', 'De locatie is bereikbaar per vrachtwagen', 'ja_nee', ARRAY[]::text[], NULL, 0),
+  ('In te vullen velden', 'De keukenruimte is op verdieping', 'tekst', ARRAY[]::text[], NULL, 1),
+  ('In te vullen velden', 'Indien op verdieping: is er een lift voor het transport van goederen', 'ja_nee_nvt', ARRAY[]::text[], NULL, 2),
+  ('In te vullen velden', 'Indien op verdieping: is er een verhuislift nodig om de goederen te leveren', 'ja_nee_nvt', ARRAY[]::text[], NULL, 3),
+  ('In te vullen velden', 'De smalste doorgang is', 'getal', ARRAY[]::text[], 'cm', 4),
+  ('In te vullen velden', 'De hoogte van de afgewerkte vloer tot het plafond wordt', 'getal', ARRAY[]::text[], 'cm', 5),
+  ('In te vullen velden', 'De afvoer van de afzuigkap is door middel van', 'keuze', ARRAY['Afvoer naar buiten','Recirculatie'], NULL, 6),
+  ('In te vullen velden', 'Indien afvoer naar buiten: diameter doorvoer', 'getal', ARRAY[]::text[], 'cm', 7),
+  ('In te vullen velden', 'Is er een naar binnen draaiend raam bij de kraan', 'ja_nee', ARRAY[]::text[], NULL, 8),
+  ('In te vullen velden', 'Is er een vensterbank in de ruimte', 'ja_nee', ARRAY[]::text[], NULL, 9),
+  ('In te vullen velden', 'Indien vensterbank: de onderkant hiervan is', 'getal', ARRAY[]::text[], 'cm', 10),
+
+  ('Gemaakte afspraken', 'De hoeken worden haaks gemaakt (90 graden).', 'afspraak', ARRAY[]::text[], NULL, 0),
+  ('Gemaakte afspraken', 'De wanden worden vlak en loodrecht afgewerkt.', 'afspraak', ARRAY[]::text[], NULL, 1),
+  ('Gemaakte afspraken', 'De posities van de muren worden gemaakt zoals aangegeven op de boven- en vooraanzichten.', 'afspraak', ARRAY[]::text[], NULL, 2),
+  ('Gemaakte afspraken', 'Indien van toepassing: de afvoer naar buiten van de kookafzuiging wordt geplaatst zoals aangegeven op het bovenaanzicht.', 'afspraak', ARRAY[]::text[], NULL, 3),
+  ('Gemaakte afspraken', 'Indien van toepassing: het plafond wordt verstevigd ten behoeve van de eiland- of inbouwafzuiging.', 'afspraak', ARRAY[]::text[], NULL, 4),
+  ('Gemaakte afspraken', 'Het leidingwerk wordt vóór levering van de keuken aangelegd volgens het leidingadvies.', 'afspraak', ARRAY[]::text[], NULL, 5),
+
+  ('Overige afspraken', 'De keuken wordt besteld volgens de maatvoering zoals vermeld op onze tekeningen.', 'afspraak', ARRAY[]::text[], NULL, 0),
+  ('Overige afspraken', 'Eventueel nieuw stucwerk is droog ten tijde van levering. Houdt u rekening met de droogtijd.', 'afspraak', ARRAY[]::text[], NULL, 1),
+  ('Overige afspraken', 'Bij de levering is de keukenruimte vochtvrij, schoon en leeg.', 'afspraak', ARRAY[]::text[], NULL, 2),
+  ('Overige afspraken', 'De afgewerkte vloer loopt door tot aan de muur. Wanneer dit niet mogelijk is, loopt de vloer tot maximaal 40 cm uit de muur en wordt hoogteverschil geëgaliseerd. Bij vrijstaande apparatuur wordt de vloer altijd doorgelegd tot de muur.', 'afspraak', ARRAY[]::text[], NULL, 3),
+  ('Overige afspraken', 'De stopcontacten en muurschakelaars worden boven het werkblad en eventuele achterwand geplaatst.', 'afspraak', ARRAY[]::text[], NULL, 4),
+  ('Overige afspraken', 'Indien u heeft gekozen voor montage, verwachten wij dat de keukenruimte gereed is op de dag van montage. Wanneer dit niet het geval is, zijn wij genoodzaakt de montage uit te stellen en hiervoor € 250,- kosten in rekening te brengen.', 'afspraak', ARRAY[]::text[], NULL, 5)
+) AS t(category_label, label, type, options, unit, sort_order)
+JOIN finka_maatformulier_categories c ON c.label = t.category_label
+WHERE NOT EXISTS (SELECT 1 FROM finka_maatformulier_templates);
+
+-- =========================================================
+-- 66. Klantportaal-meldingen per tabblad i.p.v. per veld. Sectie 63 hield
+--    één melding per vraag/document bij, waardoor één ingevulde vragenlijst
+--    tientallen regels opleverde. `reference` is voortaan het tabblad zelf
+--    ('vragenlijst' / 'maatformulier' / 'documenten'), zodat de bestaande
+--    UNIQUE(project_id, type, reference) alle bewerkingen binnen dat tabblad
+--    tot één melding samenvouwt.
+-- =========================================================
+
+ALTER TABLE finka_portal_activity DROP CONSTRAINT IF EXISTS finka_portal_activity_type_check;
+ALTER TABLE finka_portal_activity ADD CONSTRAINT finka_portal_activity_type_check
+  CHECK (type IN ('vragenlijst','document_akkoord','maatformulier'));
+
+-- =========================================================
+-- 67. Maat-klopt-formulier — sub-vragen die alleen verschijnen bij een
+--    bepaald antwoord op de vraag erboven (bv. "Is er een afvoer aanwezig?"
+--    → alleen bij "Nee" de vervolgvraag "Waar moet die komen?"). De relatie
+--    hangt aan de vraag zelf (parent_id) in plaats van aan een aparte tabel:
+--    een sub-vraag is gewoon een normale regel met een ouder + de
+--    antwoordwaarde die 'm zichtbaar maakt (show_when_answer). Bewust maar
+--    één niveau diep in de UI — dieper nesten maakt het formulier voor de
+--    klant onnavolgbaar.
+--
+--    ON DELETE CASCADE: een sub-vraag heeft zonder z'n ouder geen betekenis,
+--    dus die verdwijnt mee. show_when_answer bevat de letterlijke
+--    antwoordtekst ('Ja'/'Nee'/'N.v.t.' of een eigen keuzeoptie) — zelfde
+--    waarde als wat in answer terechtkomt, zodat vergelijken triviaal is.
+-- =========================================================
+
+ALTER TABLE finka_maatformulier_templates
+  ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES finka_maatformulier_templates(id) ON DELETE CASCADE;
+ALTER TABLE finka_maatformulier_templates
+  ADD COLUMN IF NOT EXISTS show_when_answer TEXT;
+
+ALTER TABLE finka_maatformulier_items
+  ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES finka_maatformulier_items(id) ON DELETE CASCADE;
+ALTER TABLE finka_maatformulier_items
+  ADD COLUMN IF NOT EXISTS show_when_answer TEXT;
+
+CREATE INDEX IF NOT EXISTS finka_maatformulier_templates_parent_idx
+  ON finka_maatformulier_templates (parent_id);
+CREATE INDEX IF NOT EXISTS finka_maatformulier_items_parent_idx
+  ON finka_maatformulier_items (parent_id);

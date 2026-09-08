@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     await recordPortalActivity(service, {
       projectId: doc.project_id,
       type: 'document_akkoord',
-      reference: documentId,
+      reference: 'documenten',
       description: `Akkoord gegeven op ${doc.filename}`,
     })
 
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
   await recordPortalActivity(service, {
     projectId: quote.project_id,
     type: 'document_akkoord',
-    reference: downloadId,
+    reference: 'documenten',
     description: `Akkoord gegeven op ${download.filename ?? 'document'}`,
   })
 

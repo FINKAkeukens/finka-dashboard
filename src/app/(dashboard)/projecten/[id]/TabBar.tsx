@@ -13,6 +13,7 @@ const tabs = [
   { id: 'planning', label: 'Planning' },
   { id: 'checklist', label: 'Checklist' },
   { id: 'vragenlijst', label: 'Vragenlijst' },
+  { id: 'maatformulier', label: 'Afspraken voorbereiding gereed' },
   { id: 'aansluitschema', label: 'Aansluitschema' },
   { id: 'facturen', label: 'Facturen' },
   { id: 'documenten', label: 'Documenten' },

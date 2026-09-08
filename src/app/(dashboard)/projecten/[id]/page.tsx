@@ -14,12 +14,13 @@ import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
 import ChecklistTab from './ChecklistTab'
 import VragenlijstTab from './VragenlijstTab'
+import MaatformulierTab from './MaatformulierTab'
 import FinancieelTab from './FinancieelTab'
 import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument } from '@/lib/types'
+import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
 import { leadTimeDays } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 
@@ -127,6 +128,17 @@ export default async function ProjectDetailPage({
     questionnaireCategories = (categoriesData ?? []) as QuestionnaireCategoryItem[]
     questionnaireQuestions = (questionsData ?? []) as QuestionnaireTemplateQuestion[]
     questionnaireResponses = (responsesData ?? []) as QuestionnaireResponse[]
+  }
+
+  let maatformulierItems: MaatformulierItem[] = []
+  let maatformulierSignoff: MaatformulierSignoff | null = null
+  if (tab === 'maatformulier') {
+    const [{ data: mfItems }, { data: mfSignoff }] = await Promise.all([
+      supabase.from('finka_maatformulier_items').select('*').eq('project_id', id).order('sort_order'),
+      supabase.from('finka_maatformulier_signoff').select('*').eq('project_id', id).maybeSingle(),
+    ])
+    maatformulierItems = (mfItems ?? []) as MaatformulierItem[]
+    maatformulierSignoff = mfSignoff as MaatformulierSignoff | null
   }
 
   let financialItems: ProjectFinancialItem[] = []
@@ -349,6 +361,8 @@ export default async function ProjectDetailPage({
         <ChecklistTab projectId={id} items={checklistItems} />
       ) : tab === 'vragenlijst' ? (
         <VragenlijstTab projectId={id} categories={questionnaireCategories} questions={questionnaireQuestions} responses={questionnaireResponses} />
+      ) : tab === 'maatformulier' ? (
+        <MaatformulierTab projectId={id} items={maatformulierItems} signoff={maatformulierSignoff} />
       ) : tab === 'aansluitschema' ? (
         <AansluitschemaTab
           projectId={id}

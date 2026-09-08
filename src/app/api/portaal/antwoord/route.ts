@@ -34,20 +34,12 @@ export async function POST(request: Request) {
     )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Melding voor staff op het project — de vraagtekst erbij, zodat meteen
-  // duidelijk is wát de klant heeft ingevuld.
-  const { data: question } = await service
-    .from('finka_questionnaire_templates')
-    .select('question')
-    .eq('id', questionId)
-    .maybeSingle()
+  // Eén melding per tabblad, niet per vraag — zie migratie-sectie 66.
   await recordPortalActivity(service, {
     projectId,
     type: 'vragenlijst',
-    reference: questionId,
-    description: question?.question
-      ? `Vragenlijst ingevuld: ${question.question}`
-      : 'Vragenlijst bijgewerkt',
+    reference: 'vragenlijst',
+    description: 'Vragenlijst ingevuld of bijgewerkt',
   })
 
   return NextResponse.json({ success: true })

@@ -4,11 +4,12 @@ import { redirect, notFound } from 'next/navigation'
 import { Check } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload, ProjectDocument } from '@/lib/types'
+import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
 import PortalDocumentenList, { type PortalDocumentRow } from './PortalDocumentenList'
+import PortalMaatformulier from './PortalMaatformulier'
 
 export default async function PortalProjectPage({
   params,
@@ -95,6 +96,14 @@ export default async function PortalProjectPage({
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
+  // Formulier "Afspraken voorbereiding gereed": alleen de regels die staff zichtbaar heeft gezet.
+  const [{ data: maatformulierData }, { data: signoffData }] = await Promise.all([
+    service.from('finka_maatformulier_items').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
+    service.from('finka_maatformulier_signoff').select('*').eq('project_id', id).maybeSingle(),
+  ])
+  const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)
+  const maatformulierSignoff = signoffData as MaatformulierSignoff | null
+
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
   const percentage = total > 0 ? Math.round((doneCount / total) * 100) : 0
@@ -165,6 +174,8 @@ export default async function PortalProjectPage({
             </p>
           )}
         </div>
+      ) : tab === 'maatformulier' ? (
+        <PortalMaatformulier projectId={id} items={maatformulierItems} signoff={maatformulierSignoff} />
       ) : tab === 'documenten' ? (
         <PortalDocumentenList documents={documents} />
       ) : (
