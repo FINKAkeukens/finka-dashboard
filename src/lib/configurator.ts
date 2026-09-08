@@ -31,28 +31,24 @@ export interface KastenDiscount {
   percentage: number
 }
 
-// Vaste, standaard inkoopkortingen op de Kasten-kostprijs. Betaalkorting
-// wordt in computeKastenNetCostTotal hieronder altijd als laatste stap in de
-// keten toegepast (los van de aanvinkvolgorde) — gebruikelijke conventie bij
-// handelskortingen: betaalkorting geldt over het bedrag ná de overige
-// (inkoop/leverancier-)kortingen, niet over de oorspronkelijke kostprijs.
+// Vaste, standaard inkoopkortingen op de Kasten-kostprijs — één betaalkorting
+// per keukenmerk. Op een optie is normaliter maar één van de twee van
+// toepassing (het merk van die specifieke optie). key blijft ongewijzigd
+// t.o.v. de oude, generiekere namen ("kuchentreff_sachsen"/"betaalkorting")
+// — alleen het label is hernoemd, zodat al opgeslagen aanvinkingen (o.a. bij
+// bestaande Sachsen-opties) geldig blijven zonder migratie.
 export const KASTEN_DISCOUNTS: KastenDiscount[] = [
-  { key: 'kuchentreff_sachsen', label: 'Küchentreff korting Sachsen', percentage: 11 },
-  { key: 'betaalkorting', label: 'Betaalkorting', percentage: 5 },
+  { key: 'kuchentreff_sachsen', label: 'Sachsen betaalkorting', percentage: 11 },
+  { key: 'betaalkorting', label: 'Artego betaalkorting', percentage: 5 },
 ]
 
-const BETAALKORTING_KEY = 'betaalkorting'
-
 // Past de aangevinkte kortingen ná elkaar toe (elke korting over het bedrag
-// ná de vorige, niet gewoon opgeteld) — betaalkorting altijd als laatste
-// stap, zie KASTEN_DISCOUNTS hierboven.
+// ná de vorige, niet gewoon opgeteld). Volgorde maakt voor het resultaat
+// niets uit (vermenigvuldigen is commutatief) — relevant is vooral dat het
+// geen simpele optelling is.
 export function computeKastenNetCostTotal(grossCostTotal: number, discountKeys: string[]): number {
   const active = KASTEN_DISCOUNTS.filter((d) => discountKeys.includes(d.key))
-  const ordered = [
-    ...active.filter((d) => d.key !== BETAALKORTING_KEY),
-    ...active.filter((d) => d.key === BETAALKORTING_KEY),
-  ]
-  const net = ordered.reduce((amount, d) => amount * (1 - d.percentage / 100), grossCostTotal)
+  const net = active.reduce((amount, d) => amount * (1 - d.percentage / 100), grossCostTotal)
   return Math.round(net * 100) / 100
 }
 
