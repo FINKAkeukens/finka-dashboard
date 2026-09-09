@@ -1,14 +1,14 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Plus, Sparkles, Trash2 } from 'lucide-react'
 import { ConnectionCategory, ConnectionItem, ConnectionSchema, ConnectionSectionBlock, ConnectionWand, Project } from '@/lib/types'
+import type { ApparatuurItem, ApparatuurAansluitschemaResult } from '@/lib/claude'
 import { CATEGORY_LABELS, CATEGORY_ORDER, DEFAULT_LET_OP_NOTITIES, STANDARD_SECTIES, seedConnectionItems } from '@/lib/aansluitschema'
 import AansluitschemaTekening from './AansluitschemaTekening'
 
@@ -86,8 +86,54 @@ export default function AansluitschemaTab({
 
   const [pdfLoading, setPdfLoading] = useState(false)
 
-  const [gvAiLoading, setGvAiLoading] = useState(false)
-  const [gvAiError, setGvAiError] = useState('')
+  // Apparatuur uit de offerte van dit project — automatisch geladen zodra dit
+  // tabblad opent (geen aparte knop nodig om ín te laden, alleen om het
+  // voorstel op basis daarvan te genereren, zie handleApparatuurAi).
+  const [apparaten, setApparaten] = useState<ApparatuurItem[]>([])
+  const [apparatenLoading, setApparatenLoading] = useState(true)
+  const [apparatuurAiLoading, setApparatuurAiLoading] = useState(false)
+  const [apparatuurAiError, setApparatuurAiError] = useState('')
+  const [apparatuurSuggestion, setApparatuurSuggestion] = useState<ApparatuurAansluitschemaResult | null>(null)
+  const [apparatuurItemsChecked, setApparatuurItemsChecked] = useState<Set<number>>(new Set())
+  const [apparatuurGvChecked, setApparatuurGvChecked] = useState(true)
+  const [apparatuurSpoelkastChecked, setApparatuurSpoelkastChecked] = useState(true)
+  const [apparatuurMeterkastChecked, setApparatuurMeterkastChecked] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadApparaten() {
+      const { data: quote } = await supabase.from('finka_quotes').select('id').eq('project_id', projectId).maybeSingle()
+      if (!quote) { if (!cancelled) setApparatenLoading(false); return }
+
+      const { data: quoteItems } = await supabase
+        .from('finka_quote_items')
+        .select('description, brand, model, appliance_id')
+        .eq('quote_id', quote.id)
+        .eq('type', 'apparaat')
+
+      const applianceIds = (quoteItems ?? []).map((i) => i.appliance_id).filter((id): id is string => !!id)
+      let specsById = new Map<string, { type: string; specs: Record<string, unknown> }>()
+      if (applianceIds.length) {
+        const { data: appliances } = await supabase.from('finka_appliances').select('id, type, specs').in('id', applianceIds)
+        specsById = new Map((appliances ?? []).map((a) => [a.id, { type: a.type, specs: a.specs }]))
+      }
+
+      if (cancelled) return
+      setApparaten(
+        (quoteItems ?? []).map((i) => ({
+          omschrijving: i.description,
+          merk: i.brand,
+          model: i.model,
+          type: i.appliance_id ? specsById.get(i.appliance_id)?.type ?? null : null,
+          specs: i.appliance_id ? specsById.get(i.appliance_id)?.specs : undefined,
+        }))
+      )
+      setApparatenLoading(false)
+    }
+    loadApparaten()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   function updateItem(id: string, patch: Partial<ConnectionItem>) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
@@ -132,54 +178,83 @@ export default function AansluitschemaTab({
     setExtraSecties((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  // Haalt de apparatuur uit de offerte van dit project en laat de AI daar de
-  // "Groepenverdeling"-tekst voor schrijven (welke apparatuur een eigen
-  // elektragroep nodig heeft), zoals in Merels eigen aansluitschema's — i.p.v.
-  // dat staff dit per project handmatig moet natypen. Vraagt eerst bevestiging
-  // als het veld al tekst bevat, om niet per ongeluk handwerk te overschrijven.
-  async function handleGroepenverdelingAi() {
-    if (groepenverdelingTekst.trim() && !confirm('Bestaande tekst bij Groepenverdeling vervangen door een AI-voorstel op basis van de offerte?')) return
-    setGvAiLoading(true)
-    setGvAiError('')
+  // Genereert een voorstel voor checklist-toelichtingen + Groepenverdeling +
+  // Spoelkast/Meterkast-secties, puur op basis van de apparatuur die al is
+  // ingeladen uit de offerte (zie de useEffect hierboven) — geen tekening
+  // nodig. Toont dit als een te beoordelen voorstel (zelfde patroon als
+  // handleAiHulp), niets wordt automatisch opgeslagen.
+  async function handleApparatuurAi() {
+    setApparatuurAiLoading(true)
+    setApparatuurAiError('')
+    setApparatuurSuggestion(null)
     try {
-      const { data: quote } = await supabase.from('finka_quotes').select('id').eq('project_id', projectId).maybeSingle()
-      if (!quote) throw new Error('Geen offerte gevonden voor dit project')
-
-      const { data: quoteItems } = await supabase
-        .from('finka_quote_items')
-        .select('description, brand, model, appliance_id')
-        .eq('quote_id', quote.id)
-        .eq('type', 'apparaat')
-
-      const applianceIds = (quoteItems ?? []).map((i) => i.appliance_id).filter((id): id is string => !!id)
-      let specsById = new Map<string, { type: string; specs: Record<string, unknown> }>()
-      if (applianceIds.length) {
-        const { data: appliances } = await supabase.from('finka_appliances').select('id, type, specs').in('id', applianceIds)
-        specsById = new Map((appliances ?? []).map((a) => [a.id, { type: a.type, specs: a.specs }]))
-      }
-
-      const apparaten = (quoteItems ?? []).map((i) => ({
-        omschrijving: i.description,
-        merk: i.brand,
-        model: i.model,
-        type: i.appliance_id ? specsById.get(i.appliance_id)?.type ?? null : null,
-        specs: i.appliance_id ? specsById.get(i.appliance_id)?.specs : undefined,
-      }))
       if (!apparaten.length) throw new Error('Geen apparatuur gevonden in de offerte van dit project')
-
-      const res = await fetch('/api/aansluitschema/groepenverdeling-ai', {
+      const catalogus = items.map((i) => ({ standard_key: i.standard_key, omschrijving: i.omschrijving }))
+      const res = await fetch('/api/aansluitschema/apparatuur-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apparaten }),
+        body: JSON.stringify({ apparaten, catalogus }),
       })
       const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'AI-tekst genereren mislukt')
-      setGroepenverdelingTekst(body.tekst)
+      if (!res.ok) throw new Error(body.error ?? 'AI-voorstel mislukt')
+      const result: ApparatuurAansluitschemaResult = body
+      setApparatuurSuggestion(result)
+      setApparatuurItemsChecked(new Set(result.items.map((_, i) => i)))
+      setApparatuurGvChecked(!!result.groepenverdeling_tekst.trim())
+      setApparatuurSpoelkastChecked(!!result.spoelkast_tekst)
+      setApparatuurMeterkastChecked(!!result.meterkast_tekst)
     } catch (err) {
-      setGvAiError(err instanceof Error ? err.message : 'AI-tekst genereren mislukt')
+      setApparatuurAiError(err instanceof Error ? err.message : 'AI-voorstel mislukt')
     } finally {
-      setGvAiLoading(false)
+      setApparatuurAiLoading(false)
     }
+  }
+
+  function toggleApparatuurItemChecked(idx: number) {
+    setApparatuurItemsChecked((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  function upsertSectie(titel: string, tekst: string) {
+    setExtraSecties((prev) => {
+      const idx = prev.findIndex((s) => s.titel === titel)
+      if (idx === -1) return [...prev, { titel, tekst }]
+      return prev.map((s, i) => (i === idx ? { ...s, tekst } : s))
+    })
+  }
+
+  function applyApparatuurSuggestion() {
+    if (!apparatuurSuggestion) return
+
+    if (apparatuurItemsChecked.size) {
+      setItems((prev) => {
+        let next = [...prev]
+        apparatuurSuggestion.items.forEach((s, i) => {
+          if (!apparatuurItemsChecked.has(i)) return
+          next = next.map((it) =>
+            it.standard_key === s.standard_key
+              ? { ...it, van_toepassing: s.van_toepassing ?? it.van_toepassing, positie_toelichting: s.positie_toelichting ?? it.positie_toelichting }
+              : it
+          )
+        })
+        return next
+      })
+    }
+    if (apparatuurGvChecked && apparatuurSuggestion.groepenverdeling_tekst) {
+      setGroepenverdelingTekst(apparatuurSuggestion.groepenverdeling_tekst)
+    }
+    if (apparatuurSpoelkastChecked && apparatuurSuggestion.spoelkast_tekst) {
+      upsertSectie('Spoelkast als centraal aansluitpunt', apparatuurSuggestion.spoelkast_tekst)
+    }
+    if (apparatuurMeterkastChecked && apparatuurSuggestion.meterkast_tekst) {
+      upsertSectie('Meterkast', apparatuurSuggestion.meterkast_tekst)
+    }
+
+    setApparatuurSuggestion(null)
   }
 
   async function handleUploadTekening(file: File) {
@@ -534,6 +609,74 @@ export default function AansluitschemaTab({
         )}
       </div>
 
+      <div className="bg-white border border-[#DDD8D2] rounded-xl p-4">
+        <h3 className="text-xs font-semibold text-[#9A948D] uppercase tracking-wider flex items-center gap-1.5 mb-3">
+          <Sparkles size={13} /> Apparatuur uit offerte
+        </h3>
+        <p className="text-xs text-[#6B6560] mb-2">
+          {apparatenLoading
+            ? 'Apparatuur uit de offerte laden...'
+            : apparaten.length
+            ? <>Automatisch geladen uit de offerte van dit project: {apparaten.map((a) => a.merk ? `${a.merk}${a.model ? ' ' + a.model : ''}` : a.omschrijving).join(', ')}.</>
+            : 'Geen apparatuur gevonden in de offerte van dit project.'}
+        </p>
+        <p className="text-xs text-[#6B6560] mb-3">
+          Stelt op basis hiervan de &ldquo;Toelichting&rdquo; per aansluitregel voor (welk apparaat het is), plus tekst voor Groepenverdeling, Spoelkast en Meterkast. Jij vinkt aan wat je overneemt.
+        </p>
+        <Button size="sm" onClick={handleApparatuurAi} disabled={apparatuurAiLoading || apparatenLoading || !apparaten.length}>
+          {apparatuurAiLoading ? 'Bezig...' : 'Apparatuur uit offerte overnemen'}
+        </Button>
+        {apparatuurAiError && <p className="text-sm text-red-600 mt-2">{apparatuurAiError}</p>}
+
+        {apparatuurSuggestion && (
+          <div className="mt-4 border-t border-[#DDD8D2] pt-4 space-y-4">
+            <h4 className="text-xs font-semibold text-[#9A948D] uppercase tracking-wider">Voorstel — beoordeel voor je het overneemt</h4>
+
+            {apparatuurSuggestion.items.length > 0 && (
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {apparatuurSuggestion.items.map((s, i) => (
+                  <label key={i} className="flex items-start gap-2 text-sm py-1">
+                    <Checkbox checked={apparatuurItemsChecked.has(i)} onCheckedChange={() => toggleApparatuurItemChecked(i)} className="mt-0.5" />
+                    <span>
+                      <span className="font-medium">{items.find((it) => it.standard_key === s.standard_key)?.omschrijving ?? s.standard_key}</span>
+                      {s.positie_toelichting && ` — ${s.positie_toelichting}`}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {apparatuurSuggestion.groepenverdeling_tekst && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={apparatuurGvChecked} onCheckedChange={(c) => setApparatuurGvChecked(!!c)} className="mt-0.5" />
+                <span><span className="font-medium">Groepenverdeling</span> — {apparatuurSuggestion.groepenverdeling_tekst}</span>
+              </label>
+            )}
+            {apparatuurSuggestion.spoelkast_tekst && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={apparatuurSpoelkastChecked} onCheckedChange={(c) => setApparatuurSpoelkastChecked(!!c)} className="mt-0.5" />
+                <span><span className="font-medium">Spoelkast als centraal aansluitpunt</span> — {apparatuurSuggestion.spoelkast_tekst}</span>
+              </label>
+            )}
+            {apparatuurSuggestion.meterkast_tekst && (
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={apparatuurMeterkastChecked} onCheckedChange={(c) => setApparatuurMeterkastChecked(!!c)} className="mt-0.5" />
+                <span><span className="font-medium">Meterkast</span> — {apparatuurSuggestion.meterkast_tekst}</span>
+              </label>
+            )}
+
+            {!apparatuurSuggestion.items.length && !apparatuurSuggestion.groepenverdeling_tekst && !apparatuurSuggestion.spoelkast_tekst && !apparatuurSuggestion.meterkast_tekst && (
+              <p className="text-sm text-[#6B6560]">Geen voorstel kunnen maken uit deze apparatuur.</p>
+            )}
+
+            <div className="flex gap-2">
+              <Button size="sm" onClick={applyApparatuurSuggestion}>Voorstel toepassen op concept</Button>
+              <Button size="sm" variant="outline" onClick={() => setApparatuurSuggestion(null)}>Negeren</Button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <AansluitschemaTekening
         projectId={projectId}
         wanden={wanden}
@@ -610,24 +753,13 @@ export default function AansluitschemaTab({
           })}
 
           <div className="bg-white border border-[#DDD8D2] rounded-xl p-4 space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label>Groepenverdeling</Label>
-                <button
-                  onClick={handleGroepenverdelingAi}
-                  disabled={gvAiLoading}
-                  className="flex items-center gap-1 text-xs text-[#C9A96E] hover:underline disabled:opacity-50"
-                >
-                  <Sparkles size={11} /> {gvAiLoading ? 'Bezig...' : 'AI: uit offerte overnemen'}
-                </button>
-              </div>
+            <Field label="Groepenverdeling">
               <textarea
                 value={groepenverdelingTekst}
                 onChange={(e) => setGroepenverdelingTekst(e.target.value)}
                 className="w-full h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
-              {gvAiError && <p className="text-sm text-red-600">{gvAiError}</p>}
-            </div>
+            </Field>
 
             {extraSecties.map((sectie, idx) => (
               <div key={idx} className="border border-[#DDD8D2] rounded-lg p-3 space-y-2">

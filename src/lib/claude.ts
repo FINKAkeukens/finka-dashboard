@@ -271,7 +271,7 @@ export async function extractConnectionSuggestions(
   }
 }
 
-export interface GroepenverdelingApparaat {
+export interface ApparatuurItem {
   omschrijving: string
   merk: string | null
   model: string | null
@@ -279,34 +279,66 @@ export interface GroepenverdelingApparaat {
   specs?: Record<string, unknown>
 }
 
-// Genereert de "Groepenverdeling"-tekst op basis van de daadwerkelijke
-// apparatuur uit de offerte van dit project — zoals Merel dit zelf altijd
-// handmatig schreef in haar aansluitschema's (bv. "De kookplaat Bora PURU2
-// heeft een aansluitwaarde van 7600 W. Wij adviseren een eigen groep..."),
-// nu automatisch met de echte apparatuur van dit project i.p.v. een generiek
-// sjabloon. Puur tekst-generatie (geen tekening), dus geen JSON-envelope
-// nodig — het antwoord IS de tekst.
-const GROEPENVERDELING_PROMPT = (apparaten: GroepenverdelingApparaat[]) => `Je bent een assistent voor een Nederlandse keukenontwerper (FINKA Keukens). Schrijf de tekst voor de sectie "Groepenverdeling" van een aansluitschema — een korte, zakelijke uitleg voor de installateur over welke keukenapparatuur een eigen elektragroep nodig heeft en welke apparatuur samen op de bestaande keukengroep mag.
+export interface ApparatuurAansluitschemaResult {
+  items: Array<{ standard_key: string; van_toepassing?: boolean; positie_toelichting?: string }>
+  groepenverdeling_tekst: string
+  spoelkast_tekst: string | null
+  meterkast_tekst: string | null
+}
+
+// Vult het aansluitschema in puur op basis van de daadwerkelijke apparatuur
+// uit de offerte van dit project — geen tekening nodig. Anders dan
+// extractConnectionSuggestions (die van een tekening/vrije tekst leest en
+// ook fysieke posities/pin-coördinaten kan voorstellen), weet dit alleen
+// WELK apparaat bij een aansluiting hoort, niet WAAR die in de kastenwand
+// zit — dat blijft aan de gebruiker (via de tekening/pins) om aan te vullen.
+// Vandaar de expliciete instructie om geen fysieke locatie te verzinnen.
+const APPARATUUR_AANSLUITSCHEMA_PROMPT = (
+  apparaten: ApparatuurItem[],
+  catalogus: { standard_key: string | null; omschrijving: string }[]
+) => `Je bent een assistent voor een Nederlandse keukenontwerper (FINKA Keukens). Vul het aansluitschema van dit project in op basis van de daadwerkelijke apparatuur uit de offerte (geen tekening beschikbaar, dus puur op basis van welke apparaten er besteld zijn).
 
 Apparatuur uit de offerte van dit project:
 ${apparaten.map((a) => `- ${a.omschrijving}${a.merk ? `, merk ${a.merk}` : ''}${a.model ? `, model ${a.model}` : ''}${typeof a.specs?.watt === 'number' ? `, ${a.specs.watt} watt` : ''}`).join('\n')}
 
-Richtlijnen:
-- Apparatuur met een hoog aansluitvermogen (kookplaat, oven, combi-oven, kokendwaterkraan/boiler) krijgt in de regel een eigen groep aangeraden, om overbelasting te voorkomen — noem dit per apparaat waar relevant, met het vermogen in watt als dat hierboven gegeven is, anders een gebruikelijke inschatting voor dat type apparaat.
-- Oven en kookplaat moeten altijd op verschillende groepen.
-- Lichter belaste apparatuur (koelkast/vriezer, wijnklimaatkast, vaatwasser) mag doorgaans op de bestaande keukengroep, mits die niet overbelast raakt — noem dit ook expliciet.
-- Noem apparaten bij naam (merk + model indien bekend).
-- Kort en zakelijk, in doorlopende tekst (geen opsomming), bijvoorbeeld in de trant van: "De kookplaat [merk model] heeft een aansluitwaarde van ... W. Wij adviseren een eigen groep..."
-- Verzin geen exacte technische specificaties (aantal ampère, type stekker, exact wattage) die niet uit de input zijn af te leiden — hou het bij algemene, gangbare adviezen wanneer het vermogen niet gegeven is.
+De vaste standaardcatalogus met aansluitregels (per project aan/uit te vinken) is:
+${catalogus.map((c) => `- ${c.standard_key ?? '(eigen regel)'}: ${c.omschrijving}`).join('\n')}
 
-Antwoord ALLEEN met de platte tekst van de sectie zelf — geen JSON, geen titel/kopje, geen markdown-opmaak.`
+Doe het volgende:
+1. "items": loop de catalogus langs. Voor elke regel die overduidelijk bij een van de apparaten hierboven hoort: {standard_key, van_toepassing: true, positie_toelichting}. In positie_toelichting noem je ALLEEN het specifieke apparaat (merk + model, en vermogen in watt als dat hierboven gegeven is) en eventueel of een eigen groep aan te raden is — bijvoorbeeld "T.b.v. Siemens HB934GAB1, 3600 W. Eigen groep aanbevolen." Verzin GEEN fysieke locatie (links/rechts, welke kast, kastenwand vs. eiland) — dat is niet af te leiden uit de offerte alleen en vult de gebruiker zelf aan bij het plaatsen op de tekening. Laat regels waar geen duidelijk apparaat bij hoort helemaal weg (geen giswerk).
+2. "groepenverdeling_tekst": een lopende tekst (geen opsomming) over welke apparaten een eigen elektragroep nodig hebben en welke samen op de bestaande keukengroep mogen. Apparatuur met een hoog aansluitvermogen (kookplaat, oven, combi-oven, kokendwaterkraan/boiler) krijgt in de regel een eigen groep, om overbelasting te voorkomen — noem het vermogen in watt als dat gegeven is, anders een gebruikelijke inschatting voor dat type apparaat. Oven en kookplaat moeten altijd op verschillende groepen. Lichter belaste apparatuur (koelkast/vriezer, wijnklimaatkast, vaatwasser) mag doorgaans op de bestaande keukengroep. Noem apparaten bij naam. Verzin geen exacte technische specificaties (ampère, stekkertype) die niet af te leiden zijn.
+3. "spoelkast_tekst": ALLEEN als er een spoelbak, kokendwaterkraan en/of vaatwasser in de apparatuur zit — een korte tekst dat deze aansluitingen samenkomen in de spoelkast, met de specifieke apparaten genoemd. Is hier niets duidelijk over te zeggen: geef null.
+4. "meterkast_tekst": ALLEEN als er uit stap 2 meerdere apparaten met een eigen-groep-behoefte naar voren komen — een korte tekst die deze groepen benoemt en adviseert de hoofdaansluiting/vrije groepen in de meterkast hierop te controleren. Is hier niets duidelijk over te zeggen: geef null.
 
-export async function generateGroepenverdelingTekst(apparaten: GroepenverdelingApparaat[]): Promise<string> {
+Antwoord ALLEEN met geldige JSON:
+{
+  "items": [...],
+  "groepenverdeling_tekst": "...",
+  "spoelkast_tekst": "..." of null,
+  "meterkast_tekst": "..." of null
+}`
+
+export async function generateApparatuurAansluitschema(
+  apparaten: ApparatuurItem[],
+  catalogus: { standard_key: string | null; omschrijving: string }[]
+): Promise<ApparatuurAansluitschemaResult> {
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: GROEPENVERDELING_PROMPT(apparaten) }],
+    max_tokens: 2048,
+    messages: [{ role: 'user', content: APPARATUUR_AANSLUITSCHEMA_PROMPT(apparaten, catalogus) }],
   })
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  return text.trim()
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON found')
+    const parsed = JSON.parse(jsonMatch[0])
+    return {
+      items: Array.isArray(parsed.items) ? parsed.items : [],
+      groepenverdeling_tekst: typeof parsed.groepenverdeling_tekst === 'string' ? parsed.groepenverdeling_tekst : '',
+      spoelkast_tekst: typeof parsed.spoelkast_tekst === 'string' ? parsed.spoelkast_tekst : null,
+      meterkast_tekst: typeof parsed.meterkast_tekst === 'string' ? parsed.meterkast_tekst : null,
+    }
+  } catch {
+    return { items: [], groepenverdeling_tekst: '', spoelkast_tekst: null, meterkast_tekst: null }
+  }
 }
