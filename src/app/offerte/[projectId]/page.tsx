@@ -3,14 +3,9 @@ export const dynamic = 'force-dynamic'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { ConnectionRow, Customer, CustomerCostLine, Project, Quote, QuoteCustomerCategory, QuoteCustomerSection } from '@/lib/types'
+import { ConnectionRow, Customer, CustomerCostLine, Project, Quote, QuoteCustomerSection } from '@/lib/types'
 import PrintButton from './PrintButton'
 import DownloadButton from './DownloadButton'
-
-// Alleen nog gebruikt om secties te sorteren (kasten vóór werkblad vóór
-// apparatuur, etc.) — de categorienaam zelf wordt niet meer getoond, elke
-// sectie toont haar eigen titel (bv. "Fronten en greeplijst") als label.
-const CATEGORY_ORDER: QuoteCustomerCategory[] = ['kasten', 'werkblad', 'apparatuur', 'accessoires', 'overig']
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat('nl-NL').format(Math.round(n))
@@ -342,10 +337,13 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           // SECTION_COLUMN_THRESHOLD/LINE_BUDGET verderop — 18 regels in 2
           // kolommen ≈ 9 rijen, ruim binnen het budget van 11).
           const MAX_LINES_PER_SECTION_PAGE = 18
+          // Volgorde = customer_sections array-volgorde, dus precies zoals
+          // staff de secties in de generator heeft gesleept (moveSection in
+          // QuoteEditor.tsx) — geen automatische categorie-sortering meer
+          // die dat overschrijft.
           const visibleSections = sections
             .map((s) => ({ ...s, lines: s.lines.filter((l) => l.included && l.text.trim()) }))
             .filter((s) => s.lines.length > 0 || (s.images && s.images.length > 0))
-            .sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category))
             .flatMap((s) => {
               if (s.lines.length <= MAX_LINES_PER_SECTION_PAGE) return [s]
               const chunks: typeof s[] = []
