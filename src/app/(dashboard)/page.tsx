@@ -43,17 +43,45 @@ export default async function DashboardPage() {
   // hele checklist) laat dus precies zien hoeveel werk er nog is voordat een
   // project naar de volgende fase kan.
   const projectIds = allProjects.map((p) => p.id)
+
+  // Alle vier de vervolgqueries hangen alleen van projectIds af, niet van
+  // elkaar — dus in één keer ophalen. Sequentieel waren dit vier losse
+  // netwerkrondjes (~85ms per stuk) terwijl parallel er ongeveer één kost.
+  const [
+    { data: checklistItems },
+    { data: quotesData },
+    { data: milestonesData },
+    { data: activityData },
+  ] = projectIds.length
+    ? await Promise.all([
+        supabase
+          .from('finka_checklist_items')
+          .select('project_id, category, checked')
+          .in('project_id', projectIds),
+        supabase
+          .from('finka_quotes')
+          .select('project_id, akkoord_at')
+          .in('project_id', projectIds)
+          .not('akkoord_at', 'is', null)
+          .order('akkoord_at', { ascending: true }),
+        supabase
+          .from('finka_project_milestones')
+          .select('project_id, milestone_key, date')
+          .in('project_id', projectIds)
+          .in('milestone_key', ['montage_start', 'oplevering']),
+        supabase
+          .from('finka_portal_activity')
+          .select('project_id')
+          .in('project_id', projectIds)
+          .is('seen_at', null),
+      ])
+    : [{ data: null }, { data: null }, { data: null }, { data: null }]
+
   const checklistItemsByProject = new Map<string, { category: string; checked: boolean }[]>()
-  if (projectIds.length) {
-    const { data: checklistItems } = await supabase
-      .from('finka_checklist_items')
-      .select('project_id, category, checked')
-      .in('project_id', projectIds)
-    for (const item of checklistItems ?? []) {
-      const list = checklistItemsByProject.get(item.project_id) ?? []
-      list.push({ category: item.category, checked: item.checked })
-      checklistItemsByProject.set(item.project_id, list)
-    }
+  for (const item of checklistItems ?? []) {
+    const list = checklistItemsByProject.get(item.project_id) ?? []
+    list.push({ category: item.category, checked: item.checked })
+    checklistItemsByProject.set(item.project_id, list)
   }
 
   function phaseProgress(project: Project): { done: number; total: number; percentage: number } | null {
@@ -80,43 +108,21 @@ export default async function DashboardPage() {
   // projectDates() in src/lib/project-dates.ts.
   const akkoordAtByProject = new Map<string, string>()
   const timelineMilestonesByProject = new Map<string, Pick<ProjectMilestone, 'milestone_key' | 'date'>[]>()
-  if (projectIds.length) {
-    const [{ data: quotesData }, { data: milestonesData }] = await Promise.all([
-      supabase
-        .from('finka_quotes')
-        .select('project_id, akkoord_at')
-        .in('project_id', projectIds)
-        .not('akkoord_at', 'is', null)
-        .order('akkoord_at', { ascending: true }),
-      supabase
-        .from('finka_project_milestones')
-        .select('project_id, milestone_key, date')
-        .in('project_id', projectIds)
-        .in('milestone_key', ['montage_start', 'oplevering']),
-    ])
-    // Eerste (vroegste) akkoord telt — bij een herziene offerte blijft het
-    // oorspronkelijke akkoordmoment de start van het traject.
-    for (const q of quotesData ?? []) {
-      if (!akkoordAtByProject.has(q.project_id)) akkoordAtByProject.set(q.project_id, q.akkoord_at)
-    }
-    for (const m of milestonesData ?? []) {
-      if (!m.project_id) continue
-      const list = timelineMilestonesByProject.get(m.project_id) ?? []
-      list.push(m)
-      timelineMilestonesByProject.set(m.project_id, list)
-    }
+  // Eerste (vroegste) akkoord telt — bij een herziene offerte blijft het
+  // oorspronkelijke akkoordmoment de start van het traject.
+  for (const q of quotesData ?? []) {
+    if (!akkoordAtByProject.has(q.project_id)) akkoordAtByProject.set(q.project_id, q.akkoord_at)
+  }
+  for (const m of milestonesData ?? []) {
+    if (!m.project_id) continue
+    const list = timelineMilestonesByProject.get(m.project_id) ?? []
+    list.push(m)
+    timelineMilestonesByProject.set(m.project_id, list)
   }
 
   // Groen bolletje op de projectkaart — zie migratie-sectie 63.
   const projectsWithPortalActivity = new Set<string>()
-  if (projectIds.length) {
-    const { data: activityData } = await supabase
-      .from('finka_portal_activity')
-      .select('project_id')
-      .in('project_id', projectIds)
-      .is('seen_at', null)
-    for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
-  }
+  for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
 
   const allProjectDates = allProjects.map((p) =>
     projectDates(p, {

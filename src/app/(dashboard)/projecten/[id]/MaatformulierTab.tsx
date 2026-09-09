@@ -16,7 +16,7 @@ import AutoTextarea from '@/components/ui/auto-textarea'
 import MaatformulierSubQuestionControl from '@/components/MaatformulierSubQuestionControl'
 import { createMaatformulierForProject } from '@/lib/maatformulier-create'
 
-// Het formulier "Voorbereiding ruimte gereed" van dít project: een kopie van het sjabloon uit
+// Het formulier "Ruimte gereed" van dít project: een kopie van het sjabloon uit
 // Instellingen, hier per klant aan te passen. De antwoorden vult de klant
 // zelf in via het portaal — staff ziet ze hier alleen, en bepaalt met de
 // oog-knop welke regels de klant te zien krijgt.
@@ -64,7 +64,7 @@ export default function MaatformulierTab({
     if (result.status === 'created') {
       setItems(result.items)
     } else if (result.status === 'no-template') {
-      setError('Geen standaardformulier gevonden — stel dit eerst in via Instellingen > Voorbereiding ruimte gereed.')
+      setError('Geen standaardformulier gevonden — stel dit eerst in via Instellingen > Ruimte gereed.')
     } else if (result.status === 'error') {
       setError(result.message)
     } else {
@@ -80,7 +80,7 @@ export default function MaatformulierTab({
   async function deleteForm() {
     const warning = signoff
       ? 'Dit formulier is al ondertekend door de klant. Het formulier, alle ingevulde antwoorden én de ondertekening worden verwijderd. Weet je het zeker?'
-      : 'Het volledige formulier "Voorbereiding ruimte gereed" van dit project en alle ingevulde antwoorden worden verwijderd. Weet je het zeker?'
+      : 'Het volledige formulier "Ruimte gereed" van dit project en alle ingevulde antwoorden worden verwijderd. Weet je het zeker?'
     if (!confirm(warning)) return
 
     setDeleting(true)
@@ -217,7 +217,7 @@ export default function MaatformulierTab({
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
         <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 flex flex-col items-center text-center gap-3">
           <p className="text-sm text-[#6B6560] max-w-sm">
-            Dit project heeft nog geen formulier &quot;Voorbereiding ruimte gereed&quot;. Maak &apos;m aan op basis van het standaardformulier uit
+            Dit project heeft nog geen formulier &quot;Ruimte gereed&quot;. Maak &apos;m aan op basis van het standaardformulier uit
             Instellingen; daarna kun je regels aanpassen, verbergen of toevoegen voor deze klant.
           </p>
           <Button onClick={createForm} disabled={creating}>

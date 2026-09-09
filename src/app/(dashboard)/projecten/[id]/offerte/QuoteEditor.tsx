@@ -10,7 +10,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -201,7 +201,7 @@ export default function QuoteEditor({
   projectId: string
   quote: Quote | null
   items: QuoteItem[]
-  downloads: QuoteDownload[]
+  downloads: QuoteDownloadMeta[]
   appliances: Appliance[]
 }) {
   const supabase = createClient()

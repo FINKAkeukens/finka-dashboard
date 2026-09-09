@@ -9,16 +9,19 @@ import ApplianceLibrary from './ApplianceLibrary'
 export default async function ApparatuurPage() {
   const supabase = await createClient()
 
-  const { data: appliances } = await supabase
-    .from('finka_appliances')
-    .select('*, supplier:finka_suppliers(id, name, email)')
-    .order('type')
-    .order('brand')
-
-  const { count: inboxCount } = await supabase
-    .from('finka_email_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'pending')
+  // De inbox-teller heeft niets met de apparatenlijst te maken, dus samen
+  // ophalen i.p.v. er achteraan — scheelt een netwerkrondje.
+  const [{ data: appliances }, { count: inboxCount }] = await Promise.all([
+    supabase
+      .from('finka_appliances')
+      .select('*, supplier:finka_suppliers(id, name, email)')
+      .order('type')
+      .order('brand'),
+    supabase
+      .from('finka_email_queue')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending'),
+  ])
 
   return (
     <div className="p-6 lg:p-8">

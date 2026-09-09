@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 const tabs = [
   { id: 'vragenlijst', label: 'Vragenlijst' },
   { id: 'checklist', label: 'Checklist' },
-  { id: 'maatformulier', label: 'Voorbereiding ruimte gereed' },
+  { id: 'maatformulier', label: 'Ruimte gereed' },
   { id: 'documenten', label: 'Documenten' },
 ]
 

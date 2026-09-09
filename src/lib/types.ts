@@ -578,6 +578,17 @@ export interface QuoteDownload {
   approved_by: string | null
 }
 
+// Alles van een download behalve `snapshot`. Die snapshot is een volledige
+// kopie van de offerte op het downloadmoment (~10KB per rij) en wordt alleen
+// gebruikt om de vólgende download tegen te diffen — in de PDF-route dus, en
+// nergens in de UI. De schermen halen daarom bewust deze smallere vorm op,
+// zodat er niet elke keer honderden KB's aan JSON overheen gaat.
+export type QuoteDownloadMeta = Omit<QuoteDownload, 'snapshot'>
+
+// De kolommen van QuoteDownloadMeta, klaar om aan .select() mee te geven.
+export const QUOTE_DOWNLOAD_META_COLUMNS =
+  'id, quote_id, downloaded_at, downloaded_by, changes, pdf_url, filename, visible_to_customer, approval_required, approved_at, approved_by'
+
 // Compacte kopie van een interne regel (finka_quote_items), alleen de velden
 // die relevant zijn om een kostprijs-wijziging tussen twee downloads te
 // herkennen — geen quote_id/sort_order/etc.
@@ -1032,7 +1043,7 @@ export interface ProjectDocument {
 }
 
 // ---------------------------------------------------------------------------
-// Formulier "Voorbereiding ruimte gereed" — de klant bevestigt via het portaal de maten en
+// Formulier "Ruimte gereed" — de klant bevestigt via het portaal de maten en
 // afspraken van de keukenruimte en tekent daarvoor. Zelfde sjabloon-opzet
 // als de checklist: instellingen → kopie per project. Zie migratie-sectie 65.
 // ---------------------------------------------------------------------------

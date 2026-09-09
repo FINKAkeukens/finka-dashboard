@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 // Tekstveld dat automatisch meegroeit met de inhoud, zodat lange regels
-// (bv. de afspraken in het formulier "Voorbereiding ruimte gereed") in één keer leesbaar zijn
+// (bv. de afspraken in het formulier "Ruimte gereed") in één keer leesbaar zijn
 // i.p.v. afgekapt op één regel.
 export default function AutoTextarea({
   value,

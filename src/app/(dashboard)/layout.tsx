@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { isStaffUser } from '@/lib/portal'
+import { getAuthUser, isStaffUser } from '@/lib/portal'
 import Sidebar from '@/components/Sidebar'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // getAuthUser is per verzoek gecached (zie src/lib/portal.ts), dus dit
+  // hergebruikt het rondje dat de proxy al maakte in plaats van een tweede.
+  const user = await getAuthUser()
   if (!user) redirect('/login')
 
   // Sinds het klantportaal (/portaal) bestaat, delen staff en klanten

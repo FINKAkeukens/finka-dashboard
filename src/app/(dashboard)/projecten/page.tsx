@@ -7,6 +7,7 @@ import { nl } from 'date-fns/locale'
 import { ArrowRight, Plus } from 'lucide-react'
 import { Project, ProjectMilestone, ProjectStatus } from '@/lib/types'
 import { leadTimeDays, milestoneLabel, urgencyClass } from '@/lib/planning'
+import ProjectsTable, { type ProjectRow } from './ProjectsTable'
 
 // Eerstvolgende nog-niet-afgeronde mijlpaal met een datum — bepaalt zowel de
 // sortering (dringendste bovenaan) als de "Volgende mijlpaal"-kolom.
@@ -25,11 +26,6 @@ export default async function ProjectenPage({
   const { status } = await searchParams
   const supabase = await createClient()
 
-  const { data: statuses } = await supabase
-    .from('finka_project_statuses')
-    .select('*')
-    .order('sort_order') as { data: ProjectStatus[] | null }
-
   let query = supabase
     .from('finka_projects')
     .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
@@ -37,39 +33,48 @@ export default async function ProjectenPage({
 
   if (status && status !== 'alle') query = query.eq('status_id', status)
 
-  const { data: projectsData } = await query as { data: Project[] | null }
-  const projects = projectsData ?? []
+  // De statuslijst hangt niet van de projecten af, dus die hoeft er niet op
+  // te wachten — samen ophalen scheelt een netwerkrondje.
+  const [{ data: statusesData }, { data: projectsData }] = await Promise.all([
+    supabase.from('finka_project_statuses').select('*').order('sort_order'),
+    query,
+  ])
+  const statuses = statusesData as ProjectStatus[] | null
+  const projects = (projectsData ?? []) as Project[]
 
-  // Projecten waar de klant iets heeft gedaan dat staff nog niet gezien
-  // heeft — zie migratie-sectie 63 / het meldingenblok op de projectpagina.
+  // Portaalactiviteit en mijlpalen hangen allebei alleen van de project-id's
+  // af, niet van elkaar — dus ook samen, weer een rondje minder.
+  const [{ data: activityData }, { data: milestonesData }] = projects.length
+    ? await Promise.all([
+        // Projecten waar de klant iets heeft gedaan dat staff nog niet gezien
+        // heeft — zie migratie-sectie 63 / het meldingenblok op de projectpagina.
+        supabase
+          .from('finka_portal_activity')
+          .select('project_id')
+          .in('project_id', projects.map((p) => p.id))
+          .is('seen_at', null),
+        supabase
+          .from('finka_project_milestones')
+          .select('*')
+          .in('project_id', projects.map((p) => p.id)),
+      ])
+    : [{ data: null }, { data: null }]
+
   const projectsWithPortalActivity = new Set<string>()
-  if (projects.length) {
-    const { data: activityData } = await supabase
-      .from('finka_portal_activity')
-      .select('project_id')
-      .in('project_id', projects.map((p) => p.id))
-      .is('seen_at', null)
-    for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
-  }
+  for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
 
   const milestonesByProject = new Map<string, ProjectMilestone[]>()
-  if (projects.length) {
-    const { data: milestonesData } = await supabase
-      .from('finka_project_milestones')
-      .select('*')
-      .in('project_id', projects.map((p) => p.id))
-    for (const m of (milestonesData ?? []) as ProjectMilestone[]) {
-      if (!m.project_id) continue // algemene taken (geen project) horen hier niet
-      const list = milestonesByProject.get(m.project_id) ?? []
-      list.push(m)
-      milestonesByProject.set(m.project_id, list)
-    }
+  for (const m of (milestonesData ?? []) as ProjectMilestone[]) {
+    if (!m.project_id) continue // algemene taken (geen project) horen hier niet
+    const list = milestonesByProject.get(m.project_id) ?? []
+    list.push(m)
+    milestonesByProject.set(m.project_id, list)
   }
 
   // Dringendste eerst; projecten zonder (openstaande) datum onderaan, gesorteerd
   // op aanmaakdatum — lost precies het "wat komt eraan"-probleem op waar de
   // vlakke lijst (op aanmaakdatum) niks over zei.
-  const rows = projects
+  const rows: ProjectRow[] = projects
     .map((project) => ({ project, next: nextMilestone(milestonesByProject.get(project.id) ?? []) }))
     .sort((a, b) => {
       if (a.next && b.next) return new Date(a.next.date as string).getTime() - new Date(b.next.date as string).getTime()
@@ -77,6 +82,23 @@ export default async function ProjectenPage({
       if (b.next) return 1
       return new Date(b.project.created_at).getTime() - new Date(a.project.created_at).getTime()
     })
+    // Platgeslagen tot precies de tekst die in de tabel komt te staan, zodat
+    // de zoekbalken per kolom op exact dát zoeken (zie ProjectsTable).
+    .map(({ project: p, next }) => ({
+      id: p.id,
+      reference: p.reference_number,
+      title: p.title,
+      customerId: p.customer?.id ?? null,
+      customerName: p.customer ? `${p.customer.first_name} ${p.customer.last_name}` : '',
+      statusLabel: p.status?.label ?? '',
+      statusColor: p.status?.color ?? null,
+      leadTime: p.first_contact_date ? `${leadTimeDays(p.first_contact_date)} dagen` : '—',
+      milestone: next
+        ? `${milestoneLabel(next)} — ${format(new Date(next.date as string), 'd MMM', { locale: nl })}`
+        : 'Nog niet gepland',
+      milestoneClass: next ? urgencyClass(next.date as string) : '',
+      hasPortalActivity: projectsWithPortalActivity.has(p.id),
+    }))
 
   return (
     <div className="p-8 max-w-7xl">
@@ -125,84 +147,16 @@ export default async function ProjectenPage({
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
-        {!rows.length ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-[#6B6560]">Geen projecten gevonden</p>
-            <Link href="/projecten/nieuw" className="text-sm text-[#C9A96E] hover:underline mt-1 inline-block">
-              Project toevoegen →
-            </Link>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#DDD8D2] bg-[#F7F5F2]">
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Referentie</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Project</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Klant</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Status</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Doorlooptijd</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Volgende mijlpaal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#DDD8D2]">
-              {rows.map(({ project: p, next }) => (
-                <tr key={p.id} className="hover:bg-[#F7F5F2] transition-colors">
-                  <td className="px-5 py-3.5">
-                    <Link href={`/projecten/${p.id}`} className="font-mono text-xs text-[#6B6560] hover:text-[#1C1B19]">
-                      {p.reference_number}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="flex items-center gap-2">
-                      <Link href={`/projecten/${p.id}`} className="font-medium text-[#1C1B19] hover:underline">
-                        {p.title}
-                      </Link>
-                      {projectsWithPortalActivity.has(p.id) && (
-                        <span
-                          className="h-2 w-2 shrink-0 rounded-full bg-green-500"
-                          title="De klant heeft wijzigingen doorgevoerd in het portaal"
-                        />
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {p.customer ? (
-                      <Link href={`/klanten/${p.customer.id}`} className="text-[#6B6560] hover:text-[#1C1B19]">
-                        {p.customer.first_name} {p.customer.last_name}
-                      </Link>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {p.status && (
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full border"
-                        style={{ borderColor: p.status.color, color: p.status.color }}
-                      >
-                        {p.status.label}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-xs text-[#6B6560]">
-                    {p.first_contact_date ? `${leadTimeDays(p.first_contact_date)} dagen` : '—'}
-                  </td>
-                  <td className="px-5 py-3.5 text-xs">
-                    {next ? (
-                      <span className={urgencyClass(next.date as string)}>
-                        {milestoneLabel(next)} — {format(new Date(next.date as string), 'd MMM', { locale: nl })}
-                      </span>
-                    ) : (
-                      <span className="text-[#9A948D] italic">Nog niet gepland</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {!rows.length ? (
+        <div className="bg-white rounded-xl border border-[#DDD8D2] py-16 text-center">
+          <p className="text-sm text-[#6B6560]">Geen projecten gevonden</p>
+          <Link href="/projecten/nieuw" className="text-sm text-[#C9A96E] hover:underline mt-1 inline-block">
+            Project toevoegen →
+          </Link>
+        </div>
+      ) : (
+        <ProjectsTable rows={rows} />
+      )}
     </div>
   )
 }

@@ -98,9 +98,9 @@ export default function EditProjectForm({
     if (becameAkkoord) {
       const result = await createMaatformulierForProject(supabase, project.id)
       if (result.status === 'no-template') {
-        setError('Project opgeslagen, maar "Voorbereiding ruimte gereed" kon niet automatisch worden klaargezet: er is nog geen standaardformulier ingesteld.')
+        setError('Project opgeslagen, maar "Ruimte gereed" kon niet automatisch worden klaargezet: er is nog geen standaardformulier ingesteld.')
       } else if (result.status === 'error') {
-        setError(`Project opgeslagen, maar "Voorbereiding ruimte gereed" kon niet automatisch worden klaargezet: ${result.message}`)
+        setError(`Project opgeslagen, maar "Ruimte gereed" kon niet automatisch worden klaargezet: ${result.message}`)
       }
     }
 

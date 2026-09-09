@@ -20,7 +20,7 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownload, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
+import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
 import { leadTimeDays } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 
@@ -35,28 +35,28 @@ export default async function ProjectDetailPage({
   const { tab = 'offerte' } = await searchParams
   const supabase = await createClient()
 
-  const { data: project } = await supabase
-    .from('finka_projects')
-    .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
-    .eq('id', id)
-    .single() as { data: Project | null }
-
-  if (!project) notFound()
-
-  const { data: statuses } = await supabase
-    .from('finka_project_statuses')
-    .select('*')
-    .order('sort_order') as { data: ProjectStatus[] | null }
-
-  const { data: customers } = await supabase
-    .from('finka_customers')
-    .select('id, first_name, last_name')
-    .order('first_name')
-
-  // Bronnen voor de automatische mijlpaaldatums (akkoord/montage/afronding) —
-  // zie projectDates() in src/lib/project-dates.ts. Altijd ophalen, want de
-  // tijdlijn staat bovenaan bij elk tabblad.
-  const [{ data: akkoordQuote }, { data: timelineMilestonesData }] = await Promise.all([
+  // Alles wat bij élk tabblad nodig is, in één keer opgevraagd. Deze vijf
+  // hangen alleen van `id` af en niet van elkaar, dus ze hoeven niet op
+  // elkaar te wachten — sequentieel kostte dat vijf losse netwerkrondjes
+  // (~85ms per stuk) vóórdat de tab-data überhaupt begon.
+  const [
+    { data: project },
+    { data: statuses },
+    { data: customers },
+    { data: akkoordQuote },
+    { data: timelineMilestonesData },
+    { data: portalActivityData },
+  ] = await Promise.all([
+    supabase
+      .from('finka_projects')
+      .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
+      .eq('id', id)
+      .maybeSingle(),
+    supabase.from('finka_project_statuses').select('*').order('sort_order'),
+    supabase.from('finka_customers').select('id, first_name, last_name').order('first_name'),
+    // Bronnen voor de automatische mijlpaaldatums (akkoord/montage/afronding) —
+    // zie projectDates() in src/lib/project-dates.ts. Altijd ophalen, want de
+    // tijdlijn staat bovenaan bij elk tabblad.
     supabase
       .from('finka_quotes')
       .select('akkoord_at')
@@ -70,17 +70,23 @@ export default async function ProjectDetailPage({
       .select('milestone_key, date')
       .eq('project_id', id)
       .in('milestone_key', ['montage_start', 'oplevering']),
+    // Nog niet gezien door staff — voedt het meldingenblok bovenaan.
+    supabase
+      .from('finka_portal_activity')
+      .select('*')
+      .eq('project_id', id)
+      .is('seen_at', null)
+      .order('created_at', { ascending: false }),
   ])
-  // Nog niet gezien door staff — voedt het meldingenblok bovenaan.
-  const { data: portalActivityData } = await supabase
-    .from('finka_portal_activity')
-    .select('*')
-    .eq('project_id', id)
-    .is('seen_at', null)
-    .order('created_at', { ascending: false })
+
+  // .maybeSingle() i.p.v. .single() hierboven: bij een onbekend project geeft
+  // .single() een query-fout, terwijl we hier gewoon een 404 willen tonen.
+  if (!project) notFound()
+  const projectRow = project as Project
+  const statusList = (statuses ?? []) as ProjectStatus[]
   const portalActivity = (portalActivityData ?? []) as PortalActivity[]
 
-  const dates = projectDates(project, {
+  const dates = projectDates(projectRow, {
     quoteAkkoordAt: (akkoordQuote as { akkoord_at: string | null } | null)?.akkoord_at,
     milestones: (timelineMilestonesData ?? []) as Pick<ProjectMilestone, 'milestone_key' | 'date'>[],
   })
@@ -180,7 +186,7 @@ export default async function ProjectDetailPage({
     vooraanzichtUrls = (latestQuote as { vooraanzicht_urls: string[] | null } | null)?.vooraanzicht_urls ?? []
   }
 
-  let documentDownloads: QuoteDownload[] = []
+  let documentDownloads: QuoteDownloadMeta[] = []
   let projectDocuments: ProjectDocument[] = []
   if (tab === 'documenten') {
     const [{ data: quotesForProject }, { data: documentsData }] = await Promise.all([
@@ -196,16 +202,16 @@ export default async function ProjectDetailPage({
     if (quoteIds.length) {
       const { data } = await supabase
         .from('finka_quote_downloads')
-        .select('*')
+        .select(QUOTE_DOWNLOAD_META_COLUMNS)
         .in('quote_id', quoteIds)
         .order('downloaded_at', { ascending: false })
-      documentDownloads = (data ?? []) as QuoteDownload[]
+      documentDownloads = (data ?? []) as unknown as QuoteDownloadMeta[]
     }
   }
 
   let quote: Quote | null = null
   let quoteItems: QuoteItem[] = []
-  let quoteDownloads: QuoteDownload[] = []
+  let quoteDownloads: QuoteDownloadMeta[] = []
   let appliances: Appliance[] = []
   let eurolineRates: EurolineRates | null = null
   let werkbladRates: WerkbladRates | null = null
@@ -233,10 +239,10 @@ export default async function ProjectDetailPage({
     if (quote && tab === 'offerte') {
       const [{ data: itemsData }, { data: downloadsData }] = await Promise.all([
         supabase.from('finka_quote_items').select('*').eq('quote_id', quote.id).order('sort_order'),
-        supabase.from('finka_quote_downloads').select('*').eq('quote_id', quote.id).order('downloaded_at', { ascending: false }),
+        supabase.from('finka_quote_downloads').select(QUOTE_DOWNLOAD_META_COLUMNS).eq('quote_id', quote.id).order('downloaded_at', { ascending: false }),
       ])
       quoteItems = (itemsData ?? []) as QuoteItem[]
-      quoteDownloads = (downloadsData ?? []) as QuoteDownload[]
+      quoteDownloads = (downloadsData ?? []) as unknown as QuoteDownloadMeta[]
     }
 
     if (quote && tab === 'configurator') {
@@ -258,20 +264,20 @@ export default async function ProjectDetailPage({
 
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-2xl font-semibold text-[#1C1B19]">{project.title}</h1>
-          {project.status && (
+          <h1 className="text-2xl font-semibold text-[#1C1B19]">{projectRow.title}</h1>
+          {projectRow.status && (
             <span
               className="text-xs px-2 py-0.5 rounded-full border"
-              style={{ borderColor: project.status.color, color: project.status.color }}
+              style={{ borderColor: projectRow.status.color, color: projectRow.status.color }}
             >
-              {project.status.label}
+              {projectRow.status.label}
             </span>
           )}
         </div>
-        <p className="text-sm font-mono text-[#6B6560]">{project.reference_number}</p>
-        {project.customer && (
-          <Link href={`/klanten/${project.customer.id}`} className="text-sm text-[#C9A96E] hover:underline">
-            {project.customer.first_name} {project.customer.last_name} →
+        <p className="text-sm font-mono text-[#6B6560]">{projectRow.reference_number}</p>
+        {projectRow.customer && (
+          <Link href={`/klanten/${projectRow.customer.id}`} className="text-sm text-[#C9A96E] hover:underline">
+            {projectRow.customer.first_name} {projectRow.customer.last_name} →
           </Link>
         )}
 
@@ -305,16 +311,16 @@ export default async function ProjectDetailPage({
               {isOnHold(project) && (
                 <tr>
                   <td className="px-5 py-2 text-[#C9A96E]">On hold sinds</td>
-                  <td className={`px-5 py-2 ${project.on_hold_since ? 'text-[#1C1B19]' : 'text-[#9A948D]'}`}>
-                    {formatProjectDate(project.on_hold_since)}
+                  <td className={`px-5 py-2 ${projectRow.on_hold_since ? 'text-[#1C1B19]' : 'text-[#9A948D]'}`}>
+                    {formatProjectDate(projectRow.on_hold_since)}
                   </td>
                   <td className="px-5 py-2 text-right tabular-nums text-[#6B6560]">
-                    {onHoldDays(project.on_hold_since) !== null ? `${onHoldDays(project.on_hold_since)} dagen` : '—'}
+                    {onHoldDays(projectRow.on_hold_since) !== null ? `${onHoldDays(projectRow.on_hold_since)} dagen` : '—'}
                   </td>
                 </tr>
               )}
             </tbody>
-            {project.first_contact_date && (
+            {projectRow.first_contact_date && (
               <tfoot>
                 <tr className="border-t border-[#DDD8D2] bg-[#F7F5F2]">
                   <td className="px-5 py-2 text-xs font-medium text-[#1C1B19]" colSpan={2}>
@@ -322,8 +328,8 @@ export default async function ProjectDetailPage({
                   </td>
                   <td className="px-5 py-2 text-right text-xs font-medium tabular-nums text-[#1C1B19]">
                     {dates.afronding.date
-                      ? `${leadTimeDays(project.first_contact_date) - leadTimeDays(dates.afronding.date)} dagen`
-                      : `${leadTimeDays(project.first_contact_date)} dagen`}
+                      ? `${leadTimeDays(projectRow.first_contact_date) - leadTimeDays(dates.afronding.date)} dagen`
+                      : `${leadTimeDays(projectRow.first_contact_date)} dagen`}
                   </td>
                 </tr>
               </tfoot>
@@ -335,7 +341,7 @@ export default async function ProjectDetailPage({
       <PortalActivityPanel activity={portalActivity} />
 
       <div className="mb-6">
-        <EditProjectForm project={project} statuses={statuses ?? []} customers={customers ?? []} />
+        <EditProjectForm project={projectRow} statuses={statusList} customers={customers ?? []} />
       </div>
 
       <TabBar activeTab={tab} />
@@ -366,7 +372,7 @@ export default async function ProjectDetailPage({
       ) : tab === 'aansluitschema' ? (
         <AansluitschemaTab
           projectId={id}
-          project={project}
+          project={projectRow}
           items={connectionItems}
           schema={connectionSchema}
           vooraanzichtUrls={vooraanzichtUrls}

@@ -1817,3 +1817,21 @@ CREATE INDEX IF NOT EXISTS finka_maatformulier_templates_parent_idx
   ON finka_maatformulier_templates (parent_id);
 CREATE INDEX IF NOT EXISTS finka_maatformulier_items_parent_idx
   ON finka_maatformulier_items (parent_id);
+
+-- =========================================================
+-- 68. Ontbrekende indexen op de kolommen waarop het dashboard filtert.
+--    Bij de huidige omvang (tientallen projecten) doet Postgres gewoon een
+--    seq scan en merk je er niets van — maar deze queries draaien op élke
+--    paginaweergave en groeien mee met het aantal projecten/offertes. Puur
+--    additief: geen kolom- of gedragswijziging, alleen sneller opzoeken.
+-- =========================================================
+
+CREATE INDEX IF NOT EXISTS finka_quotes_project_idx ON finka_quotes (project_id);
+CREATE INDEX IF NOT EXISTS finka_checklist_items_project_idx ON finka_checklist_items (project_id);
+CREATE INDEX IF NOT EXISTS finka_project_milestones_project_idx ON finka_project_milestones (project_id);
+CREATE INDEX IF NOT EXISTS finka_projects_customer_idx ON finka_projects (customer_id);
+CREATE INDEX IF NOT EXISTS finka_projects_archived_idx ON finka_projects (archived_at);
+CREATE INDEX IF NOT EXISTS finka_connection_items_project_idx ON finka_connection_items (project_id);
+CREATE INDEX IF NOT EXISTS finka_questionnaire_responses_project_idx ON finka_questionnaire_responses (project_id);
+CREATE INDEX IF NOT EXISTS finka_email_queue_status_idx ON finka_email_queue (status);
+CREATE INDEX IF NOT EXISTS finka_project_financials_project_idx ON finka_project_financials (project_id);

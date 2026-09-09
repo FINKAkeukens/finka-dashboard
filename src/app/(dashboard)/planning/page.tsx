@@ -7,14 +7,26 @@ import PlanningAgenda, { PlanningProject } from './PlanningAgenda'
 export default async function PlanningOverviewPage() {
   const supabase = await createClient()
 
-  const { data: projectsData } = await supabase
-    .from('finka_projects')
-    .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
-    .is('archived_at', null)
-    .order('created_at', { ascending: false }) as { data: Project[] | null }
+  // Projecten en de algemene taken hangen niet van elkaar af — samen
+  // ophalen scheelt een netwerkrondje. De projectmijlpalen hebben de
+  // project-id's wél nodig en volgen dus daarna.
+  const [{ data: projectsData }, { data: generalData }] = await Promise.all([
+    supabase
+      .from('finka_projects')
+      .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
+      .is('archived_at', null)
+      .order('created_at', { ascending: false }),
+    // Algemene taken — niet aan een project gekoppeld, eigen sectie op de pagina.
+    supabase
+      .from('finka_project_milestones')
+      .select('*')
+      .is('project_id', null)
+      .order('sort_order'),
+  ])
 
-  const projects = projectsData ?? []
+  const projects = (projectsData ?? []) as Project[]
   const projectIds = projects.map((p) => p.id)
+  const generalTasks = (generalData ?? []) as ProjectMilestone[]
 
   let milestones: ProjectMilestone[] = []
   if (projectIds.length) {
@@ -25,14 +37,6 @@ export default async function PlanningOverviewPage() {
       .order('sort_order')
     milestones = (data ?? []) as ProjectMilestone[]
   }
-
-  // Algemene taken — niet aan een project gekoppeld, eigen sectie op de pagina.
-  const { data: generalData } = await supabase
-    .from('finka_project_milestones')
-    .select('*')
-    .is('project_id', null)
-    .order('sort_order')
-  const generalTasks = (generalData ?? []) as ProjectMilestone[]
 
   const planningProjects: PlanningProject[] = projects.map((p) => ({
     id: p.id,

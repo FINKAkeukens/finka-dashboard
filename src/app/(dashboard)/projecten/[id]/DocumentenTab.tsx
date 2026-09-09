@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CheckCircle2, Clock, Eye, EyeOff, FileSignature, FileText, Trash2, Upload } from 'lucide-react'
-import type { ProjectDocument, QuoteDownload } from '@/lib/types'
+import type { ProjectDocument, QuoteDownloadMeta } from '@/lib/types'
 
 // Twee soorten documenten in één lijst: automatisch bewaarde offerte-PDF's
 // (finka_quote_downloads, ontstaan bij het downloaden van een offerte) en
@@ -26,7 +26,7 @@ type Row = {
   approved_by: string | null
 }
 
-function toRows(downloads: QuoteDownload[], documents: ProjectDocument[]): Row[] {
+function toRows(downloads: QuoteDownloadMeta[], documents: ProjectDocument[]): Row[] {
   const rows: Row[] = [
     ...downloads.map((d) => ({
       key: `download-${d.id}`,
@@ -65,11 +65,11 @@ export default function DocumentenTab({
   documents: initialDocuments,
 }: {
   projectId: string
-  downloads: QuoteDownload[]
+  downloads: QuoteDownloadMeta[]
   documents: ProjectDocument[]
 }) {
   const supabase = createClient()
-  const [downloads, setDownloads] = useState<QuoteDownload[]>(initialDownloads)
+  const [downloads, setDownloads] = useState<QuoteDownloadMeta[]>(initialDownloads)
   const [documents, setDocuments] = useState<ProjectDocument[]>(initialDocuments)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')

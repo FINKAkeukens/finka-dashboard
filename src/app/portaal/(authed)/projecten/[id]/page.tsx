@@ -4,7 +4,7 @@ import { redirect, notFound } from 'next/navigation'
 import { Check } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownload, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
+import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
@@ -30,11 +30,35 @@ export default async function PortalProjectPage({
   // opvragen. Zie src/lib/portal.ts / migratie-sectie 46.
   if (!project || (project as Project).customer_id !== session.customer.id) notFound()
 
-  const [{ data: itemsData }, { data: questionnaireCategoriesData }, { data: questionsData }, { data: responsesData }] = await Promise.all([
+  // Alles wat de vier tabbladen nodig hebben in één keer: deze queries hangen
+  // alleen van `id` af, niet van elkaar. Stonden eerder in drie losse golven
+  // (checklist/vragenlijst, documenten, maatformulier), wat per paginabezoek
+  // twee overbodige netwerkrondjes kostte.
+  const [
+    { data: itemsData },
+    { data: questionnaireCategoriesData },
+    { data: questionsData },
+    { data: responsesData },
+    { data: quotesForProject },
+    { data: uploadedDocsData },
+    { data: maatformulierData },
+    { data: signoffData },
+  ] = await Promise.all([
     service.from('finka_checklist_items').select('*').eq('project_id', id),
     service.from('finka_questionnaire_categories').select('*').order('sort_order', { ascending: true }),
     service.from('finka_questionnaire_templates').select('*').order('sort_order', { ascending: true }),
     service.from('finka_questionnaire_responses').select('*').eq('project_id', id),
+    service.from('finka_quotes').select('id').eq('project_id', id),
+    // Alleen downloads/documenten die staff expliciet zichtbaar heeft gezet —
+    // zie de oog-knop op het Documenten-tabblad (migratie-sectie 56).
+    service
+      .from('finka_project_documents')
+      .select('*')
+      .eq('project_id', id)
+      .eq('visible_to_customer', true)
+      .order('uploaded_at', { ascending: false }),
+    service.from('finka_maatformulier_items').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
+    service.from('finka_maatformulier_signoff').select('*').eq('project_id', id).maybeSingle(),
   ])
   // Alleen punten die staff expliciet zichtbaar heeft gezet voor de klant —
   // zie de oog-knop bij Checklist (project) en Instellingen > Checklist-
@@ -48,29 +72,17 @@ export default async function PortalProjectPage({
   const questions = ((questionsData ?? []) as QuestionnaireTemplateQuestion[]).filter((q) => !hiddenQuestionIds.has(q.id))
   const initialAnswers = Object.fromEntries(responses.map((r) => [r.question_id, r.answer ?? '']))
 
-  // Alleen downloads die staff expliciet zichtbaar heeft gezet — zie de
-  // oog-knop op het Documenten-tabblad (finka_quote_downloads.visible_to_customer,
-  // migratie-sectie 56, standaard false).
-  const [{ data: quotesForProject }, { data: uploadedDocsData }] = await Promise.all([
-    service.from('finka_quotes').select('id').eq('project_id', id),
-    service
-      .from('finka_project_documents')
-      .select('*')
-      .eq('project_id', id)
-      .eq('visible_to_customer', true)
-      .order('uploaded_at', { ascending: false }),
-  ])
   const quoteIds = (quotesForProject ?? []).map((q) => q.id)
-  let quoteDownloads: QuoteDownload[] = []
+  let quoteDownloads: QuoteDownloadMeta[] = []
   if (quoteIds.length) {
     const { data: documentsData } = await service
       .from('finka_quote_downloads')
-      .select('*')
+      .select(QUOTE_DOWNLOAD_META_COLUMNS)
       .in('quote_id', quoteIds)
       .eq('visible_to_customer', true)
       .not('pdf_url', 'is', null)
       .order('downloaded_at', { ascending: false })
-    quoteDownloads = (documentsData ?? []) as QuoteDownload[]
+    quoteDownloads = (documentsData ?? []) as unknown as QuoteDownloadMeta[]
   }
 
   // Offerte-downloads en zelf geüploade documenten samen, nieuwste eerst —
@@ -96,11 +108,7 @@ export default async function PortalProjectPage({
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Formulier "Voorbereiding ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
-  const [{ data: maatformulierData }, { data: signoffData }] = await Promise.all([
-    service.from('finka_maatformulier_items').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
-    service.from('finka_maatformulier_signoff').select('*').eq('project_id', id).maybeSingle(),
-  ])
+  // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
   const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)
   const maatformulierSignoff = signoffData as MaatformulierSignoff | null
   // Het tabblad verschijnt zodra staff het formulier heeft klaargezet — ook

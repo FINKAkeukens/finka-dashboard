@@ -14,7 +14,7 @@ import {
   serializeKeuzeAnswer,
 } from '@/lib/maatformulier'
 
-// Het formulier "Voorbereiding ruimte gereed" zoals de klant het invult. Antwoorden slaan per
+// Het formulier "Ruimte gereed" zoals de klant het invult. Antwoorden slaan per
 // veld op (keuzeknoppen meteen, tekstvelden bij verlaten), net als de
 // vragenlijst — en onderaan tekent de klant voor het geheel.
 export default function PortalMaatformulier({
