@@ -4,11 +4,12 @@ import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Plus, Sparkles, Trash2 } from 'lucide-react'
 import { ConnectionCategory, ConnectionItem, ConnectionSchema, ConnectionSectionBlock, ConnectionWand, Project } from '@/lib/types'
-import { CATEGORY_LABELS, CATEGORY_ORDER, DEFAULT_LET_OP_NOTITIES, seedConnectionItems } from '@/lib/aansluitschema'
+import { CATEGORY_LABELS, CATEGORY_ORDER, DEFAULT_LET_OP_NOTITIES, STANDARD_SECTIES, seedConnectionItems } from '@/lib/aansluitschema'
 import AansluitschemaTekening from './AansluitschemaTekening'
 
 type DraftItem = ConnectionItem & { isNew?: boolean }
@@ -85,6 +86,9 @@ export default function AansluitschemaTab({
 
   const [pdfLoading, setPdfLoading] = useState(false)
 
+  const [gvAiLoading, setGvAiLoading] = useState(false)
+  const [gvAiError, setGvAiError] = useState('')
+
   function updateItem(id: string, patch: Partial<ConnectionItem>) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
   }
@@ -118,11 +122,64 @@ export default function AansluitschemaTab({
   function addSectie() {
     setExtraSecties((prev) => [...prev, { titel: '', tekst: '' }])
   }
+  function addStandardSectie(preset: ConnectionSectionBlock) {
+    setExtraSecties((prev) => [...prev, { ...preset }])
+  }
   function updateSectie(idx: number, patch: Partial<ConnectionSectionBlock>) {
     setExtraSecties((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
   }
   function removeSectie(idx: number) {
     setExtraSecties((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  // Haalt de apparatuur uit de offerte van dit project en laat de AI daar de
+  // "Groepenverdeling"-tekst voor schrijven (welke apparatuur een eigen
+  // elektragroep nodig heeft), zoals in Merels eigen aansluitschema's — i.p.v.
+  // dat staff dit per project handmatig moet natypen. Vraagt eerst bevestiging
+  // als het veld al tekst bevat, om niet per ongeluk handwerk te overschrijven.
+  async function handleGroepenverdelingAi() {
+    if (groepenverdelingTekst.trim() && !confirm('Bestaande tekst bij Groepenverdeling vervangen door een AI-voorstel op basis van de offerte?')) return
+    setGvAiLoading(true)
+    setGvAiError('')
+    try {
+      const { data: quote } = await supabase.from('finka_quotes').select('id').eq('project_id', projectId).maybeSingle()
+      if (!quote) throw new Error('Geen offerte gevonden voor dit project')
+
+      const { data: quoteItems } = await supabase
+        .from('finka_quote_items')
+        .select('description, brand, model, appliance_id')
+        .eq('quote_id', quote.id)
+        .eq('type', 'apparaat')
+
+      const applianceIds = (quoteItems ?? []).map((i) => i.appliance_id).filter((id): id is string => !!id)
+      let specsById = new Map<string, { type: string; specs: Record<string, unknown> }>()
+      if (applianceIds.length) {
+        const { data: appliances } = await supabase.from('finka_appliances').select('id, type, specs').in('id', applianceIds)
+        specsById = new Map((appliances ?? []).map((a) => [a.id, { type: a.type, specs: a.specs }]))
+      }
+
+      const apparaten = (quoteItems ?? []).map((i) => ({
+        omschrijving: i.description,
+        merk: i.brand,
+        model: i.model,
+        type: i.appliance_id ? specsById.get(i.appliance_id)?.type ?? null : null,
+        specs: i.appliance_id ? specsById.get(i.appliance_id)?.specs : undefined,
+      }))
+      if (!apparaten.length) throw new Error('Geen apparatuur gevonden in de offerte van dit project')
+
+      const res = await fetch('/api/aansluitschema/groepenverdeling-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apparaten }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'AI-tekst genereren mislukt')
+      setGroepenverdelingTekst(body.tekst)
+    } catch (err) {
+      setGvAiError(err instanceof Error ? err.message : 'AI-tekst genereren mislukt')
+    } finally {
+      setGvAiLoading(false)
+    }
   }
 
   async function handleUploadTekening(file: File) {
@@ -553,13 +610,24 @@ export default function AansluitschemaTab({
           })}
 
           <div className="bg-white border border-[#DDD8D2] rounded-xl p-4 space-y-4">
-            <Field label="Groepenverdeling">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Groepenverdeling</Label>
+                <button
+                  onClick={handleGroepenverdelingAi}
+                  disabled={gvAiLoading}
+                  className="flex items-center gap-1 text-xs text-[#C9A96E] hover:underline disabled:opacity-50"
+                >
+                  <Sparkles size={11} /> {gvAiLoading ? 'Bezig...' : 'AI: uit offerte overnemen'}
+                </button>
+              </div>
               <textarea
                 value={groepenverdelingTekst}
                 onChange={(e) => setGroepenverdelingTekst(e.target.value)}
                 className="w-full h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
-            </Field>
+              {gvAiError && <p className="text-sm text-red-600">{gvAiError}</p>}
+            </div>
 
             {extraSecties.map((sectie, idx) => (
               <div key={idx} className="border border-[#DDD8D2] rounded-lg p-3 space-y-2">
@@ -581,9 +649,16 @@ export default function AansluitschemaTab({
                 />
               </div>
             ))}
-            <Button variant="outline" size="sm" onClick={addSectie}>
-              <Plus size={13} className="mr-1.5" /> Sectie toevoegen
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={addSectie}>
+                <Plus size={13} className="mr-1.5" /> Sectie toevoegen
+              </Button>
+              {STANDARD_SECTIES.filter((preset) => !extraSecties.some((s) => s.titel === preset.titel)).map((preset) => (
+                <Button key={preset.titel} variant="outline" size="sm" onClick={() => addStandardSectie(preset)}>
+                  <Plus size={13} className="mr-1.5" /> {preset.titel}
+                </Button>
+              ))}
+            </div>
 
             <Field label="Let op (bulletlijst, één regel per punt)">
               <textarea

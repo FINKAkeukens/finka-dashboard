@@ -270,3 +270,43 @@ export async function extractConnectionSuggestions(
     return { items: [], nieuwe_regels: [], pins_suggestie: [] }
   }
 }
+
+export interface GroepenverdelingApparaat {
+  omschrijving: string
+  merk: string | null
+  model: string | null
+  type: string | null
+  specs?: Record<string, unknown>
+}
+
+// Genereert de "Groepenverdeling"-tekst op basis van de daadwerkelijke
+// apparatuur uit de offerte van dit project — zoals Merel dit zelf altijd
+// handmatig schreef in haar aansluitschema's (bv. "De kookplaat Bora PURU2
+// heeft een aansluitwaarde van 7600 W. Wij adviseren een eigen groep..."),
+// nu automatisch met de echte apparatuur van dit project i.p.v. een generiek
+// sjabloon. Puur tekst-generatie (geen tekening), dus geen JSON-envelope
+// nodig — het antwoord IS de tekst.
+const GROEPENVERDELING_PROMPT = (apparaten: GroepenverdelingApparaat[]) => `Je bent een assistent voor een Nederlandse keukenontwerper (FINKA Keukens). Schrijf de tekst voor de sectie "Groepenverdeling" van een aansluitschema — een korte, zakelijke uitleg voor de installateur over welke keukenapparatuur een eigen elektragroep nodig heeft en welke apparatuur samen op de bestaande keukengroep mag.
+
+Apparatuur uit de offerte van dit project:
+${apparaten.map((a) => `- ${a.omschrijving}${a.merk ? `, merk ${a.merk}` : ''}${a.model ? `, model ${a.model}` : ''}${typeof a.specs?.watt === 'number' ? `, ${a.specs.watt} watt` : ''}`).join('\n')}
+
+Richtlijnen:
+- Apparatuur met een hoog aansluitvermogen (kookplaat, oven, combi-oven, kokendwaterkraan/boiler) krijgt in de regel een eigen groep aangeraden, om overbelasting te voorkomen — noem dit per apparaat waar relevant, met het vermogen in watt als dat hierboven gegeven is, anders een gebruikelijke inschatting voor dat type apparaat.
+- Oven en kookplaat moeten altijd op verschillende groepen.
+- Lichter belaste apparatuur (koelkast/vriezer, wijnklimaatkast, vaatwasser) mag doorgaans op de bestaande keukengroep, mits die niet overbelast raakt — noem dit ook expliciet.
+- Noem apparaten bij naam (merk + model indien bekend).
+- Kort en zakelijk, in doorlopende tekst (geen opsomming), bijvoorbeeld in de trant van: "De kookplaat [merk model] heeft een aansluitwaarde van ... W. Wij adviseren een eigen groep..."
+- Verzin geen exacte technische specificaties (aantal ampère, type stekker, exact wattage) die niet uit de input zijn af te leiden — hou het bij algemene, gangbare adviezen wanneer het vermogen niet gegeven is.
+
+Antwoord ALLEEN met de platte tekst van de sectie zelf — geen JSON, geen titel/kopje, geen markdown-opmaak.`
+
+export async function generateGroepenverdelingTekst(apparaten: GroepenverdelingApparaat[]): Promise<string> {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: GROEPENVERDELING_PROMPT(apparaten) }],
+  })
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  return text.trim()
+}

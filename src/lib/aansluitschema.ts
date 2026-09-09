@@ -1,4 +1,4 @@
-import { ConnectionCabinet, ConnectionCategory, ConnectionItem, PinType } from './types'
+import { ConnectionCabinet, ConnectionCategory, ConnectionItem, ConnectionSectionBlock, PinType } from './types'
 
 export const CATEGORY_ORDER: ConnectionCategory[] = ['water_afvoer', 'elektra', 'overig']
 
@@ -70,6 +70,24 @@ export const DEFAULT_LET_OP_NOTITIES = `- Bij een kookeiland met daarboven een e
 - Alle stopcontacten moeten voorzien zijn van randaarde.
 - Wanneer er een kickspace op de cv-installatie komt, wordt vooraf een kogelafsluitkraan gemonteerd.
 - Oven en kookplaat moeten op verschillende groepen worden aangesloten.`
+
+// Kant-en-klare "extra secties" — met één klik toe te voegen aan het
+// aansluitschema (i.p.v. een lege sectie te moeten typen), met standaardtekst
+// die per project aan te passen is. Overgenomen uit de terugkerende
+// onderwerpen in Merels eigen aansluitschema's (bv. FINKA_Aansluitschema
+// CorWoudt), gegeneraliseerd tot een sjabloon i.p.v. dat ene project.
+export const STANDARD_SECTIES: ConnectionSectionBlock[] = [
+  {
+    titel: 'Spoelkast als centraal aansluitpunt',
+    tekst: `De aansluitingen voor warm water, koud water en afvoer (en eventueel de kokendwaterkraan) komen samen in of onder de spoelkast. Houd bij de indeling van deze kast rekening met de sifon, de wateraansluiting(en) voor de kraan, en voldoende vrije ruimte voor het reservoir van de kokendwaterkraan (indien van toepassing). Achter een eventueel aangrenzend apparaat (bv. de vaatwasser) mag geen leidingwerk lopen.
+
+[Vul hier de specifieke kastindeling en eventuele bijzonderheden voor dit project in.]`,
+  },
+  {
+    titel: 'Meterkast',
+    tekst: `Dit project vraagt om [aantal] aparte, zware aansluitingen naast de bestaande keukengroep: [omschrijf welke, bv. kookgroep, oven, kokendwaterkraan]. Controleer of de hoofdzekering en het aantal vrije groepen in de meterkast hierop toereikend zijn — bij een zware kookgroep kan een driefasenaansluiting nodig zijn. Dit moet vóór het aanbrengen van eventuele vloerdozen vaststaan.`,
+  },
+]
 
 // Vast volgnummer per standard_key — 1-op-1 de positie in DEFAULT_CONNECTION_ITEMS
 // (01 = warm_water_spoelbak, 02 = koud_water_spoelbak, ... 22 = vloerdoos_eiland).
