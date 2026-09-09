@@ -260,9 +260,15 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
         : section.lines.length
       // Foto-only secties (geen tekst) renderen groot en gecentreerd —
       // die wegen zwaar genoeg om vrijwel altijd hun eigen pagina te krijgen.
+      // Meerdere foto's naast elkaar (imagePosition 'onder'/'boven') wegen
+      // zwaarder naarmate er meer zijn — anders werd een sectie met 6 foto's
+      // net zo licht ingeschat als eentje met 1 foto, en paste hij in
+      // werkelijkheid niet op de pagina (zie ook scaledImageHeight hieronder,
+      // die dit ook al deels voorkomt door de foto's kleiner te maken).
+      const imageCountFactor = Math.max(1, Math.ceil((section.images?.length ?? 1) / 3))
       const imageWeight = !section.images?.length ? 0
         : section.lines.length === 0 ? 10
-        : { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium']
+        : { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium'] * imageCountFactor
       const sectionWeight = lineWeight + imageWeight + 1
       if (current.length && weight + sectionWeight > LINE_BUDGET) {
         sectionPages.push(current)
@@ -312,13 +318,31 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                   ))}
                 </div>
               )
-              const imageHeight = SECTION_IMAGE_SIZES[section.imageSize ?? 'medium']
+              const baseImageHeight = SECTION_IMAGE_SIZES[section.imageSize ?? 'medium']
+              // Bij een rij met meerdere foto's naast elkaar ('onder'/'boven')
+              // passen er bij het volle formaat vaak maar 2-3 op één rij —
+              // de rest wrapte naar een 2e rij, waardoor de sectie hoger
+              // werd dan de pagina toeliet (onzichtbaar bij scrollen op
+              // scherm, maar een blanco pagina in de PDF-export, zie
+              // imageCountFactor hierboven). Bij meer dan 3 foto's daarom
+              // kleiner tonen zodat ze in de praktijk op één rij blijven.
+              const imageCount = section.images?.length ?? 0
+              const imageHeight = imagePosition !== 'rechts' && imageCount > 5 ? Math.round(baseImageHeight * 0.65)
+                : imagePosition !== 'rechts' && imageCount > 3 ? Math.round(baseImageHeight * 0.8)
+                : baseImageHeight
               const imagesBlock = section.images && section.images.length > 0 && (
                 <div style={{
                   display: 'flex',
                   flexDirection: imagePosition === 'rechts' ? 'column' : 'row',
                   alignItems: 'flex-start',
                   flexWrap: 'wrap', gap: 10, flexShrink: 0,
+                  // Vangnet: ook als de schatting hierboven een keer niet
+                  // klopt (bv. ongebruikelijke beeldverhoudingen), mag dit
+                  // blok nooit meer dan ~2 rijen hoog worden — anders loopt
+                  // de sectie door onder de volgende (ondoorzichtige) pagina
+                  // en levert dat in de PDF een lege pagina op.
+                  maxHeight: imagePosition === 'rechts' ? undefined : imageHeight * 2 + 10,
+                  overflow: imagePosition === 'rechts' ? undefined : 'hidden',
                 }}>
                   {section.images.map((url, i) => (
                     <div key={i} style={{ height: imageHeight, overflow: 'hidden', flexShrink: 0 }}>
@@ -437,6 +461,11 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           position: relative;
           overflow: hidden;
           background: #E6E2D9;
+        }
+
+        /* page-break-after alleen tussen pagina's, niet ná de laatste — anders
+           voegt de print-engine een extra lege pagina toe aan het einde van de PDF. */
+        .page:not(:last-child) {
           page-break-after: always;
           break-after: page;
         }
@@ -446,7 +475,8 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
         @media print {
           @page { size: 297mm 167mm; margin: 0; }
           .no-print { display: none !important; }
-          .page { width: 100%; height: 167mm; page-break-after: always; break-after: page; }
+          .page { width: 100%; height: 167mm; }
+          .page:not(:last-child) { page-break-after: always; break-after: page; }
         }
 
         @media screen {
