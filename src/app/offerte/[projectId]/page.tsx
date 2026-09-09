@@ -572,7 +572,10 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0' }}>
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#1C1B19', textTransform: 'uppercase', fontWeight: 600 }}>Totaal</div>
                 <div />
-                <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPrice(costLines.reduce((s, l) => s + l.amount, 0))}</div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPrice(costLines.reduce((s, l) => s + l.amount, 0))}</div>
+                  <div style={{ fontSize: 9, color: '#9B9591', textTransform: 'uppercase', letterSpacing: '0.08em' }}>incl. BTW</div>
+                </div>
               </div>
             </div>
             <DisclaimerFooter text={pageDisclaimers.kosten} />

@@ -693,16 +693,20 @@ export default function QuoteEditor({
 
   // Eenmalige, handmatig te bevestigen suggestie op basis van de interne
   // kostprijs-opbouw — geen live koppeling, staff blijft alles overschrijven.
+  // Bedragen zijn de daadwerkelijke klantprijs: kostprijs + marge (zelfde
+  // opbouw als totaalPrijsExclBtw hierboven) + BTW — nooit de kostprijs of
+  // marge zelf, die blijven uitsluitend intern.
   function fillCostLinesFromInternal() {
-    const sumKeys = (keys: CostBreakdownItem['key'][]) =>
+    if (customerCostLines.length && !confirm('Bestaande kostenregels vervangen door de actuele bedragen uit de offerte?')) return
+    const sumKeysInclBtw = (keys: CostBreakdownItem['key'][]) =>
       costBreakdown
         .filter((r) => keys.includes(r.key))
-        .reduce((sum, r) => sum + displayedCost(r) * (1 + r.marge_percentage / 100), 0)
+        .reduce((sum, r) => sum + displayedCost(r) * (1 + r.marge_percentage / 100) * (1 + btwPercentage / 100), 0)
 
     setCustomerCostLines([
-      { label: 'Keuken', description: 'Kasten, werkblad en apparatuur', amount: Math.round(sumKeys(['keukenkastjes', 'apparatuur', 'werkblad', 'accessoires'])) },
-      { label: 'Opslag & levering', description: 'Verzekerde opslag en levering', amount: Math.round(sumKeys(['opslag', 'levering'])) },
-      { label: 'Installatie', description: 'Installatie van de volledige keuken door ervaren monteurs', amount: Math.round(sumKeys(['installatie', 'inmeten', 'service'])) },
+      { label: 'Keuken', description: 'Kasten, werkblad en apparatuur', amount: Math.round(sumKeysInclBtw(['keukenkastjes', 'apparatuur', 'werkblad', 'accessoires'])) },
+      { label: 'Opslag & levering', description: 'Verzekerde opslag en levering', amount: Math.round(sumKeysInclBtw(['opslag', 'levering'])) },
+      { label: 'Installatie', description: 'Installatie van de volledige keuken door ervaren monteurs', amount: Math.round(sumKeysInclBtw(['installatie', 'inmeten', 'service'])) },
     ])
   }
 
@@ -1697,7 +1701,7 @@ export default function QuoteEditor({
             {!kostenCollapsed && (
               <>
                 <p className="text-xs text-[#6B6560]">
-                  Losse, handmatige regels — verschijnt alleen als hier iets staat. Nooit automatisch gevuld vanuit de interne kostprijzen.
+                  Losse regels — verschijnt alleen als hier iets staat. Met &ldquo;Vul in vanuit offerte&rdquo; zet je de daadwerkelijke klantprijzen per categorie neer (incl. marge en BTW, nooit de kostprijs of marge zelf) — dit overschrijft de bestaande regels hieronder, dus controleer/pas aan voor je opslaat.
                 </p>
                 {customerCostLines.length > 0 && (
                   <div className="bg-[#F7F5F2] rounded-lg border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
@@ -1726,7 +1730,7 @@ export default function QuoteEditor({
                       </div>
                     ))}
                     <div className="flex items-center justify-end gap-2 p-3 font-medium text-sm">
-                      <span className="text-[#6B6560]">Totaal</span>
+                      <span className="text-[#6B6560]">Totaal incl. BTW</span>
                       <span className="w-24 text-right">{formatPrice(customerCostLines.reduce((s, l) => s + l.amount, 0))}</span>
                       <span className="w-[13px]" />
                     </div>
@@ -1738,7 +1742,7 @@ export default function QuoteEditor({
                     Regel toevoegen
                   </Button>
                   <Button variant="outline" size="sm" onClick={fillCostLinesFromInternal}>
-                    Suggestie invullen vanuit kostprijzen
+                    Vul in vanuit offerte
                   </Button>
                 </div>
                 <PageDisclaimerField
