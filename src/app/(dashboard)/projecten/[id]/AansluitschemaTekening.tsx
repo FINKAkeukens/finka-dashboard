@@ -321,12 +321,12 @@ export default function AansluitschemaTekening({
                           const item = items.find((i) => i.id === e.target.value)
                           updatePin(selectedPin.id, {
                             connection_item_id: e.target.value || null,
-                            label: item ? '' : selectedPin.label,
+                            label: item ? item.omschrijving : selectedPin.label,
                           })
                         }}
                         className="w-full h-9 px-3 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
                       >
-                        <option value="">Eigen label...</option>
+                        <option value="">Geen koppeling</option>
                         {items.map((i) => (
                           <option key={i.id} value={i.id}>
                             {formatItemNumber(itemNumbers.get(i.id) ?? 0)} — {i.omschrijving}
@@ -347,17 +347,18 @@ export default function AansluitschemaTekening({
                       </select>
                     </div>
                   </div>
-                  {!selectedPin.connection_item_id && (
-                    <div className="space-y-1.5">
-                      <Label>Eigen label</Label>
-                      <Input
-                        className="h-9"
-                        value={selectedPin.label}
-                        onChange={(e) => updatePin(selectedPin.id, { label: e.target.value })}
-                        placeholder="Omschrijving van deze aansluiting"
-                      />
-                    </div>
-                  )}
+                  <div className="space-y-1.5">
+                    <Label>Tekst in legenda</Label>
+                    <Input
+                      className="h-9"
+                      value={selectedPin.label}
+                      onChange={(e) => updatePin(selectedPin.id, { label: e.target.value })}
+                      placeholder="Omschrijving van deze aansluiting"
+                    />
+                    {selectedPin.connection_item_id && (
+                      <p className="text-xs text-[#9A948D]">Standaard overgenomen van de gekoppelde regel — hier vrij aan te passen.</p>
+                    )}
+                  </div>
                   <div className="space-y-1.5">
                     <Label>Hoogte (cm)</Label>
                     <Input
@@ -378,7 +379,7 @@ export default function AansluitschemaTekening({
                       .map((pin) => {
                         const item = pin.connection_item_id ? items.find((i) => i.id === pin.connection_item_id) : null
                         const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
-                        const omschrijving = item?.omschrijving || pin.label || '—'
+                        const omschrijving = pin.label || item?.omschrijving || '—'
                         return { pin, nummer, omschrijving }
                       })
                       .sort((a, b) => (a.nummer || 999) - (b.nummer || 999))

@@ -212,7 +212,7 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
               .map((pin) => {
                 const item = pin.connection_item_id ? items.find((i) => i.id === pin.connection_item_id) : null
                 const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
-                const omschrijving = item?.omschrijving || pin.label || '—'
+                const omschrijving = pin.label || item?.omschrijving || '—'
                 return { pin, nummer, omschrijving }
               })
               .sort((a, b) => (a.nummer || 999) - (b.nummer || 999))
