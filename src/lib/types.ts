@@ -644,6 +644,13 @@ export interface ConnectionRow {
 export type SectionImagePosition = 'boven' | 'rechts' | 'onder'
 export type SectionImageSize = 'klein' | 'medium' | 'groot'
 
+// De vaste bouwstenen van de klant-PDF, in hun eigen (nooit onderling te
+// wijzigen) volgorde — zie offerte/[projectId]/page.tsx. Een sectie "plakt"
+// vóór één van deze blokken via QuoteCustomerSection.anchor; de voorpagina
+// zelf staat hier niet in, die is altijd absoluut eerst.
+export const QUOTE_PAGE_ANCHORS = ['toelichting', 'kosten', 'aansluitingen', 'prijs', 'tekening', 'vervolg', 'afsluiting'] as const
+export type QuotePageAnchor = typeof QUOTE_PAGE_ANCHORS[number]
+
 export interface QuoteCustomerSection {
   category: QuoteCustomerCategory
   title: string
@@ -657,6 +664,15 @@ export interface QuoteCustomerSection {
   // Losse disclaimer-tekst, onderaan deze sectie in de klantversie —
   // ontbreekt meestal, alleen expliciet door staff toegevoegd.
   disclaimer?: string
+  // Welk vast blok deze sectie in de klant-PDF direct voorafgaat — bepaalt
+  // de positie t.o.v. Toelichting/Kosten/Aansluitingen/Prijs/Tekening/
+  // Vervolg/Afsluiting. Ontbreekt bij oudere secties — behandel dat als
+  // 'kosten' (het bestaande gedrag: alle secties samen vóór Kosten, na
+  // Toelichting). Secties met dezelfde anchor renderen samen, in hun
+  // onderlinge customer_sections-array-volgorde (moveSection in
+  // QuoteEditor.tsx) — dát blijft ongewijzigd, de anchor bepaalt alleen
+  // tussen welke vaste blokken die groep terechtkomt.
+  anchor?: QuotePageAnchor
 }
 
 export interface QuoteItem {

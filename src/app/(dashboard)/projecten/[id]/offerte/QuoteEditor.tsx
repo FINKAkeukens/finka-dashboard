@@ -10,7 +10,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownload, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -36,6 +36,19 @@ const CUSTOMER_CATEGORY_LABELS: Record<QuoteCustomerCategory, string> = {
   apparatuur: 'Apparatuur',
   accessoires: 'Accessoires',
   overig: 'Overig',
+}
+
+// Labels voor de "Plaats vóór"-keuze per sectie — zie QuotePageAnchor in
+// types.ts. Volgorde hier is puur voor de dropdown, niet bepalend (de vaste
+// volgorde van de blokken zelf ligt vast in offerte/[projectId]/page.tsx).
+const PAGE_ANCHOR_LABELS: Record<QuotePageAnchor, string> = {
+  toelichting: 'Toelichting (na de voorpagina)',
+  kosten: 'Kosten',
+  aansluitingen: 'Aansluitingen',
+  prijs: 'Prijspagina',
+  tekening: 'Tekening / ontwerp',
+  vervolg: 'Vervolg',
+  afsluiting: 'Afsluiting',
 }
 
 // Apparaat-types die, ondanks dat ze als QuoteItem type 'apparaat' zijn
@@ -127,6 +140,7 @@ const DEFAULT_ACCESSOIRES_SECTION = {
   imagePosition: undefined as SectionImagePosition | undefined,
   imageSize: undefined as SectionImageSize | undefined,
   disclaimer: undefined as string | undefined,
+  anchor: 'kosten' as QuotePageAnchor,
 }
 
 function normalizeSections(sections: unknown): QuoteCustomerSection[] {
@@ -146,6 +160,9 @@ function normalizeSections(sections: unknown): QuoteCustomerSection[] {
         imagePosition: s.imagePosition as QuoteCustomerSection['imagePosition'],
         imageSize: s.imageSize as QuoteCustomerSection['imageSize'],
         disclaimer: s.disclaimer as string | undefined,
+        // Ontbreekt bij secties van vóór deze functie — 'kosten' reproduceert
+        // exact het oude gedrag (alle secties samen ná Toelichting, vóór Kosten).
+        anchor: (s.anchor as QuoteCustomerSection['anchor']) ?? 'kosten',
       }))
 
   if (!normalized.some((s) => s.category === 'accessoires')) {
@@ -512,7 +529,7 @@ export default function QuoteEditor({
   }
 
   function addSection() {
-    setCustomerSections((prev) => [...prev, { category: 'overig', title: 'Nieuwe sectie', lines: [] }])
+    setCustomerSections((prev) => [...prev, { category: 'overig', title: 'Nieuwe sectie', lines: [], anchor: 'kosten' }])
   }
 
   function updateSectionTitle(index: number, title: string) {
@@ -521,6 +538,13 @@ export default function QuoteEditor({
 
   function updateSectionCategory(index: number, category: QuoteCustomerCategory) {
     setCustomerSections((prev) => prev.map((s, i) => (i === index ? { ...s, category } : s)))
+  }
+
+  // Bepaalt vóór welk vast blok (Toelichting/Kosten/Aansluitingen/Prijs/
+  // Tekening/Vervolg/Afsluiting) deze sectie in de klant-PDF terechtkomt —
+  // zie QuotePageAnchor in types.ts.
+  function updateSectionAnchor(index: number, anchor: QuotePageAnchor) {
+    setCustomerSections((prev) => prev.map((s, i) => (i === index ? { ...s, anchor } : s)))
   }
 
   function updateSectionImagePosition(index: number, imagePosition: SectionImagePosition) {
@@ -1449,7 +1473,7 @@ export default function QuoteEditor({
           <div>
             <Label>Wat zit erin</Label>
             <p className="text-xs text-[#6B6560] mt-0.5">
-              Klik op het bolletje om een regel uit te sluiten van de klantofferte (rood) — de regel blijft hier gewoon staan, maar wordt niet meegeprint. Elke sectie krijgt straks zijn eigen pagina, gegroepeerd op categorie (Kasten/Werkblad/Apparatuur/Overig). Sleep aan het grijpicoontje om regels binnen een sectie te herordenen, of sleep aan het grijpicoontje links van een sectiekop om de volgorde van hele secties aan te passen. Typ <code className="px-1 bg-[#F0EDE9] rounded">==tekst==</code> om jezelf te herinneren dat iets nog niet af is — dat veld krijgt een rode rand, en in de klantversie wordt het knalrood getoond zodat je het niet per ongeluk laat staan. Elke sectie heeft onderaan een eigen "Disclaimer toevoegen"-knopje.
+              Klik op het bolletje om een regel uit te sluiten van de klantofferte (rood) — de regel blijft hier gewoon staan, maar wordt niet meegeprint. Elke sectie krijgt straks zijn eigen pagina. Met de tweede keuzelijst (&ldquo;Vóór: ...&rdquo;) bepaal je vóór welk vast onderdeel (Toelichting/Kosten/Aansluitingen/Prijs/Tekening/Vervolg/Afsluiting) de sectie in de PDF komt te staan — bv. een sfeerbeeld meteen na de voorpagina door &ldquo;Vóór: Toelichting&rdquo; te kiezen. Secties met dezelfde keuze staan samen, in de volgorde waarin je ze hier sleept. Sleep aan het grijpicoontje om regels binnen een sectie te herordenen, of sleep aan het grijpicoontje links van een sectiekop om de onderlinge volgorde van secties met dezelfde &ldquo;Vóór&rdquo;-keuze aan te passen. Typ <code className="px-1 bg-[#F0EDE9] rounded">==tekst==</code> om jezelf te herinneren dat iets nog niet af is — dat veld krijgt een rode rand, en in de klantversie wordt het knalrood getoond zodat je het niet per ongeluk laat staan. Elke sectie heeft onderaan een eigen &ldquo;Disclaimer toevoegen&rdquo;-knopje.
             </p>
           </div>
           {customerSections.map((section, sIdx) => {
@@ -1496,6 +1520,16 @@ export default function QuoteEditor({
                 >
                   {Object.entries(CUSTOMER_CATEGORY_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <select
+                  value={section.anchor ?? 'kosten'}
+                  onChange={(e) => updateSectionAnchor(sIdx, e.target.value as QuotePageAnchor)}
+                  title="Plaats deze sectie vóór..."
+                  className="text-xs bg-[#F7F5F2] border border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
+                >
+                  {QUOTE_PAGE_ANCHORS.map((value) => (
+                    <option key={value} value={value}>Vóór: {PAGE_ANCHOR_LABELS[value]}</option>
                   ))}
                 </select>
                 <input

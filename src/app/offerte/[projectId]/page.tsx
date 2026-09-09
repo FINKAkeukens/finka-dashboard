@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { ConnectionRow, Customer, CustomerCostLine, Project, Quote, QuoteCustomerSection } from '@/lib/types'
+import { ConnectionRow, Customer, CustomerCostLine, Project, QUOTE_PAGE_ANCHORS, Quote, QuoteCustomerSection, QuotePageAnchor } from '@/lib/types'
 import PrintButton from './PrintButton'
 import DownloadButton from './DownloadButton'
 
@@ -34,6 +34,16 @@ const SECTION_IMAGE_SIZES: Record<'klein' | 'medium' | 'groot', number> = {
 // — anders past een lange lijst (bv. "Kasten" met 20+ punten) niet op de
 // vaste paginahoogte en wordt het einde onzichtbaar afgesneden (overflow: hidden).
 const SECTION_COLUMN_THRESHOLD = 8
+
+// Beschikbare hoogte (px) voor een foto-only sectie ("Impressie" e.d.) — zie
+// renderSectionGroup(). Twee vaste waarden i.p.v. steeds 420: de pagina met
+// de "§ 02 · Specificaties"-kop erboven heeft merkbaar minder ruimte over
+// dan een vervolgpagina zonder die kop. Bij een vaste waarde die op de
+// kop-pagina net te groot was, viel het te veel af door overflow:hidden op
+// de omringende flex-rij — vandaar deze twee, elk met een marge eronder t.o.v.
+// de daadwerkelijk berekende beschikbare ruimte (167mm ≈ 631px pagina, min
+// padding/kop/label — zie git-historie voor de berekening).
+const PHOTO_ONLY_MAX_HEIGHT = { withHeading: 370, withoutHeading: 490 }
 
 // De toelichting/vervolg-pagina heeft een vaste hoogte (167mm) — bij een
 // korte tekst past dat ruim, maar een langere tekst (uitgebreide
@@ -187,6 +197,225 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   const remainingRenders = quote.render_urls ?? []
   const price = quote.customer_price ?? quote.total_price
 
+  // Secties gegroepeerd op anchor (welk vast blok ze voorafgaan — zie
+  // QuotePageAnchor in types.ts en de "Vóór: ..."-keuze in QuoteEditor.tsx).
+  // Onderlinge volgorde binnen een groep = customer_sections array-volgorde
+  // (moveSection in de editor), ongewijzigd t.o.v. voorheen. Secties zonder
+  // (oudere) of ongeldige anchor vallen terug op 'kosten' — dat reproduceert
+  // exact het gedrag van vóór deze functie (alles samen ná Toelichting, vóór
+  // Kosten).
+  const sectionsByAnchor = new Map<QuotePageAnchor, QuoteCustomerSection[]>()
+  for (const key of QUOTE_PAGE_ANCHORS) sectionsByAnchor.set(key, [])
+  for (const s of sections) {
+    const anchor = s.anchor && (QUOTE_PAGE_ANCHORS as readonly string[]).includes(s.anchor) ? s.anchor : 'kosten'
+    sectionsByAnchor.get(anchor)!.push(s)
+  }
+
+  // De "§ 02 · Specificaties / Wat zit erin"-kop verschijnt maar één keer:
+  // op de eerst-gerenderde pagina met sectie-inhoud, waar in de volgorde
+  // die groep ook terechtkomt. Bepaalt ook of PHOTO_ONLY_MAX_HEIGHT.withHeading
+  // of .withoutHeading geldt voor een foto-only sectie op die specifieke pagina.
+  const headingState = { shown: false }
+
+  // Rendert één anchor-groep secties als 1+ fysieke pagina's — zelfde
+  // regelbudget-verdeling als voorheen (§ 02 Wat zit erin), nu herbruikbaar
+  // per groep i.p.v. één keer over de hele sections-array. Een sectie met
+  // heel veel punten wordt eerst opgeknipt in stukken die wél op één pagina
+  // passen (18 regels in 2 kolommen ≈ 9 rijen, ruim binnen het budget van 11).
+  function renderSectionGroup(groupSections: QuoteCustomerSection[], anchorKey: string) {
+    const MAX_LINES_PER_SECTION_PAGE = 18
+    const visibleSections = groupSections
+      .map((s) => ({ ...s, lines: s.lines.filter((l) => l.included && l.text.trim()) }))
+      .filter((s) => s.lines.length > 0 || (s.images && s.images.length > 0))
+      .flatMap((s) => {
+        if (s.lines.length <= MAX_LINES_PER_SECTION_PAGE) return [s]
+        const chunks: typeof s[] = []
+        for (let i = 0; i < s.lines.length; i += MAX_LINES_PER_SECTION_PAGE) {
+          chunks.push({
+            ...s,
+            lines: s.lines.slice(i, i + MAX_LINES_PER_SECTION_PAGE),
+            title: i === 0 ? s.title : `${s.title} (vervolg)`,
+            images: i === 0 ? s.images : [],
+          })
+        }
+        return chunks
+      })
+
+    if (!visibleSections.length) return null
+
+    // Iets lager dan je zou verwachten (was 13) — de regels zijn groter
+    // geworden (13px i.p.v. 11.5px), dus er passen er nu minder op een pagina.
+    const LINE_BUDGET = 11
+    const sectionPages: typeof visibleSections[] = []
+    let current: typeof visibleSections = []
+    let weight = 0
+    for (const section of visibleSections) {
+      // Thumbnails wegen ongeveer als N tekstregels, afhankelijk van het
+      // gekozen formaat — geen exacte meting, maar voorkomt dat een
+      // fotosectie het regelbudget te optimistisch inschat. Lange
+      // lijsten komen in 2 kolommen (zie SECTION_COLUMN_THRESHOLD) en
+      // wegen dus maar half zo zwaar.
+      const lineWeight = section.lines.length > SECTION_COLUMN_THRESHOLD
+        ? Math.ceil(section.lines.length / 2)
+        : section.lines.length
+      // Foto-only secties (geen tekst) renderen groot en gecentreerd —
+      // die wegen zwaar genoeg om vrijwel altijd hun eigen pagina te krijgen.
+      const imageWeight = !section.images?.length ? 0
+        : section.lines.length === 0 ? 10
+        : { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium']
+      const sectionWeight = lineWeight + imageWeight + 1
+      if (current.length && weight + sectionWeight > LINE_BUDGET) {
+        sectionPages.push(current)
+        current = []
+        weight = 0
+      }
+      current.push(section)
+      weight += sectionWeight
+    }
+    if (current.length) sectionPages.push(current)
+
+    return sectionPages.map((pageSections, pageIdx) => {
+      const showHeading = !headingState.shown
+      if (showHeading) headingState.shown = true
+      const photoMaxHeight = showHeading ? PHOTO_ONLY_MAX_HEIGHT.withHeading : PHOTO_ONLY_MAX_HEIGHT.withoutHeading
+
+      return (
+        <div
+          key={`${anchorKey}-${pageIdx}`}
+          className="page"
+          style={{ padding: showHeading ? '64px 40px 32px' : '32px 40px', display: 'flex', flexDirection: 'column', overflow: 'visible' }}
+        >
+          {showHeading && (
+            <>
+              <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 6 }}>
+                § 02 · Specificaties
+              </div>
+              <h2 className="serif" style={{ fontSize: 42, fontWeight: 500, lineHeight: 1, color: '#1C1B19', marginBottom: 14 }}>
+                Wat zit erin.
+              </h2>
+            </>
+          )}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {pageSections.map((section, sIdx) => {
+              // Geen opgeslagen keuze (oudere secties) valt terug op
+              // 'rechts' — 'onder' gaf bij een enkele foto een uitgerekt,
+              // dun bannetje onder een korte regel tekst.
+              const imagePosition = section.imagePosition ?? 'rechts'
+              const useColumns = section.lines.length > SECTION_COLUMN_THRESHOLD
+              const linesBlock = (
+                <div style={useColumns ? { columnCount: 2, columnGap: 24 } : undefined}>
+                  {section.lines.map((line, lIdx) => (
+                    <div key={lIdx} style={{ fontSize: 13, color: '#1C1B19', lineHeight: 1.5, display: 'flex', gap: 8, padding: '3px 0', breakInside: 'avoid' }}>
+                      <span style={{ color: '#C9A96E', flexShrink: 0 }}>—</span>
+                      <span>{renderInline(line.text)}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+              const imageHeight = SECTION_IMAGE_SIZES[section.imageSize ?? 'medium']
+              const imagesBlock = section.images && section.images.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: imagePosition === 'rechts' ? 'column' : 'row',
+                  alignItems: 'flex-start',
+                  flexWrap: 'wrap', gap: 10, flexShrink: 0,
+                }}>
+                  {section.images.map((url, i) => (
+                    <div key={i} style={{ height: imageHeight, overflow: 'hidden', flexShrink: 0 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="Sfeerfoto" style={{ height: '100%', width: 'auto', objectFit: 'contain', display: 'block', borderRadius: 10 }} />
+                    </div>
+                  ))}
+                </div>
+              )
+
+              // Een sectie met alleen een foto (geen enkele tekstregel) is
+              // bedoeld als sfeerbeeld, niet als specificatie — die krijgt
+              // daarom geen label-kolom en géén vast thumbnail-formaat,
+              // maar wordt groot en gecentreerd op de pagina getoond.
+              const isPhotoOnly = section.lines.length === 0 && section.images && section.images.length > 0
+              if (isPhotoOnly) {
+                // Vult de rest van de pagina (flex: 1 op deze sectie binnen
+                // de flex-column wrapper hierboven) en centreert de foto
+                // zowel horizontaal als verticaal over die hele ruimte,
+                // i.p.v. bovenaan de content-flow te blijven hangen.
+                return (
+                  <div key={sIdx} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '15px 0', borderTop: '1px solid #E6E2D9' }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 12, flexShrink: 0 }}>
+                      {renderInline(section.title)}
+                    </div>
+                    {/* maxHeight als vaste px-waarde i.p.v. height:100% — een
+                       percentage-hoogte op een flex-kind met
+                       alignItems:'center' (niet 'stretch') kan niet
+                       resolven omdat de omringende box zelf geen
+                       vastgelegde hoogte heeft, en viel dan terug op de
+                       volledige natuurlijke afbeeldingsgrootte (vandaar de
+                       enorme overloop). Een harde px-waarde kan dat
+                       probleem niet hebben — zie PHOTO_ONLY_MAX_HEIGHT
+                       hierboven voor waarom dit er twee zijn i.p.v. één. */}
+                    {/* Geen flexWrap: bij meerdere foto's moet maxWidth per
+                       foto al zo berekend zijn dat ze samen op één rij
+                       passen — wrappen zou een 2e rij opleveren die door
+                       overflow:hidden werd afgesneden (de vorige bug). */}
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, overflow: 'hidden' }}>
+                      {section.images!.map((url, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={url}
+                          alt={section.title}
+                          style={{
+                            maxHeight: photoMaxHeight,
+                            maxWidth: `${Math.floor(88 / section.images!.length)}%`,
+                            width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', borderRadius: 10,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {section.disclaimer && (
+                      <div style={{ flexShrink: 0, fontSize: 9, lineHeight: 1.5, color: '#9B9591', marginTop: 8 }}>
+                        {renderInline(section.disclaimer)}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <div key={sIdx} style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 24, padding: '15px 0', borderTop: '1px solid #E6E2D9' }}>
+                  <div style={{ fontSize: 11, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>
+                    {renderInline(section.title)}
+                  </div>
+                  {imagePosition === 'rechts' ? (
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>{linesBlock}</div>
+                      {imagesBlock}
+                    </div>
+                  ) : imagePosition === 'boven' ? (
+                    <div>
+                      {imagesBlock && <div style={{ marginBottom: section.lines.length ? 10 : 0 }}>{imagesBlock}</div>}
+                      {linesBlock}
+                    </div>
+                  ) : (
+                    <div>
+                      {linesBlock}
+                      {imagesBlock && <div style={{ marginTop: section.lines.length ? 10 : 0 }}>{imagesBlock}</div>}
+                    </div>
+                  )}
+                  {section.disclaimer && (
+                    <div style={{ gridColumn: '1 / -1', fontSize: 9, lineHeight: 1.5, color: '#9B9591', marginTop: 4 }}>
+                      {renderInline(section.disclaimer)}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    })
+  }
+
   return (
     <>
       <style>{`
@@ -243,7 +472,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
 
       <div className="pages">
 
-        {/* ─── Pagina 1: Voorpagina ─── */}
+        {/* ─── Pagina 1: Voorpagina — altijd absoluut eerst, geen anchor ─── */}
         <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
           {/* Header, los boven de foto */}
           <div style={{
@@ -315,216 +544,16 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           </div>
         </div>
 
+        {/* ─── Secties vóór Toelichting (bv. een sfeerbeeld meteen na de voorpagina) ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('toelichting')!, 'toelichting')}
+
         {/* ─── Pagina 2: Toelichting ─── */}
         {quote.customer_intro_text && (
           <TextIntroPage sectionLabel="§ 01 · Toelichting" heading={<>Hi {c.first_name},</>} body={quote.customer_intro_text} disclaimer={quote.page_disclaimers?.toelichting} />
         )}
 
-        {/* ─── § 02 · Wat zit erin — elke sectie eigen gelabeld blok, over
-            zoveel pagina's als nodig (zoals de Nick & Floor-referentie:
-            "Fronten en greeplijst", "Werkblad", "Zijmuur"... elk hun eigen
-            titel als label, i.p.v. samengevoegd onder de categorienaam).
-            Pagina's worden gevuld o.b.v. een regelbudget — een exacte
-            tekstmeting kan alleen in de browser, dit is een inschatting
-            zodat een enkele korte sectie niet alsnog een bijna lege pagina
-            krijgt. ─── */}
-        {(() => {
-          // Zelfs in 2 kolommen past een sectie met heel veel punten (bv. 29)
-          // niet meer op één pagina — de pagina's hier hebben overflow:visible,
-          // dus zulke tekst liep gewoon door ÓNDER de volgende (ondoorzichtige)
-          // pagina en leek daardoor "leeg". Zulke secties worden daarom eerst
-          // opgeknipt in stukken die wél op één pagina passen (zie
-          // SECTION_COLUMN_THRESHOLD/LINE_BUDGET verderop — 18 regels in 2
-          // kolommen ≈ 9 rijen, ruim binnen het budget van 11).
-          const MAX_LINES_PER_SECTION_PAGE = 18
-          // Volgorde = customer_sections array-volgorde, dus precies zoals
-          // staff de secties in de generator heeft gesleept (moveSection in
-          // QuoteEditor.tsx) — geen automatische categorie-sortering meer
-          // die dat overschrijft.
-          const visibleSections = sections
-            .map((s) => ({ ...s, lines: s.lines.filter((l) => l.included && l.text.trim()) }))
-            .filter((s) => s.lines.length > 0 || (s.images && s.images.length > 0))
-            .flatMap((s) => {
-              if (s.lines.length <= MAX_LINES_PER_SECTION_PAGE) return [s]
-              const chunks: typeof s[] = []
-              for (let i = 0; i < s.lines.length; i += MAX_LINES_PER_SECTION_PAGE) {
-                chunks.push({
-                  ...s,
-                  lines: s.lines.slice(i, i + MAX_LINES_PER_SECTION_PAGE),
-                  title: i === 0 ? s.title : `${s.title} (vervolg)`,
-                  images: i === 0 ? s.images : [],
-                })
-              }
-              return chunks
-            })
-
-          if (!visibleSections.length) return null
-
-          // Iets lager dan je zou verwachten (was 13) — de regels zijn groter
-          // geworden (13px i.p.v. 11.5px), dus er passen er nu minder op een pagina.
-          const LINE_BUDGET = 11
-          const sectionPages: typeof visibleSections[] = []
-          let current: typeof visibleSections = []
-          let weight = 0
-          for (const section of visibleSections) {
-            // Thumbnails wegen ongeveer als N tekstregels, afhankelijk van het
-            // gekozen formaat — geen exacte meting, maar voorkomt dat een
-            // fotosectie het regelbudget te optimistisch inschat. Lange
-            // lijsten komen in 2 kolommen (zie SECTION_COLUMN_THRESHOLD) en
-            // wegen dus maar half zo zwaar.
-            const lineWeight = section.lines.length > SECTION_COLUMN_THRESHOLD
-              ? Math.ceil(section.lines.length / 2)
-              : section.lines.length
-            // Foto-only secties (geen tekst) renderen groot en gecentreerd —
-            // die wegen zwaar genoeg om vrijwel altijd hun eigen pagina te krijgen.
-            const imageWeight = !section.images?.length ? 0
-              : section.lines.length === 0 ? 10
-              : { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium']
-            const sectionWeight = lineWeight + imageWeight + 1
-            if (current.length && weight + sectionWeight > LINE_BUDGET) {
-              sectionPages.push(current)
-              current = []
-              weight = 0
-            }
-            current.push(section)
-            weight += sectionWeight
-          }
-          if (current.length) sectionPages.push(current)
-
-          return sectionPages.map((pageSections, pageIdx) => (
-            <div
-              key={pageIdx}
-              className="page"
-              style={{ padding: pageIdx === 0 ? '64px 40px 32px' : '32px 40px', display: 'flex', flexDirection: 'column', overflow: 'visible' }}
-            >
-              {pageIdx === 0 && (
-                <>
-                  <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 6 }}>
-                    § 02 · Specificaties
-                  </div>
-                  <h2 className="serif" style={{ fontSize: 42, fontWeight: 500, lineHeight: 1, color: '#1C1B19', marginBottom: 14 }}>
-                    Wat zit erin.
-                  </h2>
-                </>
-              )}
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                {pageSections.map((section, sIdx) => {
-                  // Geen opgeslagen keuze (oudere secties) valt terug op
-                  // 'rechts' — 'onder' gaf bij een enkele foto een uitgerekt,
-                  // dun bannetje onder een korte regel tekst.
-                  const imagePosition = section.imagePosition ?? 'rechts'
-                  const useColumns = section.lines.length > SECTION_COLUMN_THRESHOLD
-                  const linesBlock = (
-                    <div style={useColumns ? { columnCount: 2, columnGap: 24 } : undefined}>
-                      {section.lines.map((line, lIdx) => (
-                        <div key={lIdx} style={{ fontSize: 13, color: '#1C1B19', lineHeight: 1.5, display: 'flex', gap: 8, padding: '3px 0', breakInside: 'avoid' }}>
-                          <span style={{ color: '#C9A96E', flexShrink: 0 }}>—</span>
-                          <span>{renderInline(line.text)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                  const imageHeight = SECTION_IMAGE_SIZES[section.imageSize ?? 'medium']
-                  const imagesBlock = section.images && section.images.length > 0 && (
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: imagePosition === 'rechts' ? 'column' : 'row',
-                      alignItems: 'flex-start',
-                      flexWrap: 'wrap', gap: 10, flexShrink: 0,
-                    }}>
-                      {section.images.map((url, i) => (
-                        <div key={i} style={{ height: imageHeight, overflow: 'hidden', flexShrink: 0 }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={url} alt="Sfeerfoto" style={{ height: '100%', width: 'auto', objectFit: 'contain', display: 'block', borderRadius: 10 }} />
-                        </div>
-                      ))}
-                    </div>
-                  )
-
-                  // Een sectie met alleen een foto (geen enkele tekstregel) is
-                  // bedoeld als sfeerbeeld, niet als specificatie — die krijgt
-                  // daarom geen label-kolom en géén vast thumbnail-formaat,
-                  // maar wordt groot en gecentreerd op de pagina getoond.
-                  const isPhotoOnly = section.lines.length === 0 && section.images && section.images.length > 0
-                  if (isPhotoOnly) {
-                    // Vult de rest van de pagina (flex: 1 op deze sectie binnen
-                    // de flex-column wrapper hierboven) en centreert de foto
-                    // zowel horizontaal als verticaal over die hele ruimte,
-                    // i.p.v. bovenaan de content-flow te blijven hangen.
-                    return (
-                      <div key={sIdx} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '15px 0', borderTop: '1px solid #E6E2D9' }}>
-                        <div style={{ fontSize: 11, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 12, flexShrink: 0 }}>
-                          {renderInline(section.title)}
-                        </div>
-                        {/* maxHeight als vaste px-waarde i.p.v. height:100% — een
-                           percentage-hoogte op een flex-kind met
-                           alignItems:'center' (niet 'stretch') kan niet
-                           resolven omdat de omringende box zelf geen
-                           vastgelegde hoogte heeft, en viel dan terug op de
-                           volledige natuurlijke afbeeldingsgrootte (vandaar de
-                           enorme overloop). Een harde px-waarde kan dat
-                           probleem niet hebben. */}
-                        {/* Geen flexWrap: bij meerdere foto's moet maxWidth per
-                           foto al zo berekend zijn dat ze samen op één rij
-                           passen — wrappen zou een 2e rij opleveren die door
-                           overflow:hidden werd afgesneden (de vorige bug). */}
-                        <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, overflow: 'hidden' }}>
-                          {section.images!.map((url, i) => (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              key={i}
-                              src={url}
-                              alt={section.title}
-                              style={{
-                                maxHeight: 420,
-                                maxWidth: `${Math.floor(88 / section.images!.length)}%`,
-                                width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', borderRadius: 10,
-                              }}
-                            />
-                          ))}
-                        </div>
-                        {section.disclaimer && (
-                          <div style={{ flexShrink: 0, fontSize: 9, lineHeight: 1.5, color: '#9B9591', marginTop: 8 }}>
-                            {renderInline(section.disclaimer)}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <div key={sIdx} style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 24, padding: '15px 0', borderTop: '1px solid #E6E2D9' }}>
-                      <div style={{ fontSize: 11, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>
-                        {renderInline(section.title)}
-                      </div>
-                      {imagePosition === 'rechts' ? (
-                        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>{linesBlock}</div>
-                          {imagesBlock}
-                        </div>
-                      ) : imagePosition === 'boven' ? (
-                        <div>
-                          {imagesBlock && <div style={{ marginBottom: section.lines.length ? 10 : 0 }}>{imagesBlock}</div>}
-                          {linesBlock}
-                        </div>
-                      ) : (
-                        <div>
-                          {linesBlock}
-                          {imagesBlock && <div style={{ marginTop: section.lines.length ? 10 : 0 }}>{imagesBlock}</div>}
-                        </div>
-                      )}
-                      {section.disclaimer && (
-                        <div style={{ gridColumn: '1 / -1', fontSize: 9, lineHeight: 1.5, color: '#9B9591', marginTop: 4 }}>
-                          {renderInline(section.disclaimer)}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))
-        })()}
+        {/* ─── Secties vóór Kosten (standaard: hier komen "Wat zit erin"-secties zonder expliciete keuze terecht) ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('kosten')!, 'kosten')}
 
         {/* ─── Kosten (optioneel, alleen als staff dit expliciet heeft ingevuld) ─── */}
         {costLines.length > 0 && (
@@ -549,6 +578,9 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
             <DisclaimerFooter text={pageDisclaimers.kosten} />
           </div>
         )}
+
+        {/* ─── Secties vóór Aansluitingen ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('aansluitingen')!, 'aansluitingen')}
 
         {/* ─── Opstelling en aansluitingen (optioneel) ─── */}
         {connections.length > 0 && (
@@ -593,6 +625,9 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           </div>
         )}
 
+        {/* ─── Secties vóór Prijspagina ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('prijs')!, 'prijs')}
+
         {/* ─── Prijspagina ─── */}
         {price != null && (
           <div className="page" style={{ background: '#1C1B19', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -609,6 +644,9 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
             )}
           </div>
         )}
+
+        {/* ─── Secties vóór Tekening ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('tekening')!, 'tekening')}
 
         {/* ─── Tekening / renders ─── */}
         {(() => {
@@ -686,10 +724,16 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           })
         })()}
 
+        {/* ─── Secties vóór Vervolg ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('vervolg')!, 'vervolg')}
+
         {/* ─── Vervolg — eigen pagina, zelfde stijl als § 01 Toelichting ─── */}
         {quote.customer_closing_heading && (
           <TextIntroPage sectionLabel="§ 04 · Vervolg" heading={quote.customer_closing_heading} body={quote.customer_closing_text} disclaimer={quote.page_disclaimers?.vervolg} />
         )}
+
+        {/* ─── Secties vóór Afsluiting ─── */}
+        {renderSectionGroup(sectionsByAnchor.get('afsluiting')!, 'afsluiting')}
 
         {/* ─── Afsluitpagina ─── */}
         <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
