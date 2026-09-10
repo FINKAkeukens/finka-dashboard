@@ -28,27 +28,37 @@ export function applianceCustomerText(appliance: Appliance): string {
 export interface KastenDiscount {
   key: string
   label: string
-  percentage: number
+  // Eén of meer cascaderende percentages die dit vinkje toepast (elk over
+  // het bedrag ná het vorige) — bv. Sachsen's structurele korting is zelf
+  // al -45% gevolgd door -10%, dus [45, 10] i.p.v. één percentage.
+  percentages: number[]
 }
 
-// Vaste, standaard inkoopkortingen op de Kasten-kostprijs — één betaalkorting
-// per keukenmerk. Op een optie is normaliter maar één van de twee van
-// toepassing (het merk van die specifieke optie). key blijft ongewijzigd
-// t.o.v. de oude, generiekere namen ("kuchentreff_sachsen"/"betaalkorting")
-// — alleen het label is hernoemd, zodat al opgeslagen aanvinkingen (o.a. bij
-// bestaande Sachsen-opties) geldig blijven zonder migratie.
+// Vaste, standaard inkoopkortingen op de Kasten-kostprijs. Sachsen kent twee
+// afzonderlijk aan te vinken kortingen: de structurele korting (-45% -10%,
+// staat vrijwel altijd vast) en de betaalkorting (-11%, alleen bij tijdige
+// betaling) — apart te vinken omdat die laatste niet altijd wordt gehaald.
+// key blijft ongewijzigd t.o.v. de oude, generiekere namen
+// ("kuchentreff_sachsen"/"betaalkorting") voor de betaalkorting-vinkjes,
+// zodat al opgeslagen aanvinkingen (o.a. bij bestaande Sachsen-opties)
+// geldig blijven zonder migratie.
 export const KASTEN_DISCOUNTS: KastenDiscount[] = [
-  { key: 'kuchentreff_sachsen', label: 'Sachsen betaalkorting', percentage: 11 },
-  { key: 'betaalkorting', label: 'Artego betaalkorting', percentage: 5 },
+  { key: 'sachsen_structureel', label: 'Sachsen korting', percentages: [45, 10] },
+  { key: 'kuchentreff_sachsen', label: 'Sachsen betaalkorting', percentages: [11] },
+  { key: 'betaalkorting', label: 'Artego betaalkorting', percentages: [5] },
 ]
 
 // Past de aangevinkte kortingen ná elkaar toe (elke korting over het bedrag
-// ná de vorige, niet gewoon opgeteld). Volgorde maakt voor het resultaat
-// niets uit (vermenigvuldigen is commutatief) — relevant is vooral dat het
-// geen simpele optelling is.
+// ná de vorige, niet gewoon opgeteld) — zowel tussen vinkjes onderling als
+// tussen de percentages binnen één vinkje (bv. Sachsen's [45, 10]). Volgorde
+// maakt voor het resultaat niets uit (vermenigvuldigen is commutatief) —
+// relevant is vooral dat het geen simpele optelling is.
 export function computeKastenNetCostTotal(grossCostTotal: number, discountKeys: string[]): number {
   const active = KASTEN_DISCOUNTS.filter((d) => discountKeys.includes(d.key))
-  const net = active.reduce((amount, d) => amount * (1 - d.percentage / 100), grossCostTotal)
+  const net = active.reduce(
+    (amount, d) => d.percentages.reduce((a, p) => a * (1 - p / 100), amount),
+    grossCostTotal
+  )
   return Math.round(net * 100) / 100
 }
 

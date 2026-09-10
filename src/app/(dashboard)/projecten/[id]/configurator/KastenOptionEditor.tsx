@@ -150,7 +150,7 @@ export default function KastenOptionEditor({
                     checked={data.discount_keys.includes(discount.key)}
                     onCheckedChange={() => toggleDiscount(discount.key)}
                   />
-                  {discount.label} — {discount.percentage}%
+                  {discount.label} — {discount.percentages.map((p) => `-${p}%`).join(' / ')}
                 </label>
               ))}
             </div>
