@@ -61,16 +61,6 @@ export const DEFAULT_CONNECTION_ITEMS: Array<{
   { standard_key: 'vloerdoos_eiland', category: 'overig', omschrijving: 'Vloerdoos / doorvoer in de vloer t.b.v. eiland' },
 ]
 
-export const DEFAULT_LET_OP_NOTITIES = `- Bij een kookeiland met daarboven een eilandafzuigkap moet het plafond ter plaatse van tenminste 50 kg draagkracht zijn; een deugdelijke constructie is vereist om de kap aan op te hangen.
-- Het plafond moet afgewerkt zijn. Vraag hier vooraf advies over bij uw aannemer.
-- Alle maten zijn hartmaten vanaf de afgewerkte vloer.
-- De stopcontacten dienen vlak inbouw te zijn.
-- Aansluitmaterialen zoals perilex stekker, afvoer syphon en dergelijke worden niet meegeleverd.
-- Achter en onder de plaats waar apparatuur komt te staan, mag geen leidingwerk lopen.
-- Alle stopcontacten moeten voorzien zijn van randaarde.
-- Wanneer er een kickspace op de cv-installatie komt, wordt vooraf een kogelafsluitkraan gemonteerd.
-- Oven en kookplaat moeten op verschillende groepen worden aangesloten.`
-
 // Kant-en-klare "extra secties" — met één klik toe te voegen aan het
 // aansluitschema (i.p.v. een lege sectie te moeten typen), met standaardtekst
 // die per project aan te passen is. Overgenomen uit de terugkerende

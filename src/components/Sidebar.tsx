@@ -20,6 +20,7 @@ import {
   ListChecks,
   HelpCircle,
   Ruler,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -80,6 +81,7 @@ const groups: NavGroup[] = [
       { href: '/instellingen/checklist', label: 'Checklist-items', icon: ListChecks },
       { href: '/instellingen/vragenlijst', label: 'Vragenlijst', icon: HelpCircle },
       { href: '/instellingen/maatformulier', label: 'Ruimte gereed', icon: Ruler },
+      { href: '/instellingen/teksten', label: 'Standaardteksten', icon: FileText },
     ],
   },
 ]

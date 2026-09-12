@@ -10,7 +10,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -97,10 +97,6 @@ function PageDisclaimerField({ label, value, onChange }: { label: string; value:
     </div>
   )
 }
-
-const DEFAULT_CLOSING_QUOTE = 'Op naar een prachtig resultaat.'
-const DEFAULT_DISCLAIMER_TEXT = 'Onder voorbehoud van definitieve prijzen en orderbevestiging door FINKA keukens.'
-const DEFAULT_CONNECTIONS_DISCLAIMER = 'Graag maten goed controleren. Wij zijn niet aansprakelijk voor verkeerd doorgegeven maten of niet gecontroleerde maten.'
 
 // Client-side werkkopie van een regel — nieuwe regels krijgen een tijdelijk
 // id (prefix "temp-") zodat handleSave weet wat ge-insert vs. geüpdatet moet worden.
@@ -197,12 +193,14 @@ export default function QuoteEditor({
   items: initialItems,
   downloads,
   appliances,
+  defaultTexts,
 }: {
   projectId: string
   quote: Quote | null
   items: QuoteItem[]
   downloads: QuoteDownloadMeta[]
   appliances: Appliance[]
+  defaultTexts: DefaultTexts
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -285,7 +283,7 @@ export default function QuoteEditor({
     initialQuote?.customer_connections_intro ?? ''
   )
   const [customerConnectionsDisclaimer, setCustomerConnectionsDisclaimer] = useState(
-    initialQuote?.customer_connections_disclaimer ?? DEFAULT_CONNECTIONS_DISCLAIMER
+    initialQuote?.customer_connections_disclaimer ?? defaultTexts.offerte_connections_disclaimer
   )
   const [customerConnections, setCustomerConnections] = useState<ConnectionRow[]>(
     initialQuote?.customer_connections ?? []
@@ -294,10 +292,10 @@ export default function QuoteEditor({
   const [customerClosingHeading, setCustomerClosingHeading] = useState(initialQuote?.customer_closing_heading ?? '')
   const [customerClosingText, setCustomerClosingText] = useState(initialQuote?.customer_closing_text ?? '')
   const [customerClosingQuote, setCustomerClosingQuote] = useState(
-    initialQuote?.customer_closing_quote ?? DEFAULT_CLOSING_QUOTE
+    initialQuote?.customer_closing_quote ?? defaultTexts.offerte_closing_quote
   )
   const [customerDisclaimerText, setCustomerDisclaimerText] = useState(
-    initialQuote?.customer_disclaimer_text ?? DEFAULT_DISCLAIMER_TEXT
+    initialQuote?.customer_disclaimer_text ?? defaultTexts.offerte_disclaimer_text
   )
   const [pageDisclaimers, setPageDisclaimers] = useState<Partial<Record<PageDisclaimerKey, string>>>(
     initialQuote?.page_disclaimers ?? {}
@@ -1841,7 +1839,7 @@ export default function QuoteEditor({
                     value={customerConnectionsDisclaimer}
                     onChange={(e) => setCustomerConnectionsDisclaimer(e.target.value)}
                     rows={2}
-                    placeholder={DEFAULT_CONNECTIONS_DISCLAIMER}
+                    placeholder={defaultTexts.offerte_connections_disclaimer}
                     className={`w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19] resize-none ${markerClass(customerConnectionsDisclaimer)}`}
                   />
                   <p className="text-xs text-[#9A948D]">Leeg laten = geen disclaimer tonen.</p>
@@ -1903,7 +1901,7 @@ export default function QuoteEditor({
           <Input
             value={customerClosingQuote}
             onChange={(e) => setCustomerClosingQuote(e.target.value)}
-            placeholder={DEFAULT_CLOSING_QUOTE}
+            placeholder={defaultTexts.offerte_closing_quote}
             className={markerClass(customerClosingQuote)}
           />
           <p className="text-xs text-[#9A948D]">Leeg laten = geen quote tonen.</p>
@@ -1920,7 +1918,7 @@ export default function QuoteEditor({
             value={customerDisclaimerText}
             onChange={(e) => setCustomerDisclaimerText(e.target.value)}
             rows={2}
-            placeholder={DEFAULT_DISCLAIMER_TEXT}
+            placeholder={defaultTexts.offerte_disclaimer_text}
             className={`w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19] resize-none ${markerClass(customerDisclaimerText)}`}
           />
           <p className="text-xs text-[#9A948D]">Leeg laten = geen voorbehoud-zin tonen.</p>

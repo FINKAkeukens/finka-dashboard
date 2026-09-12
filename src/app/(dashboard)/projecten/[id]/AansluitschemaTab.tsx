@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Plus, Sparkles, Trash2 } from 'lucide-react'
-import { ConnectionCategory, ConnectionItem, ConnectionSchema, ConnectionSectionBlock, ConnectionWand, Project } from '@/lib/types'
+import { ConnectionCategory, ConnectionItem, ConnectionSchema, ConnectionSectionBlock, ConnectionWand, DefaultTexts, Project } from '@/lib/types'
 import type { ApparatuurItem, ApparatuurAansluitschemaResult } from '@/lib/claude'
-import { CATEGORY_LABELS, CATEGORY_ORDER, DEFAULT_LET_OP_NOTITIES, STANDARD_SECTIES, seedConnectionItems } from '@/lib/aansluitschema'
+import { CATEGORY_LABELS, CATEGORY_ORDER, STANDARD_SECTIES, seedConnectionItems } from '@/lib/aansluitschema'
 import AansluitschemaTekening from './AansluitschemaTekening'
 
 type DraftItem = ConnectionItem & { isNew?: boolean }
@@ -43,12 +43,14 @@ export default function AansluitschemaTab({
   items: initialItems,
   schema,
   vooraanzichtUrls,
+  defaultTexts,
 }: {
   projectId: string
   project: Project
   items: ConnectionItem[]
   schema: ConnectionSchema | null
   vooraanzichtUrls: string[]
+  defaultTexts: DefaultTexts
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -66,7 +68,7 @@ export default function AansluitschemaTab({
   const [versie, setVersie] = useState(schema?.versie ?? 1)
   const [groepenverdelingTekst, setGroepenverdelingTekst] = useState(schema?.groepenverdeling_tekst ?? '')
   const [extraSecties, setExtraSecties] = useState<ConnectionSectionBlock[]>(schema?.extra_secties ?? [])
-  const [letOpNotities, setLetOpNotities] = useState(schema?.let_op_notities ?? DEFAULT_LET_OP_NOTITIES)
+  const [letOpNotities, setLetOpNotities] = useState(schema?.let_op_notities ?? defaultTexts.aansluitschema_let_op_notities)
   const [wanden, setWanden] = useState<ConnectionWand[]>(schema?.wanden ?? [])
 
   const [customImageUrls, setCustomImageUrls] = useState<string[]>([])

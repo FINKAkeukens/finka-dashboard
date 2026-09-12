@@ -1834,4 +1834,40 @@ CREATE INDEX IF NOT EXISTS finka_projects_archived_idx ON finka_projects (archiv
 CREATE INDEX IF NOT EXISTS finka_connection_items_project_idx ON finka_connection_items (project_id);
 CREATE INDEX IF NOT EXISTS finka_questionnaire_responses_project_idx ON finka_questionnaire_responses (project_id);
 CREATE INDEX IF NOT EXISTS finka_email_queue_status_idx ON finka_email_queue (status);
+
+-- =========================================================
+-- 69. Standaardteksten — los instelbaar via Instellingen → Standaardteksten
+--    (i.p.v. hardcoded in de code), zelfde één-rij-patroon als
+--    finka_euroline_rates. Dit zijn alleen de vertrekpunten voor een NIEUWE
+--    offerte/aansluitschema; een al aangemaakte offerte heeft haar eigen,
+--    los bewerkbare tekst in finka_quotes en wijzigt dus niet met terugwerkende
+--    kracht mee als deze standaardtekst later verandert (zelfde als bij de
+--    Euroline-tarieven pas geldt voor nieuwe berekeningen).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_default_texts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  offerte_closing_quote TEXT NOT NULL DEFAULT 'Op naar een prachtig resultaat.',
+  offerte_disclaimer_text TEXT NOT NULL DEFAULT 'Onder voorbehoud van definitieve prijzen en orderbevestiging door FINKA keukens.',
+  offerte_connections_disclaimer TEXT NOT NULL DEFAULT 'Graag maten goed controleren. Wij zijn niet aansprakelijk voor verkeerd doorgegeven maten of niet gecontroleerde maten.',
+  aansluitschema_let_op_notities TEXT NOT NULL DEFAULT '- Bij een kookeiland met daarboven een eilandafzuigkap moet het plafond ter plaatse van tenminste 50 kg draagkracht zijn; een deugdelijke constructie is vereist om de kap aan op te hangen.
+- Het plafond moet afgewerkt zijn. Vraag hier vooraf advies over bij uw aannemer.
+- Alle maten zijn hartmaten vanaf de afgewerkte vloer.
+- De stopcontacten dienen vlak inbouw te zijn.
+- Aansluitmaterialen zoals perilex stekker, afvoer syphon en dergelijke worden niet meegeleverd.
+- Achter en onder de plaats waar apparatuur komt te staan, mag geen leidingwerk lopen.
+- Alle stopcontacten moeten voorzien zijn van randaarde.
+- Wanneer er een kickspace op de cv-installatie komt, wordt vooraf een kogelafsluitkraan gemonteerd.
+- Oven en kookplaat moeten op verschillende groepen worden aangesloten.',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO finka_default_texts (id)
+SELECT gen_random_uuid()
+WHERE NOT EXISTS (SELECT 1 FROM finka_default_texts);
+
+ALTER TABLE finka_default_texts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_default_texts FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_default_texts TO anon, authenticated, service_role;
 CREATE INDEX IF NOT EXISTS finka_project_financials_project_idx ON finka_project_financials (project_id);

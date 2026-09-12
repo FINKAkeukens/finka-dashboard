@@ -342,6 +342,19 @@ export interface EurolineRates {
   updated_at: string
 }
 
+// Los instelbare standaardteksten (§ Instellingen → Standaardteksten) —
+// vertrekpunt voor een nieuwe offerte/aansluitschema, zie QuoteEditor.tsx en
+// AansluitschemaTab.tsx. Wijzigt niet met terugwerkende kracht: een al
+// aangemaakte offerte/aansluitschema heeft haar eigen, los opgeslagen tekst.
+export interface DefaultTexts {
+  id: string
+  offerte_closing_quote: string
+  offerte_disclaimer_text: string
+  offerte_connections_disclaimer: string
+  aansluitschema_let_op_notities: string
+  updated_at: string
+}
+
 export interface WerkbladMaterial {
   id: string
   name: string
