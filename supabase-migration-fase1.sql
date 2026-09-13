@@ -1871,3 +1871,27 @@ CREATE POLICY "Authenticated users only" ON finka_default_texts FOR ALL TO authe
 
 GRANT ALL ON TABLE finka_default_texts TO anon, authenticated, service_role;
 CREATE INDEX IF NOT EXISTS finka_project_financials_project_idx ON finka_project_financials (project_id);
+
+-- =========================================================
+-- 70. Levertijden Sachsen/Artego — dashboard-widget met handmatige
+--    "Bijwerken"-knop (geen achtergrond-cron: Merel wilde expliciet geen
+--    automatische/steeds-lopende check, alleen bijwerken op klik). Eén rij
+--    per merk i.p.v. één rij met kolommen per merk, zodat een refresh van
+--    het ene merk niet de updated_at van het andere aanraakt.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_delivery_times (
+  brand TEXT PRIMARY KEY CHECK (brand IN ('artego', 'sachsen')),
+  summary TEXT NOT NULL DEFAULT '',
+  source_email_date TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO finka_delivery_times (brand)
+VALUES ('artego'), ('sachsen')
+ON CONFLICT (brand) DO NOTHING;
+
+ALTER TABLE finka_delivery_times ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_delivery_times FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_delivery_times TO anon, authenticated, service_role;

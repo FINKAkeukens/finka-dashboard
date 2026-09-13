@@ -1115,3 +1115,12 @@ export interface MaatformulierSignoff {
   signed_at: string
   signed_by: string
 }
+
+export type DeliveryTimeBrand = 'artego' | 'sachsen'
+
+export interface DeliveryTime {
+  brand: DeliveryTimeBrand
+  summary: string
+  source_email_date: string | null
+  updated_at: string
+}

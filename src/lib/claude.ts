@@ -342,3 +342,62 @@ export async function generateApparatuurAansluitschema(
     return { items: [], groepenverdeling_tekst: '', spoelkast_tekst: null, meterkast_tekst: null }
   }
 }
+
+const DELIVERY_TIME_PROMPT = `Je bent een assistent voor een Nederlandse keukenontwerper. Je krijgt een mail (en eventueel een PDF-bijlage) van een keukenfabrikant met daarin de actuele levertijden.
+
+Vat de actuele levertijd(en) samen in een paar korte, leesbare regels in het Nederlands — geschikt om direct op een dashboard te tonen aan het verkoopteam. Focus ALLEEN op de levertijd-informatie (bijvoorbeeld: hoeveel weken tussen orderbinnenkomst en levering, eventueel per programma/productlijn als dat apart vermeld wordt). Laat disclaimers, contactgegevens, social media-links en andere ruis weg.
+
+Als er meerdere productlijnen/programma's met verschillende levertijden zijn, noem ze apart, elk op een eigen regel (bv. "FINE/VILLA/MODENA: order week 38 → levering vanaf week 44"). Reken het aantal weken tussen orderbinnenkomst en levering uit en noem dat expliciet erbij — dat is makkelijker te lezen dan alleen kalenderweeknummers.
+
+Antwoord ALLEEN met de samenvattende tekst zelf (platte tekst, geen JSON, geen aanhef, geen opsomming van wat je hebt weggelaten). Als je geen levertijd-informatie kunt vinden, antwoord dan met precies: GEEN_LEVERTIJD_GEVONDEN`
+
+export async function extractDeliveryTimeSummary(body: string, pdfBase64?: string | null): Promise<string | null> {
+  const emailContext = `E-mailtekst:\n${body.slice(0, 4000)}`
+
+  function toSummary(text: string): string | null {
+    const trimmed = text.trim()
+    if (!trimmed || trimmed === 'GEEN_LEVERTIJD_GEVONDEN') return null
+    return trimmed
+  }
+
+  // Met PDF-bijlage — gebruik Sonnet voor betere PDF-analyse
+  if (pdfBase64) {
+    try {
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document' as const,
+              source: {
+                type: 'base64' as const,
+                media_type: 'application/pdf' as const,
+                data: pdfBase64,
+              },
+            },
+            {
+              type: 'text' as const,
+              text: `${DELIVERY_TIME_PROMPT}\n\n${emailContext}\n\nAnalyseer de bijgevoegde PDF — daar staan de daadwerkelijke levertijden in, niet (alleen) in de e-mailtekst hierboven.`,
+            },
+          ],
+        }],
+      })
+      const text = response.content[0].type === 'text' ? response.content[0].text : ''
+      return toSummary(text)
+    } catch (err) {
+      console.error('Delivery time PDF extraction failed:', err)
+      return null
+    }
+  }
+
+  // Alleen tekst — gebruik Haiku (goedkoper)
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: `${DELIVERY_TIME_PROMPT}\n\n${emailContext}` }],
+  })
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  return toSummary(text)
+}

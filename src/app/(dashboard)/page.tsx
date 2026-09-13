@@ -3,9 +3,10 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { Users, Zap, Mail, TrendingUp, FolderKanban } from 'lucide-react'
 import Link from 'next/link'
-import { Project, ProjectMilestone } from '@/lib/types'
+import { DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
 import { averageDays, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
+import DeliveryTimesWidget from './DeliveryTimesWidget'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -190,12 +191,19 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
     .limit(5)
 
+  const { data: deliveryTimesData } = await supabase
+    .from('finka_delivery_times')
+    .select('brand, summary, source_email_date, updated_at')
+  const deliveryTimes = (deliveryTimesData ?? []) as DeliveryTime[]
+
   return (
     <div className="p-8">
       <div className="max-w-6xl mb-8">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Dashboard</h1>
         <p className="text-sm text-[#6B6560] mt-1">Welkom terug bij FINKA</p>
       </div>
+
+      <DeliveryTimesWidget initialData={deliveryTimes} />
 
       {/* Stats */}
       <div className="max-w-6xl grid grid-cols-4 gap-4 mb-8">
