@@ -25,6 +25,13 @@ interface AkkoordQuoteRow {
   } | null
 }
 
+// Testprojecten (titel "Test" of klant "Test Test") tellen niet mee in de
+// PNL-cijfers — die zijn alleen om het systeem uit te proberen.
+function isTestProject(project: NonNullable<AkkoordQuoteRow['project']>) {
+  const isTest = (s: string | null | undefined) => (s ?? '').trim().toLowerCase() === 'test'
+  return isTest(project.title) || (isTest(project.customer?.first_name) && isTest(project.customer?.last_name))
+}
+
 function round2(n: number) {
   return Math.round(n * 100) / 100
 }
@@ -58,7 +65,7 @@ export default async function FinancieelPage() {
     supabase.from('finka_financial_settings').select('*').limit(1).maybeSingle(),
   ])
 
-  const rows = ((data ?? []) as unknown as AkkoordQuoteRow[]).filter((r) => !!r.project)
+  const rows = ((data ?? []) as unknown as AkkoordQuoteRow[]).filter((r) => !!r.project && !isTestProject(r.project))
   const belastingPercentage = (settingsData as { belasting_percentage: number } | null)?.belasting_percentage ?? 21
 
   const projects: ProjectFigures[] = rows
