@@ -46,6 +46,30 @@ export default function VragenlijstTab({
     if (updError) setError(updError.message)
   }
 
+  // Eén knop voor alle vragen: zijn ze allemaal al verborgen, dan worden ze
+  // allemaal weer zichtbaar; anders gaan ze allemaal op verborgen.
+  const allHidden = questions.length > 0 && questions.every((q) => responseFor(q.id)?.hidden)
+
+  async function setAllHidden(hidden: boolean) {
+    setError('')
+    setResponses((prev) => {
+      const existing = new Set(prev.map((r) => r.question_id))
+      const updated = prev.map((r) => ({ ...r, hidden }))
+      const added = questions
+        .filter((q) => !existing.has(q.id))
+        .map((q) => ({ id: `temp-${q.id}`, project_id: projectId, question_id: q.id, answer: null, hidden, created_at: '', updated_at: '' }))
+      return [...updated, ...added]
+    })
+    const now = new Date().toISOString()
+    const { error: updError } = await supabase
+      .from('finka_questionnaire_responses')
+      .upsert(
+        questions.map((q) => ({ project_id: projectId, question_id: q.id, hidden, updated_at: now })),
+        { onConflict: 'project_id,question_id' }
+      )
+    if (updError) setError(updError.message)
+  }
+
   if (questions.length === 0) {
     return (
       <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-8 text-center">
@@ -59,6 +83,16 @@ export default function VragenlijstTab({
   return (
     <div className="space-y-4">
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">{error}</p>}
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => setAllHidden(!allHidden)}
+          className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg px-3 py-1.5"
+        >
+          {allHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+          {allHidden ? 'Alle vragen tonen' : 'Alle vragen verbergen'}
+        </button>
+      </div>
 
       {orderedCategories.map((category) => {
         const catQuestions = questions
