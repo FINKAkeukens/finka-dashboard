@@ -59,11 +59,18 @@ export default function ApparatuurOptionEditor({
   appliances,
   option,
   onChange,
+  pickerLabel = 'Apparaat uit bibliotheek',
+  uploadHint = 'Apparatuur die niet uit de bibliotheek komt: upload de leveranciersofferte.',
 }: {
   quoteId: string
   appliances: Appliance[]
   option: ConfiguratorOption
   onChange: (patch: { data?: ApparatuurOptionData; cost_total?: number }) => void
+  // De accessoires-sectie hergebruikt deze editor — zelfde datavorm en
+  // berekening, alleen een eigen knop-/hulptekst en een eigen (gefilterde)
+  // bibliotheeklijst.
+  pickerLabel?: string
+  uploadHint?: string
 }) {
   const data = readData(option.data)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -243,7 +250,7 @@ export default function ApparatuurOptionEditor({
         <div className="flex items-center gap-2 px-4 py-3 border-t border-[#DDD8D2] bg-[#F7F5F2]">
           <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
             <Zap size={13} className="mr-1.5" />
-            Apparaat uit bibliotheek
+            {pickerLabel}
           </Button>
           <Button variant="outline" size="sm" onClick={addManualItem}>
             <Plus size={13} className="mr-1.5" />
@@ -255,7 +262,7 @@ export default function ApparatuurOptionEditor({
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-[#6B6560]">Apparatuur die niet uit de bibliotheek komt: upload de leveranciersofferte.</p>
+        <p className="text-xs text-[#6B6560]">{uploadHint}</p>
         <div className="flex items-center gap-2 shrink-0">
           <input ref={inputRef} type="file" accept="application/pdf" hidden onChange={handleUpload} />
           <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={uploading}>

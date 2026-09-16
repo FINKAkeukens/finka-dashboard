@@ -484,7 +484,11 @@ export interface Quote {
 // optie per onderdeel combineren. Zie het Configurator-tabblad.
 // ---------------------------------------------------------------------------
 
-export type ConfiguratorSection = 'kasten' | 'apparatuur' | 'werkblad' | 'opslag'
+// 'accessoires' werkt precies als 'apparatuur' (zelfde ApparatuurOptionData),
+// maar voedt de kostenrij 'accessoires' en levert offerteregels van type
+// 'accessoire'. Kranen/spoelbakken zitten in die sectie, de rest bij
+// apparatuur — zie ACCESSOIRE_APPLIANCE_TYPES in src/lib/appliance-utils.ts.
+export type ConfiguratorSection = 'kasten' | 'apparatuur' | 'accessoires' | 'werkblad' | 'opslag'
 
 // JSONB-vorm per sectie — vrij van vorm zodat "Dupliceren" gewoon een
 // deep-copy van `data` is. Elke sectie krijgt zijn eigen data-interface;
@@ -552,6 +556,9 @@ export interface ConfiguratorScenario {
   sort_order: number
   kasten_option_id: string | null
   apparatuur_option_id: string | null
+  // Ontbreekt (NULL) bij kostenoverzichten van vóór de accessoires-sectie —
+  // die tellen dan gewoon geen accessoires mee.
+  accessoires_option_id: string | null
   werkblad_option_id: string | null
   opslag_option_id: string | null
   created_at: string

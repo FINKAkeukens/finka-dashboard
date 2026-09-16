@@ -8,11 +8,12 @@ import { ConfiguratorOption, ConfiguratorScenario, ConfiguratorSection, CostBrea
 import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS } from '@/lib/euroline-calc'
 import { Trash2 } from 'lucide-react'
 
-const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'werkblad', 'opslag']
+const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'accessoires', 'werkblad', 'opslag']
 
 const SECTION_LABELS: Record<ConfiguratorSection, string> = {
   kasten: 'Kasten',
   apparatuur: 'Apparatuur',
+  accessoires: 'Accessoires',
   werkblad: 'Werkblad',
   opslag: 'Opslag, levering en montage',
 }
@@ -21,6 +22,7 @@ function selectedOptionId(scenario: ConfiguratorScenario, section: ConfiguratorS
   switch (section) {
     case 'kasten': return scenario.kasten_option_id
     case 'apparatuur': return scenario.apparatuur_option_id
+    case 'accessoires': return scenario.accessoires_option_id
     case 'werkblad': return scenario.werkblad_option_id
     case 'opslag': return scenario.opslag_option_id
   }
@@ -64,12 +66,13 @@ export default function ScenarioCard({
 }) {
   const [editingName, setEditingName] = useState(false)
 
-  const selected = SECTIONS.map((section) => {
-    const id = selectedOptionId(scenario, section)
-    return optionsBySection[section].find((o) => o.id === id)
-  })
-  const total = selected.reduce((sum, o) => sum + (o?.cost_total ?? 0), 0)
-  const missing = SECTIONS.filter((_, i) => !selected[i] && optionsBySection[SECTIONS[i]].length > 0)
+  // Bewust op sectienaam i.p.v. op positie in SECTIONS: een sectie ertussen
+  // zetten verschoof anders stilzwijgend de marges hieronder.
+  const selectedBySection = Object.fromEntries(
+    SECTIONS.map((section) => [section, optionsBySection[section].find((o) => o.id === selectedOptionId(scenario, section))])
+  ) as Record<ConfiguratorSection, ConfiguratorOption | undefined>
+  const total = SECTIONS.reduce((sum, section) => sum + (selectedBySection[section]?.cost_total ?? 0), 0)
+  const missing = SECTIONS.filter((section) => !selectedBySection[section] && optionsBySection[section].length > 0)
 
   // Marge komt uit de kostprijs-opbouw van de Offerte-tab, niet uit de
   // Configurator zelf — die kent alleen kostprijzen per onderdeel. "Opslag"
@@ -80,13 +83,15 @@ export default function ScenarioCard({
   const marginFor = (key: CostCategoryKey) => costBreakdown.find((r) => r.key === key)?.marge_percentage ?? 0
 
   let klantprijsExclBtw = 0
-  const kastenOpt = selected[0]
+  const kastenOpt = selectedBySection.kasten
   if (kastenOpt) klantprijsExclBtw += kastenOpt.cost_total * (1 + marginFor('keukenkastjes') / 100)
-  const apparatuurOpt = selected[1]
+  const apparatuurOpt = selectedBySection.apparatuur
   if (apparatuurOpt) klantprijsExclBtw += apparatuurOpt.cost_total * (1 + marginFor('apparatuur') / 100)
-  const werkbladOpt = selected[2]
+  const accessoiresOpt = selectedBySection.accessoires
+  if (accessoiresOpt) klantprijsExclBtw += accessoiresOpt.cost_total * (1 + marginFor('accessoires') / 100)
+  const werkbladOpt = selectedBySection.werkblad
   if (werkbladOpt) klantprijsExclBtw += werkbladOpt.cost_total * (1 + marginFor('werkblad') / 100)
-  const opslagOpt = selected[3]
+  const opslagOpt = selectedBySection.opslag
   if (opslagOpt) {
     const d = opslagOpt.data as Partial<OpslagOptionData>
     const inputs = d.euroline_inputs && Object.keys(d.euroline_inputs).length

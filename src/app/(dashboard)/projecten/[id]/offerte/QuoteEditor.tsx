@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label'
 import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
-import { formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ApplianceType, ConnectionRow, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { ACCESSOIRE_APPLIANCE_TYPES, formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
+import { Appliance, ConnectionRow, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -52,11 +52,6 @@ const PAGE_ANCHOR_LABELS: Record<QuotePageAnchor, string> = {
   vervolg: 'Vervolg',
   afsluiting: 'Afsluiting',
 }
-
-// Apparaat-types die, ondanks dat ze als QuoteItem type 'apparaat' zijn
-// (uit dezelfde bibliotheek gekozen), in de klantversie bij "Accessoires"
-// horen in plaats van bij "Apparatuur".
-const ACCESSOIRE_APPLIANCE_TYPES: ApplianceType[] = ['kraan', 'spoelbak']
 
 // "Tabje" om per pagina een losse disclaimer-tekst te typen — staat onderaan
 // die pagina in de klantversie, lichtgrijs zoals de sectielabels (zie

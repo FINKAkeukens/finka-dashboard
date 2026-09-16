@@ -1,4 +1,10 @@
-import { Appliance, ApplianceSpecs, EnergyLabel, OvenSubtype, ProductLine } from '@/lib/types'
+import { Appliance, ApplianceSpecs, ApplianceType, EnergyLabel, OvenSubtype, ProductLine } from '@/lib/types'
+
+// Types uit de bibliotheek die als accessoire gelden i.p.v. als apparatuur:
+// ze horen in de offerte bij regeltype 'accessoire', in de kostenrij
+// "Accessoires" en in de gelijknamige klantsectie/configurator-sectie. Hier
+// gedeeld zodat Offerte en Configurator gegarandeerd dezelfde groep hanteren.
+export const ACCESSOIRE_APPLIANCE_TYPES: ApplianceType[] = ['kraan', 'spoelbak']
 
 export const TYPE_LABELS: Record<string, string> = {
   kookplaat: 'Kookplaat',

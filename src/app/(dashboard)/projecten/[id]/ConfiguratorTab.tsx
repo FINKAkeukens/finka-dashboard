@@ -10,16 +10,20 @@ import {
   ConfiguratorOptionData,
   ConfiguratorScenario,
   ConfiguratorSection,
+  CostCategoryKey,
   EurolineRates,
   KastenOptionData,
   OpslagOptionData,
   Quote,
+  QuoteCustomerCategory,
+  QuoteItemType,
   WerkbladOptionData,
   WerkbladRates,
 } from '@/lib/types'
 import { DEFAULT_WERKBLAD_RATES } from '@/lib/werkblad-calc'
 import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, DEFAULT_EUROLINE_RATES } from '@/lib/euroline-calc'
 import { applianceCustomerText, DEFAULT_COST_BREAKDOWN, patchCostRow, replaceCategoryLines } from '@/lib/configurator'
+import { ACCESSOIRE_APPLIANCE_TYPES } from '@/lib/appliance-utils'
 import KastenOptionEditor from './configurator/KastenOptionEditor'
 import WerkbladOptionEditor from './configurator/WerkbladOptionEditor'
 import OpslagOptionEditor from './configurator/OpslagOptionEditor'
@@ -27,11 +31,12 @@ import ApparatuurOptionEditor from './configurator/ApparatuurOptionEditor'
 import OptionTabs from './configurator/OptionTabs'
 import ScenarioCard from './configurator/ScenarioCard'
 
-const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'werkblad', 'opslag']
+const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'accessoires', 'werkblad', 'opslag']
 
 const SECTION_LABELS: Record<ConfiguratorSection, string> = {
   kasten: 'Kasten',
   apparatuur: 'Apparatuur',
+  accessoires: 'Accessoires',
   werkblad: 'Werkblad',
   opslag: 'Opslag, levering en montage',
 }
@@ -39,16 +44,18 @@ const SECTION_LABELS: Record<ConfiguratorSection, string> = {
 const SECTION_DESCRIPTIONS: Record<ConfiguratorSection, string> = {
   kasten: 'Winner Flex / Compusoft-uitdraai — upload de tekening + onderdelenlijst per optie.',
   apparatuur: 'Kies apparatuur uit de bibliotheek — vergelijk bijvoorbeeld twee merken als losse opties.',
+  accessoires: 'Kranen en spoelbakken uit de bibliotheek — eigen kostenrij, los van de apparatuur.',
   werkblad: 'Upload een werkblad-specificatie of bereken zelf een richtprijs per optie.',
   opslag: 'Opslag, levering, installatie en service op basis van de Euroline-tarieven.',
 }
 
 type OptionPatch = Partial<Pick<ConfiguratorOption, 'name' | 'data' | 'cost_total'>>
-type ScenarioPatch = Partial<Pick<ConfiguratorScenario, 'name' | 'kasten_option_id' | 'apparatuur_option_id' | 'werkblad_option_id' | 'opslag_option_id'>>
+type ScenarioPatch = Partial<Pick<ConfiguratorScenario, 'name' | 'kasten_option_id' | 'apparatuur_option_id' | 'accessoires_option_id' | 'werkblad_option_id' | 'opslag_option_id'>>
 
 const SCENARIO_FIELD_BY_SECTION: Record<ConfiguratorSection, keyof ScenarioPatch> = {
   kasten: 'kasten_option_id',
   apparatuur: 'apparatuur_option_id',
+  accessoires: 'accessoires_option_id',
   werkblad: 'werkblad_option_id',
   opslag: 'opslag_option_id',
 }
@@ -211,6 +218,7 @@ export default function ConfiguratorTab({
       const werkblad = options.find((o) => o.id === scenario.werkblad_option_id)
       const opslag = options.find((o) => o.id === scenario.opslag_option_id)
       const apparatuur = options.find((o) => o.id === scenario.apparatuur_option_id)
+      const accessoires = options.find((o) => o.id === scenario.accessoires_option_id)
 
       if (kasten) {
         const d = kasten.data as KastenOptionData
@@ -236,11 +244,25 @@ export default function ConfiguratorTab({
         costBreakdown = patchCostRow(costBreakdown, 'installatie', totals.installatie)
         costBreakdown = patchCostRow(costBreakdown, 'service', totals.service)
       }
-      let apparatuurItems: ApparatuurOptionData['items'] | null = null
-      if (apparatuur) {
-        const d = apparatuur.data as Partial<ApparatuurOptionData>
+      // Apparatuur en accessoires werken identiek (zelfde datavorm), maar elk
+      // met een eigen kostenrij, klantsectie en offerteregel-type — zo wist de
+      // ene sectie nooit de regels van de andere.
+      const itemSections: {
+        option: ConfiguratorOption | undefined
+        costKey: CostCategoryKey
+        category: QuoteCustomerCategory
+        title: string
+        itemType: QuoteItemType
+      }[] = [
+        { option: apparatuur, costKey: 'apparatuur', category: 'apparatuur', title: 'Apparatuur', itemType: 'apparaat' },
+        { option: accessoires, costKey: 'accessoires', category: 'accessoires', title: 'Accessoires', itemType: 'accessoire' },
+      ]
+      const itemsToReplace: { itemType: QuoteItemType; items: ApparatuurOptionData['items'] }[] = []
+      for (const sectionSpec of itemSections) {
+        if (!sectionSpec.option) continue
+        const d = sectionSpec.option.data as Partial<ApparatuurOptionData>
         const items = d.items ?? []
-        costBreakdown = patchCostRow(costBreakdown, 'apparatuur', apparatuur.cost_total)
+        costBreakdown = patchCostRow(costBreakdown, sectionSpec.costKey, sectionSpec.option.cost_total)
         const itemLines = items
           .filter((i) => i.include_in_customer_view)
           .map((i) => {
@@ -249,8 +271,8 @@ export default function ConfiguratorTab({
             return i.brand && i.model ? `${i.brand} ${i.model}` : i.description
           })
           .filter((text): text is string => !!text)
-        customerSections = replaceCategoryLines(customerSections, 'apparatuur', 'Apparatuur', [...itemLines, ...(d.summary_lines ?? [])])
-        apparatuurItems = items
+        customerSections = replaceCategoryLines(customerSections, sectionSpec.category, sectionSpec.title, [...itemLines, ...(d.summary_lines ?? [])])
+        itemsToReplace.push({ itemType: sectionSpec.itemType, items })
       }
 
       const { error: updError } = await supabase
@@ -259,38 +281,38 @@ export default function ConfiguratorTab({
         .eq('id', quote.id)
       if (updError) throw new Error(updError.message)
 
-      if (apparatuurItems) {
-        const { error: delError } = await supabase.from('finka_quote_items').delete().eq('quote_id', quote.id).eq('type', 'apparaat')
+      for (const { itemType, items } of itemsToReplace) {
+        const { error: delError } = await supabase.from('finka_quote_items').delete().eq('quote_id', quote.id).eq('type', itemType)
         if (delError) throw new Error(delError.message)
-        if (apparatuurItems.length) {
-          // sort_order verder laten lopen na de al bestaande (niet-apparaat)
-          // regels, i.p.v. bij 0 te beginnen — anders raken de nieuwe
-          // apparatuur-regels door elkaar gehusseld met product/dienst/
-          // maatwerk-regels die al in de tabel stonden.
-          const { count } = await supabase
-            .from('finka_quote_items')
-            .select('id', { count: 'exact', head: true })
-            .eq('quote_id', quote.id)
-          const baseOrder = count ?? 0
-          const { error: insError } = await supabase.from('finka_quote_items').insert(
-            apparatuurItems.map((item, idx) => ({
-              quote_id: quote.id,
-              type: 'apparaat' as const,
-              appliance_id: item.appliance_id,
-              description: item.description,
-              brand: item.brand,
-              model: item.model,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              unit_price_source: 'in' as const,
-              line_total: round2(item.quantity * item.unit_price),
-              line_total_source: 'auto' as const,
-              sort_order: baseOrder + idx,
-              include_in_customer_view: item.include_in_customer_view,
-            }))
-          )
-          if (insError) throw new Error(insError.message)
-        }
+        if (!items.length) continue
+        // sort_order verder laten lopen na de al bestaande regels, i.p.v. bij 0
+        // te beginnen — anders raken de nieuwe regels door elkaar gehusseld met
+        // de product/dienst/maatwerk-regels die al in de tabel stonden. Per
+        // type opnieuw tellen, want het vorige blok heeft er net regels bij
+        // gezet.
+        const { count } = await supabase
+          .from('finka_quote_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('quote_id', quote.id)
+        const baseOrder = count ?? 0
+        const { error: insError } = await supabase.from('finka_quote_items').insert(
+          items.map((item, idx) => ({
+            quote_id: quote.id,
+            type: itemType,
+            appliance_id: item.appliance_id,
+            description: item.description,
+            brand: item.brand,
+            model: item.model,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            unit_price_source: 'in' as const,
+            line_total: round2(item.quantity * item.unit_price),
+            line_total_source: 'auto' as const,
+            sort_order: baseOrder + idx,
+            include_in_customer_view: item.include_in_customer_view,
+          }))
+        )
+        if (insError) throw new Error(insError.message)
       }
 
       setAppliedIds((prev) => new Set(prev).add(scenario.id))
@@ -315,9 +337,16 @@ export default function ConfiguratorTab({
   const optionsBySection: Record<ConfiguratorSection, ConfiguratorOption[]> = {
     kasten: optionsFor('kasten'),
     apparatuur: optionsFor('apparatuur'),
+    accessoires: optionsFor('accessoires'),
     werkblad: optionsFor('werkblad'),
     opslag: optionsFor('opslag'),
   }
+
+  // Kranen/spoelbakken horen bij Accessoires, al het andere bij Apparatuur —
+  // zo kan hetzelfde artikel niet in twee secties staan en dus niet dubbel in
+  // de kostprijs belanden.
+  const accessoireAppliances = appliances.filter((a) => ACCESSOIRE_APPLIANCE_TYPES.includes(a.type))
+  const apparatuurAppliances = appliances.filter((a) => !ACCESSOIRE_APPLIANCE_TYPES.includes(a.type))
 
   return (
     <div className="space-y-6">
@@ -378,9 +407,19 @@ export default function ConfiguratorTab({
                 {active && section === 'apparatuur' && (
                   <ApparatuurOptionEditor
                     quoteId={quote.id}
-                    appliances={appliances}
+                    appliances={apparatuurAppliances}
                     option={active}
                     onChange={(patch) => updateOption(active.id, patch)}
+                  />
+                )}
+                {active && section === 'accessoires' && (
+                  <ApparatuurOptionEditor
+                    quoteId={quote.id}
+                    appliances={accessoireAppliances}
+                    option={active}
+                    onChange={(patch) => updateOption(active.id, patch)}
+                    pickerLabel="Accessoire uit bibliotheek"
+                    uploadHint="Accessoires die niet uit de bibliotheek komen: upload de leveranciersofferte."
                   />
                 )}
               </>

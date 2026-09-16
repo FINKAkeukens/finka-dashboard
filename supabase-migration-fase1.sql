@@ -1972,3 +1972,20 @@ USING (bucket_id = 'leverancier-documenten');
 ALTER TABLE finka_quote_items DROP CONSTRAINT IF EXISTS finka_quote_items_type_check;
 ALTER TABLE finka_quote_items ADD CONSTRAINT finka_quote_items_type_check
   CHECK (type IN ('apparaat','accessoire','product','dienst','maatwerk'));
+
+-- =========================================================
+-- 73. Configurator-sectie "accessoires" — kranen/spoelbakken en los
+--    toebehoren krijgen een eigen sectie naast Apparatuur, zodat ze niet in
+--    twee secties (en dus dubbel in de kostprijs) kunnen belanden. Zelfde
+--    datavorm als de apparatuur-sectie (items + bijlagen + samenvatting),
+--    maar met een eigen kostenrij ('accessoires') en offerteregel-type
+--    ('accessoire', zie sectie 72). Bestaande kostenoverzichten houden NULL
+--    en tellen dus gewoon geen accessoires mee.
+-- =========================================================
+
+ALTER TABLE finka_configurator_options DROP CONSTRAINT IF EXISTS finka_configurator_options_section_check;
+ALTER TABLE finka_configurator_options ADD CONSTRAINT finka_configurator_options_section_check
+  CHECK (section IN ('kasten', 'apparatuur', 'accessoires', 'werkblad', 'opslag'));
+
+ALTER TABLE finka_configurator_scenarios
+  ADD COLUMN IF NOT EXISTS accessoires_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL;
