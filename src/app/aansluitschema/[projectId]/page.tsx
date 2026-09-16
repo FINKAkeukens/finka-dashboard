@@ -48,10 +48,12 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
         .cat-row td { background: #EFEAE0; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
         .watermark { position: absolute; top: 6mm; left: 14mm; font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: #9A948D; }
         .watermark-bottom { position: absolute; bottom: 6mm; left: 14mm; font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: #9A948D; }
+        ul { list-style: disc; list-style-position: outside; }
+        .akkoord-block { break-inside: avoid; page-break-inside: avoid; }
         @media print {
           @page { size: A4; margin: 0; }
           .no-print { display: none !important; }
-          .a4 { page-break-after: always; break-after: page; }
+          .a4:not(:last-child) { page-break-after: always; break-after: page; }
         }
         @media screen {
           body { background: #e5e5e5; }
@@ -156,30 +158,30 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
             <div className="watermark">Intern</div>
 
             {schema?.groepenverdeling_tekst && (
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 12, marginBottom: 4 }}>Groepenverdeling</h3>
-                <p style={{ fontSize: 10.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{schema.groepenverdeling_tekst}</p>
+              <div style={{ marginBottom: 12 }}>
+                <h3 style={{ fontSize: 12, marginBottom: 3 }}>Groepenverdeling</h3>
+                <p style={{ fontSize: 10.5, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{schema.groepenverdeling_tekst}</p>
               </div>
             )}
 
             {schema?.extra_secties?.map((sectie, i) => (
-              <div key={i} style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 12, marginBottom: 4 }}>{sectie.titel}</h3>
-                <p style={{ fontSize: 10.5, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{sectie.tekst}</p>
+              <div key={i} style={{ marginBottom: 12 }}>
+                <h3 style={{ fontSize: 12, marginBottom: 3 }}>{sectie.titel}</h3>
+                <p style={{ fontSize: 10.5, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{sectie.tekst}</p>
               </div>
             ))}
 
             {letOpLines.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 14, marginBottom: 8 }}>Let op</h3>
-                <ul style={{ fontSize: 10.5, lineHeight: 1.6, paddingLeft: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <h3 style={{ fontSize: 14, marginBottom: 6 }}>Let op</h3>
+                <ul style={{ fontSize: 10.5, lineHeight: 1.45, paddingLeft: 16 }}>
                   {letOpLines.map((line, i) => <li key={i}>{line}</li>)}
                 </ul>
               </div>
             )}
 
-            <div style={{ marginTop: 32 }}>
-              <h3 style={{ fontSize: 14, marginBottom: 8 }}>Akkoord</h3>
+            <div className="akkoord-block" style={{ marginTop: 20 }}>
+              <h3 style={{ fontSize: 14, marginBottom: 6 }}>Akkoord</h3>
               <table>
                 <thead>
                   <tr>
@@ -189,14 +191,14 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
                   </tr>
                 </thead>
                 <tbody>
-                  <tr style={{ height: 60 }}>
+                  <tr style={{ height: 50 }}>
                     <td style={{ color: '#9A948D', fontSize: 9 }}>Naam / datum</td>
                     <td style={{ color: '#9A948D', fontSize: 9 }}>Naam / datum</td>
                     <td style={{ color: '#9A948D', fontSize: 9 }}>Naam / datum</td>
                   </tr>
                 </tbody>
               </table>
-              <p style={{ fontSize: 9, fontStyle: 'italic', color: '#9A948D', marginTop: 8 }}>
+              <p style={{ fontSize: 9, fontStyle: 'italic', color: '#9A948D', marginTop: 6 }}>
                 Wijzigingen in de opstelling na akkoord kunnen leiden tot extra kosten en een langere levertijd. Definitief inmeten vindt plaats nadat wanden en vloer zijn afgewerkt.
               </p>
             </div>
