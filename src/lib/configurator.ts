@@ -9,7 +9,7 @@ export const DEFAULT_COST_BREAKDOWN: CostBreakdownItem[] = [
   { key: 'keukenkastjes', label: 'Keukenkastjes', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 75, marge_percentage_source: 'def' },
   { key: 'apparatuur', label: 'Apparatuur', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'werkblad', label: 'Aanrechtblad', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 25, marge_percentage_source: 'def' },
-  { key: 'accessoires', label: 'Accessoires', werkelijke_kosten: 0, werkelijke_kosten_source: 'def', marge_percentage: 10, marge_percentage_source: 'def' },
+  { key: 'accessoires', label: 'Accessoires', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 10, marge_percentage_source: 'def' },
   { key: 'inmeten', label: 'Inmeten', werkelijke_kosten: 250, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'opslag', label: 'Opslag', werkelijke_kosten: 139.75, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'levering', label: 'Levering', werkelijke_kosten: 360.25, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },

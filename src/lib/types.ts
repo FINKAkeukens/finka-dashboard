@@ -201,7 +201,7 @@ export interface Project {
 }
 
 export type QuoteStatus = 'concept' | 'verstuurd' | 'akkoord'
-export type QuoteItemType = 'apparaat' | 'product' | 'dienst' | 'maatwerk'
+export type QuoteItemType = 'apparaat' | 'accessoire' | 'product' | 'dienst' | 'maatwerk'
 
 export type CostCategoryKey =
   | 'keukenkastjes'

@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 const TYPE_LABELS: Record<QuoteItemType, string> = {
   apparaat: 'Apparaat',
+  accessoire: 'Accessoire',
   product: 'Product',
   dienst: 'Dienst',
   maatwerk: 'Maatwerk',
@@ -25,6 +26,7 @@ const TYPE_LABELS: Record<QuoteItemType, string> = {
 
 const CUSTOMER_CATEGORY_BY_TYPE: Record<QuoteItemType, QuoteCustomerCategory> = {
   apparaat: 'apparatuur',
+  accessoire: 'accessoires',
   dienst: 'overig',
   maatwerk: 'overig',
   product: 'overig',
@@ -316,13 +318,38 @@ export default function QuoteEditor({
   const [totalValue, setTotalValue] = useState(initialQuote?.total_price ?? 0)
   const [totalSource, setTotalSource] = useState<FieldSource>(initialQuote?.total_price_source ?? 'auto')
 
-  // Apparatuur-kosten volgen live uit de interne regels — geen handmatige
-  // invoer nodig zolang de rij op 'auto' staat.
-  const liveApparatuurCost = round2(items.filter((i) => i.type === 'apparaat').reduce((sum, i) => sum + lineTotal(i), 0))
+  // Apparatuur- en accessoire-kosten volgen live uit de interne regels — geen
+  // handmatige invoer nodig zolang de rij op 'auto' staat. Elk type voedt
+  // precies één kostenrij, zodat een regel nooit dubbel meetelt.
+  const liveCostByType = (type: QuoteItemType) =>
+    round2(items.filter((i) => i.type === type).reduce((sum, i) => sum + lineTotal(i), 0))
+  const liveApparatuurCost = liveCostByType('apparaat')
+  const liveAccessoiresCost = liveCostByType('accessoire')
+
+  function autoCostFor(key: CostBreakdownItem['key']): number | null {
+    if (key === 'apparatuur') return liveApparatuurCost
+    if (key === 'accessoires') return liveAccessoiresCost
+    return null
+  }
+
+  // Volgt deze rij de interne regels? Alleen een handmatig ingevuld bedrag
+  // ('in') blijft staan. 'def' telt hier als automatisch: dat is de nooit
+  // aangeraakte standaardwaarde (0) van een rij die zichzelf hoort te vullen
+  // — anders bleef Accessoires op €0 staan in offertes van vóór dit type.
+  function followsItems(row: CostBreakdownItem): boolean {
+    return autoCostFor(row.key) !== null && row.werkelijke_kosten_source !== 'in'
+  }
 
   function displayedCost(row: CostBreakdownItem): number {
-    if (row.key === 'apparatuur' && row.werkelijke_kosten_source === 'auto') return liveApparatuurCost
+    if (followsItems(row)) return autoCostFor(row.key)!
     return round2(row.werkelijke_kosten)
+  }
+
+  // Een rij die meeloopt met de interne regels toont AUTO, ook als er nog
+  // 'def' in de database staat — dat wordt bij de eerstvolgende opslag
+  // rechtgetrokken (zie saveCostBreakdownNow).
+  function displayedCostSource(row: CostBreakdownItem): FieldSource {
+    return followsItems(row) ? 'auto' : row.werkelijke_kosten_source
   }
 
   function updateCostRow(key: CostBreakdownItem['key'], patch: Partial<CostBreakdownItem>) {
@@ -340,7 +367,11 @@ export default function QuoteEditor({
   // op de meeste andere plekken in het dashboard.
   async function saveCostBreakdownNow(rows: CostBreakdownItem[] = costBreakdown) {
     if (!quote) return
-    const finalRows = rows.map((r) => ({ ...r, werkelijke_kosten: displayedCost(r) }))
+    const finalRows = rows.map((r) => ({
+      ...r,
+      werkelijke_kosten: displayedCost(r),
+      werkelijke_kosten_source: displayedCostSource(r),
+    }))
     const { error: updError } = await supabase
       .from('finka_quotes')
       .update({ cost_breakdown: finalRows, updated_at: new Date().toISOString() })
@@ -784,7 +815,11 @@ export default function QuoteEditor({
 
     // "auto"-rijen (Keukenkastjes/Apparatuur) slaan het live-berekende bedrag
     // op i.p.v. de mogelijk verouderde opgeslagen waarde.
-    const finalCostBreakdown = costBreakdown.map((r) => ({ ...r, werkelijke_kosten: displayedCost(r) }))
+    const finalCostBreakdown = costBreakdown.map((r) => ({
+      ...r,
+      werkelijke_kosten: displayedCost(r),
+      werkelijke_kosten_source: displayedCostSource(r),
+    }))
     const finalTotal = totalSource === 'auto' ? totaalPrijsInclBtw : totalValue
     // Eerste keer dat de status op 'akkoord' komt te staan — voor de
     // omzet-rapportage op /financieel. Blijft daarna staan, ook als de
@@ -963,6 +998,9 @@ export default function QuoteEditor({
             <option value="akkoord">Akkoord</option>
           </select>
         </div>
+        {/* Zelfde opslaan-knop als onderaan de pagina (zelfde handleSave) —
+           bovenaan herhaald zodat een lange offerte niet eerst helemaal
+           doorgescrold hoeft te worden om te bewaren. */}
         <div className="flex items-center gap-3">
           <span className="text-xs text-[#9A948D]">Versie {quote.version}</span>
           <a
@@ -973,6 +1011,10 @@ export default function QuoteEditor({
           >
             Klantversie bekijken →
           </a>
+          {saved && <span className="text-sm text-green-700">Opgeslagen ✓</span>}
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? 'Opslaan...' : 'Offerte opslaan'}
+          </Button>
         </div>
       </div>
 
@@ -1297,8 +1339,8 @@ export default function QuoteEditor({
                         onBlur={() => saveCostBreakdownNow()}
                         className="w-full min-w-0 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
                       />
-                      <SourceTag source={row.werkelijke_kosten_source} />
-                      {row.werkelijke_kosten_source === 'in' && (row.key === 'keukenkastjes' || row.key === 'apparatuur') && (
+                      <SourceTag source={displayedCostSource(row)} />
+                      {row.werkelijke_kosten_source === 'in' && (row.key === 'keukenkastjes' || row.key === 'apparatuur' || row.key === 'accessoires') && (
                         <button
                           title="Terug naar automatisch"
                           onClick={() => {

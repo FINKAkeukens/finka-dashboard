@@ -1959,3 +1959,16 @@ USING (bucket_id = 'leverancier-documenten');
 CREATE POLICY "Authenticated kunnen leverancier-documenten verwijderen"
 ON storage.objects FOR DELETE TO authenticated
 USING (bucket_id = 'leverancier-documenten');
+
+-- =========================================================
+-- 72. Offerteregel-type "accessoire" — kranen/spoelbakken en los toebehoren
+--    stonden tot nu toe als type 'apparaat' in de interne regels, waardoor
+--    hun kostprijs automatisch in de kostenrij "Apparatuur" viel terwijl ze
+--    bij de klant onder "Accessoires" horen. Met een eigen type voedt zo'n
+--    regel voortaan de kostenrij "Accessoires" (zie displayedCost in
+--    QuoteEditor.tsx). Bestaande regels blijven staan zoals ze zijn.
+-- =========================================================
+
+ALTER TABLE finka_quote_items DROP CONSTRAINT IF EXISTS finka_quote_items_type_check;
+ALTER TABLE finka_quote_items ADD CONSTRAINT finka_quote_items_type_check
+  CHECK (type IN ('apparaat','accessoire','product','dienst','maatwerk'));
