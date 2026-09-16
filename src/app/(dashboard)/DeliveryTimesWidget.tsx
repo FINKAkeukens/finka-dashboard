@@ -15,6 +15,29 @@ function formatUpdatedAt(iso: string | null): string {
   return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+// Zet de door Claude opgeleverde platte tekst om in blokken: regels die met
+// "- " beginnen worden een <ul> met bolletjes, alle andere regels (intro of
+// productlijn-kopregels) worden losse regels. Zie de DELIVERY_TIME_PROMPT in
+// src/lib/claude.ts voor het verwachte format.
+type SummaryBlock = { type: 'header' | 'list'; lines: string[] }
+
+function parseSummaryBlocks(summary: string): SummaryBlock[] {
+  const blocks: SummaryBlock[] = []
+  for (const raw of summary.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    if (line.startsWith('- ')) {
+      const text = line.slice(2).trim()
+      const last = blocks[blocks.length - 1]
+      if (last?.type === 'list') last.lines.push(text)
+      else blocks.push({ type: 'list', lines: [text] })
+    } else {
+      blocks.push({ type: 'header', lines: [line] })
+    }
+  }
+  return blocks
+}
+
 export default function DeliveryTimesWidget({ initialData }: { initialData: DeliveryTime[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +88,19 @@ export default function DeliveryTimesWidget({ initialData }: { initialData: Deli
             <div key={brand} className="border border-[#EDE9E3] rounded-lg p-4">
               <p className="text-sm font-medium text-[#1C1B19] mb-2">{BRAND_LABELS[brand]}</p>
               {entry?.summary ? (
-                <p className="text-sm text-[#3D3935] whitespace-pre-line">{entry.summary}</p>
+                <div className="text-sm text-[#3D3935] space-y-1.5">
+                  {parseSummaryBlocks(entry.summary).map((block, i) =>
+                    block.type === 'list' ? (
+                      <ul key={i} className="list-disc list-outside pl-4 space-y-0.5">
+                        {block.lines.map((line, j) => (
+                          <li key={j}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p key={i} className="font-medium text-[#1C1B19]">{block.lines[0]}</p>
+                    )
+                  )}
+                </div>
               ) : (
                 <p className="text-sm text-[#6B6560] italic">Nog geen levertijden opgehaald — klik op &quot;Bijwerken&quot;</p>
               )}
