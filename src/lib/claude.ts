@@ -343,27 +343,51 @@ export async function generateApparatuurAansluitschema(
   }
 }
 
+export interface DeliveryTimeSummary {
+  intro: string | null
+  rows: { programma: string; levertijd: string }[]
+}
+
 const DELIVERY_TIME_PROMPT = `Je bent een assistent voor een Nederlandse keukenontwerper. Je krijgt een mail (en eventueel een PDF-bijlage) van een keukenfabrikant met daarin de actuele levertijden.
 
-Vat de actuele levertijd(en) samen als een lijst in het Nederlands — geschikt om direct op een dashboard te tonen aan het verkoopteam. Focus ALLEEN op de levertijd-informatie (bijvoorbeeld: hoeveel weken tussen orderbinnenkomst en levering, eventueel per programma/productlijn als dat apart vermeld wordt). Laat disclaimers, contactgegevens, social media-links en andere ruis weg.
+Haal de actuele levertijd-informatie eruit voor gebruik in een compact tabelletje op een dashboard voor het verkoopteam (kolommen: programma/productlijn en levertijd). Focus ALLEEN op de levertijd-informatie. Laat disclaimers, contactgegevens, social media-links en andere ruis weg.
 
-Wees zo beknopt mogelijk — dit moet in één oogopslag leesbaar zijn, niet een volledige tabel. Belangrijk: als meerdere productlijnen/programma's/afwerkingen exact dezelfde levertijd hebben, zet ze SAMEN op één regel (namen gescheiden door komma's) in plaats van elk een eigen regel te geven — groepeer dus op levertijd, niet op productlijn. Alleen als de levertijd per week verschilt (bv. een reeks van meerdere orderweken met elk een andere leverweek) mag dat wél als losse regels per week.
+Wees zo beknopt mogelijk per rij. Belangrijk: als meerdere productlijnen/programma's/afwerkingen exact dezelfde levertijd hebben, zet ze SAMEN in één rij (namen gescheiden door komma's in de "programma"-kolom) in plaats van elk een eigen rij te geven — groepeer dus op levertijd, niet op productlijn.
 
-Gebruik exact dit format, platte tekst zonder markdown-opmaak (geen **, geen #):
-- Eén losse regel bovenaan mag een algemene mededeling zijn (bv. een uiterste besteldatum), zonder opsommingsteken.
-- Elke regel begint met "- " (koppelteken plus spatie), bijvoorbeeld: "- FINE pro, FINE, VILLA: order week 38 → levering vanaf week 44 (6 weken)" of bij gelijke levertijd voor alles: "- Standaard assortiment: levering week 42-43 (ca. 3-4 weken)". Reken het aantal weken tussen orderbinnenkomst en levering uit en noem dat expliciet erbij — dat is makkelijker te lezen dan alleen kalenderweeknummers.
-- Gebruik GEEN aparte kopregels zonder opsommingsteken voor productlijnen — de productlijn-naam hoort aan het begin van de "- "-regel zelf, gevolgd door een dubbele punt.
+- "intro": een korte algemene mededeling als die er is (bv. een uiterste besteldatum), anders null.
+- "rows": één rij per (gegroepeerde) levertijd. "programma" is de naam van de productlijn/het programma (of "Algemeen"/"Standaard assortiment" als er geen onderscheid is). "levertijd" is een korte tekst met de leverweek(en) — reken het aantal weken tussen orderbinnenkomst en levering uit en noem dat erbij, bv. "week 42-43 (ca. 4 weken)" of bij meerdere orderweken "week 38→42, 39→43, 40→44 (4 weken)".
 
-Antwoord ALLEEN met deze platte tekst zelf (geen JSON, geen aanhef, geen opsomming van wat je hebt weggelaten). Als je geen levertijd-informatie kunt vinden, antwoord dan met precies: GEEN_LEVERTIJD_GEVONDEN`
+Antwoord ALLEEN met geldige JSON in dit format:
+{
+  "intro": "..." of null,
+  "rows": [
+    { "programma": "...", "levertijd": "..." }
+  ]
+}
+Als je geen levertijd-informatie kunt vinden: {"intro": null, "rows": []}`
 
-export async function extractDeliveryTimeSummary(body: string, pdfBase64?: string | null): Promise<string | null> {
-  const emailContext = `E-mailtekst:\n${body.slice(0, 4000)}`
-
-  function toSummary(text: string): string | null {
-    const trimmed = text.trim()
-    if (!trimmed || trimmed === 'GEEN_LEVERTIJD_GEVONDEN') return null
-    return trimmed
+function parseDeliverySummary(text: string): DeliveryTimeSummary | null {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+    const parsed = JSON.parse(jsonMatch[0])
+    const rows = Array.isArray(parsed.rows)
+      ? parsed.rows
+          .filter((r: unknown): r is { programma: unknown; levertijd: unknown } => typeof r === 'object' && r !== null)
+          .map((r: { programma: unknown; levertijd: unknown }) => ({
+            programma: String(r.programma ?? ''),
+            levertijd: String(r.levertijd ?? ''),
+          }))
+      : []
+    if (rows.length === 0) return null
+    return { intro: typeof parsed.intro === 'string' ? parsed.intro : null, rows }
+  } catch {
+    return null
   }
+}
+
+export async function extractDeliveryTimeSummary(body: string, pdfBase64?: string | null): Promise<DeliveryTimeSummary | null> {
+  const emailContext = `E-mailtekst:\n${body.slice(0, 4000)}`
 
   // Met PDF-bijlage — gebruik Sonnet voor betere PDF-analyse
   if (pdfBase64) {
@@ -390,7 +414,7 @@ export async function extractDeliveryTimeSummary(body: string, pdfBase64?: strin
         }],
       })
       const text = response.content[0].type === 'text' ? response.content[0].text : ''
-      return toSummary(text)
+      return parseDeliverySummary(text)
     } catch (err) {
       console.error('Delivery time PDF extraction failed:', err)
       return null
@@ -404,5 +428,5 @@ export async function extractDeliveryTimeSummary(body: string, pdfBase64?: strin
     messages: [{ role: 'user', content: `${DELIVERY_TIME_PROMPT}\n\n${emailContext}` }],
   })
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  return toSummary(text)
+  return parseDeliverySummary(text)
 }

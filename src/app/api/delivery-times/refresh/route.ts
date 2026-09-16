@@ -53,7 +53,7 @@ export async function POST() {
         .from('finka_delivery_times')
         .upsert({
           brand,
-          summary,
+          summary: JSON.stringify(summary),
           source_email_date: email.received_at,
           updated_at: new Date().toISOString(),
         })

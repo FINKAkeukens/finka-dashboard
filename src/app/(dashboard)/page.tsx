@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
 import { averageDays, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
+import { getIsoWeek } from '@/lib/iso-week'
 import DeliveryTimesWidget from './DeliveryTimesWidget'
 
 export default async function DashboardPage() {
@@ -203,7 +204,7 @@ export default async function DashboardPage() {
         <p className="text-sm text-[#6B6560] mt-1">Welkom terug bij FINKA</p>
       </div>
 
-      <DeliveryTimesWidget initialData={deliveryTimes} />
+      <DeliveryTimesWidget initialData={deliveryTimes} currentWeek={getIsoWeek(new Date())} />
 
       {/* Stats */}
       <div className="max-w-6xl grid grid-cols-4 gap-4 mb-8">

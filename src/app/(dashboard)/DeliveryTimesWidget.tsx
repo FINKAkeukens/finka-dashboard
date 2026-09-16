@@ -15,30 +15,32 @@ function formatUpdatedAt(iso: string | null): string {
   return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-// Zet de door Claude opgeleverde platte tekst om in blokken: regels die met
-// "- " beginnen worden een <ul> met bolletjes, alle andere regels (intro of
-// productlijn-kopregels) worden losse regels. Zie de DELIVERY_TIME_PROMPT in
-// src/lib/claude.ts voor het verwachte format.
-type SummaryBlock = { type: 'header' | 'list'; lines: string[] }
-
-function parseSummaryBlocks(summary: string): SummaryBlock[] {
-  const blocks: SummaryBlock[] = []
-  for (const raw of summary.split('\n')) {
-    const line = raw.trim()
-    if (!line) continue
-    if (line.startsWith('- ')) {
-      const text = line.slice(2).trim()
-      const last = blocks[blocks.length - 1]
-      if (last?.type === 'list') last.lines.push(text)
-      else blocks.push({ type: 'list', lines: [text] })
-    } else {
-      blocks.push({ type: 'header', lines: [line] })
-    }
-  }
-  return blocks
+interface ParsedSummary {
+  intro: string | null
+  rows: { programma: string; levertijd: string }[]
 }
 
-export default function DeliveryTimesWidget({ initialData }: { initialData: DeliveryTime[] }) {
+// De opgeslagen summary is JSON ({intro, rows}, zie DELIVERY_TIME_PROMPT in
+// src/lib/claude.ts). Bij een oudere, nog niet opnieuw opgehaalde rij (vóór
+// de omzetting naar tabelvorm) is dat platte tekst — dan toont de tabel niks
+// en valt hij terug op de rauwe tekst i.p.v. te crashen.
+function parseSummary(summary: string): ParsedSummary | null {
+  try {
+    const parsed = JSON.parse(summary)
+    if (Array.isArray(parsed?.rows)) return parsed as ParsedSummary
+    return null
+  } catch {
+    return null
+  }
+}
+
+export default function DeliveryTimesWidget({
+  initialData,
+  currentWeek,
+}: {
+  initialData: DeliveryTime[]
+  currentWeek: { week: number; year: number }
+}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -65,9 +67,14 @@ export default function DeliveryTimesWidget({ initialData }: { initialData: Deli
   return (
     <div className="max-w-6xl bg-white rounded-xl border border-[#DDD8D2] p-5 mb-8">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Truck size={16} className="text-[#C9A96E]" />
-          <h2 className="text-sm font-semibold text-[#1C1B19]">Actuele levertijden</h2>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Truck size={16} className="text-[#C9A96E]" />
+            <h2 className="text-sm font-semibold text-[#1C1B19]">Actuele levertijden</h2>
+          </div>
+          <span className="text-xs font-medium text-[#6B6560] bg-[#F5F2ED] rounded-full px-2.5 py-1">
+            Nu week {currentWeek.week} · {currentWeek.year}
+          </span>
         </div>
         <button
           onClick={handleRefresh}
@@ -84,23 +91,30 @@ export default function DeliveryTimesWidget({ initialData }: { initialData: Deli
       <div className="grid grid-cols-2 gap-4">
         {(['artego', 'sachsen'] as const).map((brand) => {
           const entry = byBrand.get(brand)
+          const parsed = entry?.summary ? parseSummary(entry.summary) : null
           return (
             <div key={brand} className="border border-[#EDE9E3] rounded-lg p-4">
               <p className="text-sm font-medium text-[#1C1B19] mb-2">{BRAND_LABELS[brand]}</p>
-              {entry?.summary ? (
-                <div className="text-sm text-[#3D3935] leading-snug space-y-1">
-                  {parseSummaryBlocks(entry.summary).map((block, i) =>
-                    block.type === 'list' ? (
-                      <ul key={i} className="list-disc list-outside pl-4 space-y-0">
-                        {block.lines.map((line, j) => (
-                          <li key={j}>{line}</li>
+              {parsed ? (
+                <div className="text-sm text-[#3D3935]">
+                  {parsed.intro && <p className="mb-2 text-[#6B6560]">{parsed.intro}</p>}
+                  {parsed.rows.length > 0 ? (
+                    <table className="w-full text-left border-collapse">
+                      <tbody>
+                        {parsed.rows.map((row, i) => (
+                          <tr key={i} className="border-t border-[#EDE9E3] first:border-t-0">
+                            <td className="py-1.5 pr-3 align-top text-[#1C1B19] font-medium">{row.programma}</td>
+                            <td className="py-1.5 align-top">{row.levertijd}</td>
+                          </tr>
                         ))}
-                      </ul>
-                    ) : (
-                      <p key={i} className="font-medium text-[#1C1B19]">{block.lines[0]}</p>
-                    )
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-[#6B6560] italic">Geen levertijd-informatie gevonden</p>
                   )}
                 </div>
+              ) : entry?.summary ? (
+                <p className="text-sm text-[#6B6560] italic">Nieuwe weergave beschikbaar — klik op &quot;Bijwerken&quot;</p>
               ) : (
                 <p className="text-sm text-[#6B6560] italic">Nog geen levertijden opgehaald — klik op &quot;Bijwerken&quot;</p>
               )}
