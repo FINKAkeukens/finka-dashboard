@@ -347,10 +347,12 @@ const DELIVERY_TIME_PROMPT = `Je bent een assistent voor een Nederlandse keukeno
 
 Vat de actuele levertijd(en) samen als een lijst in het Nederlands — geschikt om direct op een dashboard te tonen aan het verkoopteam. Focus ALLEEN op de levertijd-informatie (bijvoorbeeld: hoeveel weken tussen orderbinnenkomst en levering, eventueel per programma/productlijn als dat apart vermeld wordt). Laat disclaimers, contactgegevens, social media-links en andere ruis weg.
 
+Wees zo beknopt mogelijk — dit moet in één oogopslag leesbaar zijn, niet een volledige tabel. Belangrijk: als meerdere productlijnen/programma's/afwerkingen exact dezelfde levertijd hebben, zet ze SAMEN op één regel (namen gescheiden door komma's) in plaats van elk een eigen regel te geven — groepeer dus op levertijd, niet op productlijn. Alleen als de levertijd per week verschilt (bv. een reeks van meerdere orderweken met elk een andere leverweek) mag dat wél als losse regels per week.
+
 Gebruik exact dit format, platte tekst zonder markdown-opmaak (geen **, geen #):
 - Eén losse regel bovenaan mag een algemene mededeling zijn (bv. een uiterste besteldatum), zonder opsommingsteken.
-- Als er meerdere productlijnen/programma's met verschillende levertijden zijn: per productlijn eerst een korte kopregel met de naam van de productlijn gevolgd door een dubbele punt (géén opsommingsteken ervoor), daaronder de bijbehorende levertijd-regel(s).
-- Elke levertijd-regel begint met "- " (koppelteken plus spatie), bijvoorbeeld: "- Order week 38 → levering vanaf week 44 (6 weken)". Reken het aantal weken tussen orderbinnenkomst en levering uit en noem dat expliciet erbij — dat is makkelijker te lezen dan alleen kalenderweeknummers.
+- Elke regel begint met "- " (koppelteken plus spatie), bijvoorbeeld: "- FINE pro, FINE, VILLA: order week 38 → levering vanaf week 44 (6 weken)" of bij gelijke levertijd voor alles: "- Standaard assortiment: levering week 42-43 (ca. 3-4 weken)". Reken het aantal weken tussen orderbinnenkomst en levering uit en noem dat expliciet erbij — dat is makkelijker te lezen dan alleen kalenderweeknummers.
+- Gebruik GEEN aparte kopregels zonder opsommingsteken voor productlijnen — de productlijn-naam hoort aan het begin van de "- "-regel zelf, gevolgd door een dubbele punt.
 
 Antwoord ALLEEN met deze platte tekst zelf (geen JSON, geen aanhef, geen opsomming van wat je hebt weggelaten). Als je geen levertijd-informatie kunt vinden, antwoord dan met precies: GEEN_LEVERTIJD_GEVONDEN`
 

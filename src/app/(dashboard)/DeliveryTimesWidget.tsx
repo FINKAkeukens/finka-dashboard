@@ -88,10 +88,10 @@ export default function DeliveryTimesWidget({ initialData }: { initialData: Deli
             <div key={brand} className="border border-[#EDE9E3] rounded-lg p-4">
               <p className="text-sm font-medium text-[#1C1B19] mb-2">{BRAND_LABELS[brand]}</p>
               {entry?.summary ? (
-                <div className="text-sm text-[#3D3935] space-y-1.5">
+                <div className="text-sm text-[#3D3935] leading-snug space-y-1">
                   {parseSummaryBlocks(entry.summary).map((block, i) =>
                     block.type === 'list' ? (
-                      <ul key={i} className="list-disc list-outside pl-4 space-y-0.5">
+                      <ul key={i} className="list-disc list-outside pl-4 space-y-0">
                         {block.lines.map((line, j) => (
                           <li key={j}>{line}</li>
                         ))}
