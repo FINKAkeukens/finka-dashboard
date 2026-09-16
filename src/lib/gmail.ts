@@ -75,14 +75,20 @@ function parseGmailMessage(msg: gmail_v1.Schema$Message): EmailData {
     part.parts?.forEach(extractBody)
   }
   extractBody(msg.payload ?? undefined)
-  // Gebruik HTML als er geen plain text is
-  if (!bodyText.trim() && htmlFallback) bodyText = htmlFallback
+  // Gebruik de rijkere van de twee — sommige afzenders sturen een vrijwel
+  // lege plain-text placeholder ("uw mailprogramma ondersteunt geen HTML")
+  // náást de eigenlijke HTML-inhoud; dan is de (gestripte) HTML-tekst
+  // duidelijk langer en bevat die de daadwerkelijke inhoud.
+  if (htmlFallback.length > bodyText.trim().length) bodyText = htmlFallback
 
-  // Verzamel PDF-bijlagen
+  // Verzamel PDF-bijlagen — sommige afzenders geven een PDF-bijlage als
+  // application/octet-stream mee i.p.v. application/pdf, dus ook op
+  // bestandsextensie matchen i.p.v. alleen op mimeType.
   const pdf_attachments: { messageId: string; attachmentId: string; filename: string }[] = []
   const collectAttachments = (part: GmailPayload | undefined) => {
     if (!part) return
-    if (part.filename && part.body?.attachmentId && part.mimeType === 'application/pdf') {
+    const isPdf = part.mimeType === 'application/pdf' || part.filename?.toLowerCase().endsWith('.pdf')
+    if (part.filename && part.body?.attachmentId && isPdf) {
       pdf_attachments.push({
         messageId: msg.id!,
         attachmentId: part.body.attachmentId,
