@@ -1,14 +1,29 @@
 import { NextResponse } from 'next/server'
-import { fetchLatestEmail } from '@/lib/gmail'
+import { getGmailClient } from '@/lib/gmail'
 import { createClient } from '@supabase/supabase-js'
 import { DeliveryTimeBrand } from '@/lib/types'
+import { gmail_v1 } from 'googleapis'
 
 // TIJDELIJKE diagnostische route — geen Claude-call, geen DB-write, alleen
-// om te zien wat er exact uit Gmail komt. Wordt weer verwijderd zodra het
-// "levertijden laden niet"-probleem is gevonden.
+// om te zien wat er exact uit Gmail komt (incl. alle bijlage-parts, niet
+// alleen PDF's). Wordt weer verwijderd zodra het "levertijden laden
+// niet"-probleem is gevonden.
 const BRAND_QUERIES: Record<DeliveryTimeBrand, string> = {
   artego: 'from:artego-kuechen.de subject:levertijden newer_than:180d',
   sachsen: 'from:sachsenkuechen.de subject:levertijden newer_than:180d',
+}
+
+function listParts(part: gmail_v1.Schema$MessagePart | undefined, depth = 0): unknown[] {
+  if (!part) return []
+  const self = {
+    depth,
+    mimeType: part.mimeType,
+    filename: part.filename || undefined,
+    hasAttachmentId: !!part.body?.attachmentId,
+    bodySize: part.body?.size,
+  }
+  const children = (part.parts ?? []).flatMap((p) => listParts(p, depth + 1))
+  return [self, ...children]
 }
 
 export async function GET() {
@@ -26,21 +41,27 @@ export async function GET() {
     return NextResponse.json({ error: 'Gmail niet gekoppeld' }, { status: 400 })
   }
 
+  const gmail = await getGmailClient(tokenRow.refresh_token)
   const results: Record<string, unknown> = {}
+
   for (const brand of Object.keys(BRAND_QUERIES) as DeliveryTimeBrand[]) {
     try {
-      const email = await fetchLatestEmail(tokenRow.refresh_token, BRAND_QUERIES[brand])
-      results[brand] = email
-        ? {
-            subject: email.subject,
-            sender: email.sender,
-            received_at: email.received_at,
-            has_attachments: email.has_attachments,
-            pdf_attachments: email.pdf_attachments,
-            body_preview_length: email.body_preview.length,
-            body_preview: email.body_preview.slice(0, 1500),
-          }
-        : { error: 'Geen mail gevonden' }
+      const { data: list } = await gmail.users.messages.list({
+        userId: 'me',
+        q: BRAND_QUERIES[brand],
+        maxResults: 1,
+      })
+      const id = list.messages?.[0]?.id
+      if (!id) {
+        results[brand] = { error: 'Geen mail gevonden' }
+        continue
+      }
+      const { data: msg } = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
+      results[brand] = {
+        subject: msg.payload?.headers?.find((h) => h.name === 'Subject')?.value,
+        topLevelMimeType: msg.payload?.mimeType,
+        parts: listParts(msg.payload ?? undefined),
+      }
     } catch (err) {
       results[brand] = { error: String(err) }
     }
