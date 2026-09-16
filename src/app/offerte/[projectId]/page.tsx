@@ -616,7 +616,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
         {renderSectionGroup(sectionsByAnchor.get('aansluitingen')!, 'aansluitingen')}
 
         {/* ─── Opstelling en aansluitingen (optioneel) ─── */}
-        {connections.length > 0 && (
+        {(connections.length > 0 || quote.customer_connections_intro || quote.connections_image_url) && (
           <div className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column' }}>
             <h2 className="serif" style={{ fontSize: 38, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 16, flexShrink: 0 }}>
               Opstelling en aansluitingen.
@@ -636,18 +636,20 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                     {renderIntroBody(quote.customer_connections_intro)}
                   </div>
                 )}
-                <div style={{ borderTop: '1px solid #E6E2D9', overflowY: 'auto' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
-                    <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Kast</div>
-                    <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Aansluitingen</div>
-                  </div>
-                  {connections.map((row, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
-                      <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.kast)}</div>
-                      <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.aansluitingen)}</div>
+                {connections.length > 0 && (
+                  <div style={{ borderTop: '1px solid #E6E2D9', overflowY: 'auto' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
+                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Kast</div>
+                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Aansluitingen</div>
                     </div>
-                  ))}
-                </div>
+                    {connections.map((row, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
+                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.kast)}</div>
+                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.aansluitingen)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {quote.customer_connections_disclaimer && (
                   <p style={{ fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: '#9B9591', marginTop: 12 }}>
                     {renderInline(quote.customer_connections_disclaimer)}
