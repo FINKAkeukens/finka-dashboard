@@ -615,51 +615,6 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
         {/* ─── Secties vóór Aansluitingen ─── */}
         {renderSectionGroup(sectionsByAnchor.get('aansluitingen')!, 'aansluitingen')}
 
-        {/* ─── Opstelling en aansluitingen (optioneel) ─── */}
-        {(connections.length > 0 || quote.customer_connections_intro || quote.connections_image_url) && (
-          <div className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column' }}>
-            <h2 className="serif" style={{ fontSize: 38, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 16, flexShrink: 0 }}>
-              Opstelling en aansluitingen.
-            </h2>
-
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24 }}>
-              {quote.connections_image_url && (
-                <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 10, border: '1px solid #DDD8D2' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={quote.connections_image_url!} alt="Opstelling" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: 10 }} />
-                </div>
-              )}
-
-              <div style={{ flex: 1.3, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                {quote.customer_connections_intro && (
-                  <div style={{ fontSize: 11, lineHeight: 1.5, color: '#3d3a37', marginBottom: 12 }}>
-                    {renderIntroBody(quote.customer_connections_intro)}
-                  </div>
-                )}
-                {connections.length > 0 && (
-                  <div style={{ borderTop: '1px solid #E6E2D9', overflowY: 'auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
-                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Kast</div>
-                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Aansluitingen</div>
-                    </div>
-                    {connections.map((row, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
-                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.kast)}</div>
-                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.aansluitingen)}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {quote.customer_connections_disclaimer && (
-                  <p style={{ fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: '#9B9591', marginTop: 12 }}>
-                    {renderInline(quote.customer_connections_disclaimer)}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ─── Secties vóór Prijspagina ─── */}
         {renderSectionGroup(sectionsByAnchor.get('prijs')!, 'prijs')}
 
@@ -814,6 +769,54 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
             <span style={{ fontSize: 10, color: '#9B9591', lineHeight: 1.5 }}>Op deze {quote.customer_document_label.toLowerCase()} en alle door FINKA keukens uitgebrachte offertes zijn onze algemene voorwaarden van toepassing.</span>
           </div>
         </div>
+
+        {/* ─── Bijlage: Opstelling en aansluitingen (optioneel, altijd achteraan) ─── */}
+        {(connections.length > 0 || quote.customer_connections_intro || quote.connections_image_url) && (
+          <div className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 6, flexShrink: 0 }}>
+              Bijlage
+            </div>
+            <h2 className="serif" style={{ fontSize: 38, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 16, flexShrink: 0 }}>
+              Opstelling en aansluitingen.
+            </h2>
+
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 24 }}>
+              {quote.connections_image_url && (
+                <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 10, border: '1px solid #DDD8D2' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={quote.connections_image_url!} alt="Opstelling" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: 10 }} />
+                </div>
+              )}
+
+              <div style={{ flex: 1.3, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {quote.customer_connections_intro && (
+                  <div style={{ fontSize: 11, lineHeight: 1.5, color: '#3d3a37', marginBottom: 12 }}>
+                    {renderIntroBody(quote.customer_connections_intro)}
+                  </div>
+                )}
+                {connections.length > 0 && (
+                  <div style={{ borderTop: '1px solid #E6E2D9', overflowY: 'auto' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
+                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Kast</div>
+                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Aansluitingen</div>
+                    </div>
+                    {connections.map((row, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
+                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.kast)}</div>
+                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.aansluitingen)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {quote.customer_connections_disclaimer && (
+                  <p style={{ fontSize: 10, fontStyle: 'italic', lineHeight: 1.5, color: '#9B9591', marginTop: 12 }}>
+                    {renderInline(quote.customer_connections_disclaimer)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </>

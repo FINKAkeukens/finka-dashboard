@@ -1812,7 +1812,10 @@ export default function QuoteEditor({
             </div>
             {!connectionsCollapsed && (
               <>
-                <p className="text-xs text-[#6B6560]">Verschijnt alleen als hier regels zijn ingevuld.</p>
+                <p className="text-xs text-[#6B6560]">
+                  Verschijnt als bijlage achteraan de offerte, zodra hier toelichting, een tekening en/of regels zijn ingevuld.
+                  Gebruik de regels hieronder alleen voor specifieke aansluitingen per kast — algemene montage-voorwaarden horen in het toelichtingveld.
+                </p>
 
                 <div className="space-y-1.5">
                   <Label>Toelichting</Label>
