@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Truck } from 'lucide-react'
+import { ChevronDown, RefreshCw, Truck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DeliveryTime } from '@/lib/types'
 
@@ -34,6 +34,13 @@ function parseSummary(summary: string): ParsedSummary | null {
   }
 }
 
+// De rij die standaard zichtbaar is; de rest zit achter "Toon overige
+// assortiment" — anders is de tabel bij merken met veel afwerkingen
+// (bv. Sachsen) meteen weer net zo lang als de vorige platte lijst.
+function isStandardRow(programma: string): boolean {
+  return /standaard/i.test(programma)
+}
+
 export default function DeliveryTimesWidget({
   initialData,
   currentWeek,
@@ -43,6 +50,7 @@ export default function DeliveryTimesWidget({
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const router = useRouter()
 
   const byBrand = new Map(initialData.map((d) => [d.brand, d]))
@@ -92,16 +100,24 @@ export default function DeliveryTimesWidget({
         {(['artego', 'sachsen'] as const).map((brand) => {
           const entry = byBrand.get(brand)
           const parsed = entry?.summary ? parseSummary(entry.summary) : null
+          const standardRows = parsed?.rows.filter((r) => isStandardRow(r.programma)) ?? []
+          const otherRows = parsed?.rows.filter((r) => !isStandardRow(r.programma)) ?? []
+          // Geen duidelijke "standaard"-rij gevonden: dan is inklappen niet
+          // zinvol, gewoon alles tonen.
+          const hasStandardSplit = standardRows.length > 0 && otherRows.length > 0
+          const visibleRows = hasStandardSplit
+            ? [...standardRows, ...(expanded[brand] ? otherRows : [])]
+            : parsed?.rows ?? []
           return (
             <div key={brand} className="border border-[#EDE9E3] rounded-lg p-4">
               <p className="text-sm font-medium text-[#1C1B19] mb-2">{BRAND_LABELS[brand]}</p>
               {parsed ? (
                 <div className="text-sm text-[#3D3935]">
                   {parsed.intro && <p className="mb-2 text-[#6B6560]">{parsed.intro}</p>}
-                  {parsed.rows.length > 0 ? (
+                  {visibleRows.length > 0 ? (
                     <table className="w-full text-left border-collapse">
                       <tbody>
-                        {parsed.rows.map((row, i) => (
+                        {visibleRows.map((row, i) => (
                           <tr key={i} className="border-t border-[#EDE9E3] first:border-t-0">
                             <td className="py-1.5 pr-3 align-top text-[#1C1B19] font-medium">{row.programma}</td>
                             <td className="py-1.5 align-top">{row.levertijd}</td>
@@ -111,6 +127,15 @@ export default function DeliveryTimesWidget({
                     </table>
                   ) : (
                     <p className="text-[#6B6560] italic">Geen levertijd-informatie gevonden</p>
+                  )}
+                  {hasStandardSplit && (
+                    <button
+                      onClick={() => setExpanded((prev) => ({ ...prev, [brand]: !prev[brand] }))}
+                      className="flex items-center gap-1 text-xs text-[#6B6560] hover:text-[#1C1B19] mt-2"
+                    >
+                      <ChevronDown size={12} className={expanded[brand] ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                      {expanded[brand] ? 'Verberg overige assortiment' : `Toon overige assortiment (${otherRows.length})`}
+                    </button>
                   )}
                 </div>
               ) : entry?.summary ? (
