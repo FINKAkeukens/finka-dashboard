@@ -632,9 +632,9 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
 
               <div style={{ flex: 1.3, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 {quote.customer_connections_intro && (
-                  <p style={{ fontSize: 11, lineHeight: 1.5, color: '#3d3a37', marginBottom: 12 }}>
-                    {renderInline(quote.customer_connections_intro)}
-                  </p>
+                  <div style={{ fontSize: 11, lineHeight: 1.5, color: '#3d3a37', marginBottom: 12 }}>
+                    {renderIntroBody(quote.customer_connections_intro)}
+                  </div>
                 )}
                 <div style={{ borderTop: '1px solid #E6E2D9', overflowY: 'auto' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
