@@ -111,7 +111,11 @@ export default function AansluitschemaTab({
         .from('finka_quote_items')
         .select('description, brand, model, appliance_id')
         .eq('quote_id', quote.id)
-        .eq('type', 'apparaat')
+        // Ook 'accessoire': een kokendwaterkraan of spoelbak staat sinds de
+        // accessoires-sectie niet meer als 'apparaat' in de offerte, maar
+        // bepaalt wél het aansluitschema (zware elektragroep resp. de
+        // aansluitingen in de spoelkast).
+        .in('type', ['apparaat', 'accessoire'])
 
       const applianceIds = (quoteItems ?? []).map((i) => i.appliance_id).filter((id): id is string => !!id)
       let specsById = new Map<string, { type: string; specs: Record<string, unknown> }>()

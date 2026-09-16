@@ -4,7 +4,7 @@ import { Appliance, ApplianceSpecs, ApplianceType, EnergyLabel, OvenSubtype, Pro
 // ze horen in de offerte bij regeltype 'accessoire', in de kostenrij
 // "Accessoires" en in de gelijknamige klantsectie/configurator-sectie. Hier
 // gedeeld zodat Offerte en Configurator gegarandeerd dezelfde groep hanteren.
-export const ACCESSOIRE_APPLIANCE_TYPES: ApplianceType[] = ['kraan', 'spoelbak']
+export const ACCESSOIRE_APPLIANCE_TYPES: ApplianceType[] = ['kraan', 'kokendwaterkraan', 'spoelbak', 'anders']
 
 export const TYPE_LABELS: Record<string, string> = {
   kookplaat: 'Kookplaat',

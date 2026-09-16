@@ -752,7 +752,10 @@ export default function QuoteEditor({
     setItems((prev) => [
       ...prev,
       newDraftItem({
-        type: 'apparaat',
+        // Kraan/kokendwaterkraan/spoelbak/overig komen uit dezelfde
+        // bibliotheek, maar horen bij Accessoires — met dit type voedt de
+        // regel de kostenrij Accessoires i.p.v. die van Apparatuur.
+        type: ACCESSOIRE_APPLIANCE_TYPES.includes(appliance.type) ? 'accessoire' : 'apparaat',
         appliance_id: appliance.id,
         description: `${appliance.brand} ${appliance.model}`,
         brand: appliance.brand,
