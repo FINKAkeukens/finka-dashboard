@@ -1895,3 +1895,67 @@ ALTER TABLE finka_delivery_times ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Authenticated users only" ON finka_delivery_times FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 GRANT ALL ON TABLE finka_delivery_times TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 71. Leveranciers-documenten — nieuw linker sidebar-tabje "Leveranciers"
+--    met een pagina per leverancier (finka_suppliers, al bestaand voor de
+--    apparatuur-koppeling) waarop losse aantekeningen (hergebruikt de
+--    bestaande finka_suppliers.notes-kolom) en een eigen mappenstructuur
+--    met documenten staan. Mappen zijn zelf-refererend (parent_folder_id)
+--    voor onbeperkte nesting; NULL parent = hoofdmap van de leverancier.
+--    Zelfde patroon als project-documenten (sectie 64): publieke bucket,
+--    obscuur pad via random UUID, upload altijd server-side via
+--    /api/leveranciers/documenten/upload. Verwijderen van een map
+--    cascadeert naar submappen en documenten erin (zelfde gedrag als een
+--    bestandsbeheerder) — ruimt alleen de database-rij op, niet het
+--    storage-object, zelfde bewuste keuze als finka_project_documents.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_supplier_folders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id UUID NOT NULL REFERENCES finka_suppliers(id) ON DELETE CASCADE,
+  parent_folder_id UUID REFERENCES finka_supplier_folders(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS finka_supplier_folders_supplier_idx ON finka_supplier_folders (supplier_id);
+CREATE INDEX IF NOT EXISTS finka_supplier_folders_parent_idx ON finka_supplier_folders (parent_folder_id);
+
+CREATE TABLE IF NOT EXISTS finka_supplier_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id UUID NOT NULL REFERENCES finka_suppliers(id) ON DELETE CASCADE,
+  folder_id UUID REFERENCES finka_supplier_folders(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  size_bytes BIGINT,
+  uploaded_by TEXT,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS finka_supplier_documents_supplier_idx ON finka_supplier_documents (supplier_id);
+CREATE INDEX IF NOT EXISTS finka_supplier_documents_folder_idx ON finka_supplier_documents (folder_id);
+
+ALTER TABLE finka_supplier_folders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE finka_supplier_documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users only" ON finka_supplier_folders FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Authenticated users only" ON finka_supplier_documents FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+GRANT ALL ON TABLE finka_supplier_folders TO anon, authenticated, service_role;
+GRANT ALL ON TABLE finka_supplier_documents TO anon, authenticated, service_role;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('leverancier-documenten', 'leverancier-documenten', true)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Authenticated kunnen leverancier-documenten uploaden"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'leverancier-documenten');
+
+CREATE POLICY "Authenticated kunnen leverancier-documenten bijwerken"
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'leverancier-documenten');
+
+CREATE POLICY "Authenticated kunnen leverancier-documenten verwijderen"
+ON storage.objects FOR DELETE TO authenticated
+USING (bucket_id = 'leverancier-documenten');

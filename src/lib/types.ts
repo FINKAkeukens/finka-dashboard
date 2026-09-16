@@ -1055,6 +1055,27 @@ export interface ProjectDocument {
   approved_by: string | null
 }
 
+// Mappenstructuur + documenten per leverancier (los van de apparatuur-
+// koppeling op Supplier hierboven). Zie migratie-sectie 71.
+export interface SupplierFolder {
+  id: string
+  supplier_id: string
+  parent_folder_id: string | null
+  name: string
+  created_at: string
+}
+
+export interface SupplierDocument {
+  id: string
+  supplier_id: string
+  folder_id: string | null
+  filename: string
+  file_url: string
+  size_bytes: number | null
+  uploaded_by: string | null
+  uploaded_at: string
+}
+
 // ---------------------------------------------------------------------------
 // Formulier "Ruimte gereed" — de klant bevestigt via het portaal de maten en
 // afspraken van de keukenruimte en tekent daarvoor. Zelfde sjabloon-opzet

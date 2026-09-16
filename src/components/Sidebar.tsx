@@ -21,6 +21,7 @@ import {
   HelpCircle,
   Ruler,
   FileText,
+  Truck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -61,6 +62,10 @@ const groups: NavGroup[] = [
       { href: '/financieel/balans', label: 'Balans', icon: Scale },
       { href: '/financieel/kosten', label: 'Kosten', icon: Receipt },
     ],
+  },
+  {
+    label: 'Leveranciers',
+    items: [{ href: '/leveranciers', label: 'Leveranciers', icon: Truck }],
   },
   {
     label: 'Apparatuur',
