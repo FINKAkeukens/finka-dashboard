@@ -254,12 +254,28 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
 
     if (!visibleSections.length) return null
 
-    // Iets lager dan je zou verwachten (was 13) — de regels zijn groter
-    // geworden (13px i.p.v. 11.5px), dus er passen er nu minder op een pagina.
-    const LINE_BUDGET = 11
+    // Budget in "regels" van ~25px: een tekstregel is 13px × lineHeight 1.5
+    // plus 3px padding boven/onder. De pagina is 167mm ≈ 631px hoog; op een
+    // vervolgpagina blijft na de padding (32+32) ~567px over ≈ 22 regels, en
+    // op de pagina met de "Wat zit erin"-kop (64+32 padding + label + titel)
+    // ~460px ≈ 18. Hieronder bewust iets lager dan die theoretische max, als
+    // marge tegen afwijkende regelhoogtes — anders valt het einde van een
+    // sectie buiten de vaste paginahoogte (overflow: hidden) en is het in de
+    // PDF onzichtbaar. De ~31px witruimte + scheidingslijn per sectie zit in
+    // de "+1" van sectionWeight hieronder.
+    const LINE_BUDGET_WITH_HEADING = 16
+    const LINE_BUDGET = 20
+    // Alleen de eerste pagina van de eerste groep krijgt de kop (en dus minder
+    // ruimte) — zie headingState / showHeading verderop.
+    const firstPageHasHeading = !headingState.shown
     const sectionPages: typeof visibleSections[] = []
     let current: typeof visibleSections = []
     let weight = 0
+    // Een sfeerbeeld-sectie (alleen foto's) rendert groot en gecentreerd over
+    // de volle pagina. Die hield voorheen vanzelf zijn eigen pagina doordat
+    // imageWeight 10 vrijwel het hele budget opsnoepte; met het ruimere budget
+    // hierboven gaat dat niet meer op, dus zetten we dat nu expliciet.
+    let lastWasPhotoOnly = false
     for (const section of visibleSections) {
       // Thumbnails wegen ongeveer als N tekstregels, afhankelijk van het
       // gekozen formaat — geen exacte meting, maar voorkomt dat een
@@ -281,13 +297,16 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
         : section.lines.length === 0 ? 10
         : { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium'] * imageCountFactor
       const sectionWeight = lineWeight + imageWeight + 1
-      if (current.length && weight + sectionWeight > LINE_BUDGET) {
+      const budget = sectionPages.length === 0 && firstPageHasHeading ? LINE_BUDGET_WITH_HEADING : LINE_BUDGET
+      const isPhotoOnly = section.lines.length === 0 && !!section.images?.length
+      if (current.length && (isPhotoOnly || lastWasPhotoOnly || weight + sectionWeight > budget)) {
         sectionPages.push(current)
         current = []
         weight = 0
       }
       current.push(section)
       weight += sectionWeight
+      lastWasPhotoOnly = isPhotoOnly
     }
     if (current.length) sectionPages.push(current)
 
