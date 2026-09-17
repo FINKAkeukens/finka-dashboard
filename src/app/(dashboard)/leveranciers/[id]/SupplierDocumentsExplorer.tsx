@@ -221,29 +221,35 @@ export default function SupplierDocumentsExplorer({
   async function uploadDroppedFiles(items: DroppedFile[], targetFolderId: string | null) {
     setUploading(true)
     setError('')
+    const failures: string[] = []
     try {
       for (const { file, folderPath } of items) {
-        let resolvedFolderId: string | null
+        // Alles per bestand in één try/catch — een fout op één bestand
+        // (netwerkhikje, een niet-JSON-foutpagina, een gooiende fetch) mag
+        // nooit de rest van de batch stilletjes afbreken zonder dat er iets
+        // op het scherm verschijnt. Eerder gebeurde dat wél: alleen
+        // resolveFolderPath was afgeschermd, dus een fout ná dat punt liet
+        // de map leeg achter zonder enige melding.
         try {
-          resolvedFolderId = await resolveFolderPath(folderPath, targetFolderId)
+          const resolvedFolderId = await resolveFolderPath(folderPath, targetFolderId)
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('supplierId', supplierId)
+          if (resolvedFolderId) formData.append('folderId', resolvedFolderId)
+          const res = await fetch('/api/leveranciers/documenten/upload', { method: 'POST', body: formData })
+          const data = await res.json().catch(() => ({ error: `Onverwacht antwoord van de server (status ${res.status})` }))
+          if (!res.ok) {
+            failures.push(`${file.name}: ${data.error ?? 'Uploaden mislukt'}`)
+            continue
+          }
+          setDocuments((prev) => [data.document as SupplierDocument, ...prev])
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Map aanmaken mislukt')
-          continue
+          failures.push(`${file.name}: ${err instanceof Error ? err.message : 'Uploaden mislukt'}`)
         }
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('supplierId', supplierId)
-        if (resolvedFolderId) formData.append('folderId', resolvedFolderId)
-        const res = await fetch('/api/leveranciers/documenten/upload', { method: 'POST', body: formData })
-        const data = await res.json()
-        if (!res.ok) {
-          setError(`${file.name}: ${data.error ?? 'Uploaden mislukt'}`)
-          continue
-        }
-        setDocuments((prev) => [data.document as SupplierDocument, ...prev])
       }
     } finally {
       setUploading(false)
+      if (failures.length) setError(failures.join(' — '))
     }
   }
 
