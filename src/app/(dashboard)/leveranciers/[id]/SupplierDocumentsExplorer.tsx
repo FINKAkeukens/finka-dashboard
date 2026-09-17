@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ChevronRight, File, Folder, FolderPlus, Trash2, Upload } from 'lucide-react'
 import type { SupplierDocument, SupplierFolder } from '@/lib/types'
@@ -15,6 +15,62 @@ function formatSize(bytes: number | null): string {
   if (!bytes) return ''
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+type DroppedFile = { file: File; folderPath: string[] }
+
+function readDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject))
+}
+
+// readEntries geeft maximaal ~100 entries per aanroep terug — pas een lege
+// batch betekent dat de map uitgelezen is.
+async function readAllDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  const all: FileSystemEntry[] = []
+  for (;;) {
+    const batch = await readDirectoryEntries(reader)
+    if (!batch.length) break
+    all.push(...batch)
+  }
+  return all
+}
+
+function readFileFromEntry(entry: FileSystemEntry): Promise<File> {
+  return new Promise((resolve, reject) => (entry as unknown as { file: (cb: (f: File) => void, eb: (e: unknown) => void) => void }).file(resolve, reject))
+}
+
+async function walkEntry(entry: FileSystemEntry, folderPath: string[], out: DroppedFile[]) {
+  if (entry.isFile) {
+    out.push({ file: await readFileFromEntry(entry), folderPath })
+  } else if (entry.isDirectory) {
+    const reader = (entry as unknown as { createReader: () => FileSystemDirectoryReader }).createReader()
+    for (const child of await readAllDirectoryEntries(reader)) {
+      await walkEntry(child, [...folderPath, entry.name], out)
+    }
+  }
+}
+
+// Leest zowel losse bestanden als hele mappen uit een drag-event, inclusief
+// de mapstructuur. Chrome/Edge/Safari ondersteunen hiervoor de non-standaard
+// webkitGetAsEntry-API; zonder die entries bevat dataTransfer.files voor een
+// gesleepte map geen bruikbare inhoud (hooguit een 0-byte placeholder) — dat
+// was de oorzaak van "een map slepen doet niets". Zonder entries-support
+// (zeldzaam) valt dit terug op de platte bestandenlijst zonder mapstructuur.
+async function readDroppedFiles(dataTransfer: DataTransfer): Promise<DroppedFile[]> {
+  const items = Array.from(dataTransfer.items ?? [])
+  const entries = items
+    .map((item) => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
+    .filter((entry): entry is FileSystemEntry => !!entry)
+
+  if (!entries.length) {
+    return Array.from(dataTransfer.files).map((file) => ({ file, folderPath: [] }))
+  }
+
+  const out: DroppedFile[] = []
+  for (const entry of entries) {
+    await walkEntry(entry, [], out)
+  }
+  return out
 }
 
 export default function SupplierDocumentsExplorer({
@@ -34,6 +90,57 @@ export default function SupplierDocumentsExplorer({
   const [error, setError] = useState('')
   const [dropTarget, setDropTarget] = useState<'zone' | string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Bijgehouden náást de folders-state (i.p.v. die rechtstreeks te lezen) zodat
+  // resolveFolderPath tijdens één upload-batch meteen ziet welke (sub)mappen
+  // net zijn aangemaakt — anders zou elk bestand in dezelfde nieuwe submap
+  // zijn eigen duplicaat van die map aanmaken (de state-update van de vorige
+  // is dan nog niet doorgekomen).
+  const foldersRef = useRef(folders)
+  useEffect(() => {
+    foldersRef.current = folders
+  }, [folders])
+
+  // Voor een gesleepte map: maakt (of hergebruikt) de submappen op elke
+  // niveau onder targetFolderId, en geeft de id van de diepste map terug
+  // waar het bestand in moet landen.
+  async function resolveFolderPath(folderPath: string[], targetFolderId: string | null): Promise<string | null> {
+    let parentId = targetFolderId
+    for (const name of folderPath) {
+      const existing = foldersRef.current.find((f) => f.parent_folder_id === parentId && f.name === name)
+      if (existing) {
+        parentId = existing.id
+        continue
+      }
+      const { data, error } = await supabase
+        .from('finka_supplier_folders')
+        .insert({ supplier_id: supplierId, parent_folder_id: parentId, name })
+        .select()
+        .single()
+      if (error) throw new Error(error.message)
+      const created = data as SupplierFolder
+      foldersRef.current = [...foldersRef.current, created]
+      setFolders((prev) => [...prev, created])
+      parentId = created.id
+    }
+    return parentId
+  }
+
+  // Voorkomt dat de browser bij een drop die net naast de dropzone valt de
+  // hele pagina vervangt door het gesleepte bestand (het standaardgedrag
+  // zonder preventDefault) — alleen voor echte bestandsdrags (type "Files"),
+  // zodat het intern slepen van een documentkaart tussen mappen (DOC_DRAG_TYPE)
+  // hierdoor niet geraakt wordt.
+  useEffect(() => {
+    function preventStrayNavigation(e: DragEvent) {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault()
+    }
+    window.addEventListener('dragover', preventStrayNavigation)
+    window.addEventListener('drop', preventStrayNavigation)
+    return () => {
+      window.removeEventListener('dragover', preventStrayNavigation)
+      window.removeEventListener('drop', preventStrayNavigation)
+    }
+  }, [])
 
   const breadcrumb = useMemo(() => {
     const chain: SupplierFolder[] = []
@@ -57,19 +164,30 @@ export default function SupplierDocumentsExplorer({
     )
   }
 
-  async function uploadFiles(files: FileList | File[], targetFolderId: string | null) {
+  async function uploadFlatFiles(files: FileList | File[], targetFolderId: string | null) {
+    await uploadDroppedFiles(Array.from(files).map((file) => ({ file, folderPath: [] })), targetFolderId)
+  }
+
+  async function uploadDroppedFiles(items: DroppedFile[], targetFolderId: string | null) {
     setUploading(true)
     setError('')
     try {
-      for (const file of Array.from(files)) {
+      for (const { file, folderPath } of items) {
+        let resolvedFolderId: string | null
+        try {
+          resolvedFolderId = await resolveFolderPath(folderPath, targetFolderId)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Map aanmaken mislukt')
+          continue
+        }
         const formData = new FormData()
         formData.append('file', file)
         formData.append('supplierId', supplierId)
-        if (targetFolderId) formData.append('folderId', targetFolderId)
+        if (resolvedFolderId) formData.append('folderId', resolvedFolderId)
         const res = await fetch('/api/leveranciers/documenten/upload', { method: 'POST', body: formData })
         const data = await res.json()
         if (!res.ok) {
-          setError(data.error ?? 'Uploaden mislukt')
+          setError(`${file.name}: ${data.error ?? 'Uploaden mislukt'}`)
           continue
         }
         setDocuments((prev) => [data.document as SupplierDocument, ...prev])
@@ -125,18 +243,23 @@ export default function SupplierDocumentsExplorer({
     if (error) setError(error.message)
   }
 
-  function handleZoneDrop(e: React.DragEvent) {
+  async function handleZoneDrop(e: React.DragEvent) {
     e.preventDefault()
     setDropTarget(null)
-    if (e.dataTransfer.files?.length) uploadFiles(e.dataTransfer.files, currentFolderId)
+    if (!e.dataTransfer.types.includes('Files')) return
+    const dataTransfer = e.dataTransfer
+    const items = await readDroppedFiles(dataTransfer)
+    if (items.length) uploadDroppedFiles(items, currentFolderId)
   }
 
-  function handleFolderDrop(e: React.DragEvent, folder: SupplierFolder) {
+  async function handleFolderDrop(e: React.DragEvent, folder: SupplierFolder) {
     e.preventDefault()
     e.stopPropagation()
     setDropTarget(null)
-    if (e.dataTransfer.files?.length) {
-      uploadFiles(e.dataTransfer.files, folder.id)
+    if (e.dataTransfer.types.includes('Files')) {
+      const dataTransfer = e.dataTransfer
+      const items = await readDroppedFiles(dataTransfer)
+      if (items.length) uploadDroppedFiles(items, folder.id)
       return
     }
     const docId = e.dataTransfer.getData(DOC_DRAG_TYPE)
@@ -186,7 +309,7 @@ export default function SupplierDocumentsExplorer({
               className="hidden"
               disabled={uploading}
               onChange={(e) => {
-                if (e.target.files?.length) uploadFiles(e.target.files, currentFolderId)
+                if (e.target.files?.length) uploadFlatFiles(e.target.files, currentFolderId)
                 e.target.value = ''
               }}
             />
@@ -195,6 +318,7 @@ export default function SupplierDocumentsExplorer({
       </div>
 
       <div
+        data-testid="supplier-drop-zone"
         onDragOver={(e) => { e.preventDefault(); setDropTarget('zone') }}
         onDragLeave={() => setDropTarget(null)}
         onDrop={handleZoneDrop}
