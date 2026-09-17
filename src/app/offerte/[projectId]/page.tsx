@@ -189,7 +189,18 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   const c = project.customer
   const sections = (quote.customer_sections ?? []) as QuoteCustomerSection[]
   const costLines = (quote.customer_cost_lines ?? []) as CustomerCostLine[]
-  const connections = (quote.customer_connections ?? []) as ConnectionRow[]
+  // Vangnet tegen dubbel ingevoerde inhoud: als een "Kast"-regel grotendeels
+  // hetzelfde zegt als de toelichting hierboven (bv. per ongeluk de hele
+  // montage-voorwaarden in een tabelregel geplakt i.p.v. losse
+  // kast-specifieke aansluitingen), toon die regel dan niet nogmaals.
+  function normalizeForDupeCheck(text: string): string {
+    return text.replace(/^[-*•]\s*/gm, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  }
+  const normalizedIntro = quote.customer_connections_intro ? normalizeForDupeCheck(quote.customer_connections_intro) : ''
+  const connections = ((quote.customer_connections ?? []) as ConnectionRow[]).filter((row) => {
+    const normKast = normalizeForDupeCheck(row.kast)
+    return !(normKast.length > 40 && normalizedIntro.includes(normKast.slice(0, 80)))
+  })
   const pageDisclaimers = quote.page_disclaimers ?? {}
   // Voorpagina-afbeelding komt uit de gekozen bibliotheekfoto — renders en de
   // tekening zijn bedoeld voor latere pagina's, niet voor de voorpagina.
