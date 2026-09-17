@@ -11,7 +11,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { ACCESSOIRE_APPLIANCE_TYPES, formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, ConnectionRow, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -282,9 +282,6 @@ export default function QuoteEditor({
   )
   const [customerConnectionsDisclaimer, setCustomerConnectionsDisclaimer] = useState(
     initialQuote?.customer_connections_disclaimer ?? defaultTexts.offerte_connections_disclaimer
-  )
-  const [customerConnections, setCustomerConnections] = useState<ConnectionRow[]>(
-    initialQuote?.customer_connections ?? []
   )
   const [includeAansluitschemaBijlage, setIncludeAansluitschemaBijlage] = useState(
     initialQuote?.include_aansluitschema_bijlage ?? false
@@ -707,18 +704,6 @@ export default function QuoteEditor({
     e.target.value = ''
   }
 
-  function addConnectionRow() {
-    setCustomerConnections((prev) => [...prev, { kast: '', aansluitingen: '' }])
-  }
-
-  function updateConnectionRow(index: number, patch: Partial<ConnectionRow>) {
-    setCustomerConnections((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
-  }
-
-  function removeConnectionRow(index: number) {
-    setCustomerConnections((prev) => prev.filter((_, i) => i !== index))
-  }
-
   // Eenmalige, handmatig te bevestigen suggestie op basis van de interne
   // kostprijs-opbouw — geen live koppeling, staff blijft alles overschrijven.
   // Bedragen zijn de daadwerkelijke klantprijs: kostprijs + marge (zelfde
@@ -857,7 +842,6 @@ export default function QuoteEditor({
       connections_image_url: connectionsImageUrl || null,
       customer_connections_intro: customerConnectionsIntro || null,
       customer_connections_disclaimer: customerConnectionsDisclaimer || null,
-      customer_connections: customerConnections,
       include_aansluitschema_bijlage: includeAansluitschemaBijlage,
       customer_closing_heading: customerClosingHeading || null,
       customer_closing_text: customerClosingText || null,
@@ -1809,15 +1793,11 @@ export default function QuoteEditor({
                 <ChevronDown size={15} className={connectionsCollapsed ? '-rotate-90 transition-transform' : 'transition-transform'} />
               </button>
               <span className="flex-1 text-sm font-medium text-[#1C1B19]">Opstelling en aansluitingen (optioneel)</span>
-              {connectionsCollapsed && (
-                <span className="text-xs text-[#9A948D]">{customerConnections.length} regel{customerConnections.length === 1 ? '' : 's'}</span>
-              )}
             </div>
             {!connectionsCollapsed && (
               <>
                 <p className="text-xs text-[#6B6560]">
-                  Verschijnt als bijlage achteraan de offerte, zodra hier toelichting, een tekening en/of regels zijn ingevuld.
-                  Gebruik de regels hieronder alleen voor specifieke aansluitingen per kast — algemene montage-voorwaarden horen in het toelichtingveld.
+                  Verschijnt als bijlage achteraan de offerte, zodra hier toelichting en/of een tekening zijn ingevuld.
                 </p>
 
                 <div className="space-y-1.5">
@@ -1852,34 +1832,6 @@ export default function QuoteEditor({
                     </Button>
                   )}
                 </div>
-
-                {customerConnections.length > 0 && (
-                  <div className="bg-[#F7F5F2] rounded-lg border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
-                    {customerConnections.map((row, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-3">
-                        <input
-                          value={row.kast}
-                          onChange={(e) => updateConnectionRow(idx, { kast: e.target.value })}
-                          placeholder="Bijv. Kast met oven en inductiekookplaat"
-                          className={`w-56 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${markerClass(row.kast)}`}
-                        />
-                        <input
-                          value={row.aansluitingen}
-                          onChange={(e) => updateConnectionRow(idx, { aansluitingen: e.target.value })}
-                          placeholder="Bijv. 2x stopcontact, geaard"
-                          className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${markerClass(row.aansluitingen)}`}
-                        />
-                        <button onClick={() => removeConnectionRow(idx)} title="Regel verwijderen">
-                          <X size={13} className="text-[#9A948D] hover:text-red-600" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Button variant="outline" size="sm" onClick={addConnectionRow}>
-                  <Plus size={12} className="mr-1.5" />
-                  Regel toevoegen
-                </Button>
 
                 <div className="space-y-1.5">
                   <Label>Disclaimer</Label>

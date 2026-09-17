@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { ConnectionRow, Customer, CustomerCostLine, Project, QUOTE_PAGE_ANCHORS, Quote, QuoteCustomerSection, QuotePageAnchor } from '@/lib/types'
+import { Customer, CustomerCostLine, Project, QUOTE_PAGE_ANCHORS, Quote, QuoteCustomerSection, QuotePageAnchor } from '@/lib/types'
 import PrintButton from './PrintButton'
 import DownloadButton from './DownloadButton'
 
@@ -189,18 +189,6 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   const c = project.customer
   const sections = (quote.customer_sections ?? []) as QuoteCustomerSection[]
   const costLines = (quote.customer_cost_lines ?? []) as CustomerCostLine[]
-  // Vangnet tegen dubbel ingevoerde inhoud: als een "Kast"-regel grotendeels
-  // hetzelfde zegt als de toelichting hierboven (bv. per ongeluk de hele
-  // montage-voorwaarden in een tabelregel geplakt i.p.v. losse
-  // kast-specifieke aansluitingen), toon die regel dan niet nogmaals.
-  function normalizeForDupeCheck(text: string): string {
-    return text.replace(/^[-*•]\s*/gm, '').replace(/\s+/g, ' ').trim().toLowerCase()
-  }
-  const normalizedIntro = quote.customer_connections_intro ? normalizeForDupeCheck(quote.customer_connections_intro) : ''
-  const connections = ((quote.customer_connections ?? []) as ConnectionRow[]).filter((row) => {
-    const normKast = normalizeForDupeCheck(row.kast)
-    return !(normKast.length > 40 && normalizedIntro.includes(normKast.slice(0, 80)))
-  })
   const pageDisclaimers = quote.page_disclaimers ?? {}
   // Voorpagina-afbeelding komt uit de gekozen bibliotheekfoto — renders en de
   // tekening zijn bedoeld voor latere pagina's, niet voor de voorpagina.
@@ -809,7 +797,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
         </div>
 
         {/* ─── Bijlage: Opstelling en aansluitingen (optioneel, altijd achteraan) ─── */}
-        {(connections.length > 0 || quote.customer_connections_intro || quote.connections_image_url) && (
+        {(quote.customer_connections_intro || quote.connections_image_url) && (
           <div className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 6, flexShrink: 0 }}>
               Bijlage
@@ -830,20 +818,6 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                 {quote.customer_connections_intro && (
                   <div style={{ fontSize: 11, lineHeight: 1.5, color: '#3d3a37', marginBottom: 12 }}>
                     {renderIntroBody(quote.customer_connections_intro)}
-                  </div>
-                )}
-                {connections.length > 0 && (
-                  <div style={{ borderTop: '1px solid #E6E2D9', overflowY: 'auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
-                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Kast</div>
-                      <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600 }}>Aansluitingen</div>
-                    </div>
-                    {connections.map((row, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '8px 0', borderBottom: '1px solid #E6E2D9' }}>
-                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.kast)}</div>
-                        <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.4 }}>{renderInline(row.aansluitingen)}</div>
-                      </div>
-                    ))}
                   </div>
                 )}
                 {quote.customer_connections_disclaimer && (
