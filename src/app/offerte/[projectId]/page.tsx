@@ -532,7 +532,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
               Bijlage: Aansluitschema →
             </a>
           )}
-          <DownloadButton projectId={projectId} />
+          <DownloadButton projectId={projectId} includeAansluitschemaBijlage={quote.include_aansluitschema_bijlage} />
           <PrintButton />
         </div>
       </div>

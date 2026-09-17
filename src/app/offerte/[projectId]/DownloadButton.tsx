@@ -21,26 +21,53 @@ function filenameFromContentDisposition(header: string | null): string | null {
   return asciiMatch ? asciiMatch[1] : null
 }
 
-export default function DownloadButton({ projectId }: { projectId: string }) {
+// Haalt een PDF op bij `endpoint` en start de download in de browser onder
+// de bestandsnaam die de server meegeeft (of `fallbackFilename` als die
+// ontbreekt). Gedeeld tussen de offerte zelf en — indien aangevinkt — de
+// aansluitschema-bijlage, zodat beide als losse bestanden gedownload worden.
+async function downloadFromEndpoint(endpoint: string, fallbackFilename: string): Promise<string | null> {
+  const res = await fetch(endpoint)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    return body.error ?? res.statusText
+  }
+  const filename = filenameFromContentDisposition(res.headers.get('Content-Disposition')) ?? fallbackFilename
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+  return null
+}
+
+export default function DownloadButton({
+  projectId,
+  includeAansluitschemaBijlage,
+}: {
+  projectId: string
+  includeAansluitschemaBijlage?: boolean
+}) {
   const [loading, setLoading] = useState(false)
 
   async function handleDownload() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/offerte/${projectId}/pdf`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        alert(`PDF-download mislukt: ${body.error ?? res.statusText}`)
+      const error = await downloadFromEndpoint(`/api/offerte/${projectId}/pdf`, `offerte-${projectId}.pdf`)
+      if (error) {
+        alert(`PDF-download mislukt: ${error}`)
         return
       }
-      const filename = filenameFromContentDisposition(res.headers.get('Content-Disposition')) ?? `offerte-${projectId}.pdf`
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
+      if (includeAansluitschemaBijlage) {
+        const bijlageError = await downloadFromEndpoint(
+          `/api/offerte/${projectId}/bijlage-aansluitschema/pdf`,
+          `Bijlage-aansluitschema-${projectId}.pdf`
+        )
+        if (bijlageError) {
+          alert(`Download van de bijlage is mislukt: ${bijlageError}`)
+        }
+      }
     } finally {
       setLoading(false)
     }
