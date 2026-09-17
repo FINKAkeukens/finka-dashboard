@@ -924,37 +924,49 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                     <h2 className="serif" style={{ fontSize: 38, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 16, flexShrink: 0 }}>
                       {wand.label}.
                     </h2>
-                    <div style={{ flex: 1, minHeight: 0, position: 'relative', borderRadius: 10, overflow: 'hidden', border: '1px solid #DDD8D2' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={wand.bron_afbeelding_url!} alt={wand.label} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-                      {wand.pins.map((pin) => {
-                        const item = pin.connection_item_id ? aansluitschemaItems.find((i) => i.id === pin.connection_item_id) : null
-                        const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
-                        return (
-                          <div
-                            key={pin.id}
-                            style={{
-                              position: 'absolute',
-                              left: `${pin.x * 100}%`,
-                              top: `${pin.y * 100}%`,
-                              transform: 'translate(-50%, -50%)',
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              background: '#fff',
-                              border: `2px solid ${PIN_TYPE_COLORS[pin.type]}`,
-                              color: PIN_TYPE_COLORS[pin.type],
-                              fontSize: 10,
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            {nummer ? formatItemNumber(nummer) : '?'}
-                          </div>
-                        )
-                      })}
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {/* Binnenste wrapper krimpt exact naar de gerenderde
+                         afbeeldingsgrootte (maxWidth/maxHeight + width/
+                         height:auto i.p.v. de buitenste flex-box te vullen
+                         met objectFit:contain) — anders kloppen de pin-
+                         percentages niet meer zodra de afbeeldingsverhouding
+                         niet exact de containerverhouding is. */}
+                      <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={wand.bron_afbeelding_url!}
+                          alt={wand.label}
+                          style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', borderRadius: 10, border: '1px solid #DDD8D2' }}
+                        />
+                        {wand.pins.map((pin) => {
+                          const item = pin.connection_item_id ? aansluitschemaItems.find((i) => i.id === pin.connection_item_id) : null
+                          const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
+                          return (
+                            <div
+                              key={pin.id}
+                              style={{
+                                position: 'absolute',
+                                left: `${pin.x * 100}%`,
+                                top: `${pin.y * 100}%`,
+                                transform: 'translate(-50%, -50%)',
+                                width: 22,
+                                height: 22,
+                                borderRadius: '50%',
+                                background: '#fff',
+                                border: `2px solid ${PIN_TYPE_COLORS[pin.type]}`,
+                                color: PIN_TYPE_COLORS[pin.type],
+                                fontSize: 10,
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {nummer ? formatItemNumber(nummer) : '?'}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                     <div style={{ flexShrink: 0, marginTop: 12, fontSize: 10, lineHeight: 1.6, color: '#3d3a37' }}>
                       {pinRows.map(({ pin, nummer, omschrijving }, i) => (
