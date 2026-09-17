@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ChevronRight, File, Folder, FolderPlus, Trash2, Upload } from 'lucide-react'
+import { ChevronRight, File as FileIcon, Folder, FolderPlus, FolderUp, Trash2, Upload } from 'lucide-react'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { SupplierDocument, SupplierFolder } from '@/lib/types'
 
 // Interne drag van een documentkaart naar een map draagt het document-id mee
@@ -54,23 +55,70 @@ async function walkEntry(entry: FileSystemEntry, folderPath: string[], out: Drop
 // de mapstructuur. Chrome/Edge/Safari ondersteunen hiervoor de non-standaard
 // webkitGetAsEntry-API; zonder die entries bevat dataTransfer.files voor een
 // gesleepte map geen bruikbare inhoud (hooguit een 0-byte placeholder) — dat
-// was de oorzaak van "een map slepen doet niets". Zonder entries-support
-// (zeldzaam) valt dit terug op de platte bestandenlijst zonder mapstructuur.
-async function readDroppedFiles(dataTransfer: DataTransfer): Promise<DroppedFile[]> {
+// was de oorzaak van "een map slepen doet niets". `usedFallback` laat de
+// aanroeper weten of dit pad is genomen, zodat die een placeholder kan
+// herkennen i.p.v. 'm als een leeg document te uploaden.
+async function readDroppedFiles(dataTransfer: DataTransfer): Promise<{ items: DroppedFile[]; usedFallback: boolean }> {
   const items = Array.from(dataTransfer.items ?? [])
   const entries = items
     .map((item) => (typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null))
     .filter((entry): entry is FileSystemEntry => !!entry)
 
   if (!entries.length) {
-    return Array.from(dataTransfer.files).map((file) => ({ file, folderPath: [] }))
+    return { items: Array.from(dataTransfer.files).map((file) => ({ file, folderPath: [] })), usedFallback: true }
   }
 
   const out: DroppedFile[] = []
   for (const entry of entries) {
     await walkEntry(entry, [], out)
   }
-  return out
+  return { items: out, usedFallback: false }
+}
+
+// Een gesleepte map komt zonder entries-support (of wanneer de browser de
+// map om een andere reden niet kon uitlezen) binnen als een 0-byte bestand
+// zonder mimetype en zonder extensie in de naam — daar is een losse, echt
+// lege upload praktisch nooit van te onderscheiden, maar dit patroon komt in
+// de praktijk vrijwel alleen van een niet-uitgelezen map.
+function looksLikeUnreadableFolderPlaceholder(file: File): boolean {
+  return file.size === 0 && !file.type && !file.name.includes('.')
+}
+
+type PreviewKind = 'pdf' | 'image' | 'office' | 'unsupported'
+
+const OFFICE_EXTENSIONS = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'])
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'])
+
+function previewKindFor(filename: string): PreviewKind {
+  const ext = filename.includes('.') ? filename.slice(filename.lastIndexOf('.') + 1).toLowerCase() : ''
+  if (ext === 'pdf') return 'pdf'
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image'
+  if (OFFICE_EXTENSIONS.has(ext)) return 'office'
+  return 'unsupported'
+}
+
+// webkitdirectory/directory zijn non-standard HTML-attributen (geen React-
+// typering) waarmee input[type=file] een mappicker i.p.v. bestandspicker
+// toont — breed ondersteund (Chrome/Edge/Firefox/Safari) en betrouwbaarder
+// dan slepen, omdat de browser dan altijd élk bestand in de map levert
+// (met webkitRelativePath) i.p.v. afhankelijk te zijn van de niet-overal
+// even goed ondersteunde drag-entries-API hierboven.
+const FOLDER_PICKER_PROPS = { webkitdirectory: '', directory: '' } as unknown as React.InputHTMLAttributes<HTMLInputElement>
+
+function filesFromWebkitRelativePaths(files: FileList): DroppedFile[] {
+  return Array.from(files).map((file) => {
+    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+    const parts = relativePath.split('/')
+    const basename = parts[parts.length - 1]
+    // file.name is hier altijd al kaal de bestandsnaam (het mappad zit in
+    // webkitRelativePath) — maar Chrome's FormData.append() gebruikt zelf
+    // webkitRelativePath i.p.v. .name voor de multipart-bestandsnaam zodra
+    // die aanwezig is, ook als .name al klopt. Vandaar altijd een nieuw
+    // File-object zonder die eigenschap, anders komt het mappad alsnog in
+    // de geüploade bestandsnaam terecht.
+    const uploadFile = new File([file], basename, { type: file.type })
+    return { file: uploadFile, folderPath: parts.slice(0, -1) }
+  })
 }
 
 export default function SupplierDocumentsExplorer({
@@ -89,7 +137,9 @@ export default function SupplierDocumentsExplorer({
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [dropTarget, setDropTarget] = useState<'zone' | string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<SupplierDocument | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
   // Bijgehouden náást de folders-state (i.p.v. die rechtstreeks te lezen) zodat
   // resolveFolderPath tijdens één upload-batch meteen ziet welke (sub)mappen
   // net zijn aangemaakt — anders zou elk bestand in dezelfde nieuwe submap
@@ -243,13 +293,26 @@ export default function SupplierDocumentsExplorer({
     if (error) setError(error.message)
   }
 
+  // Filtert map-placeholders eruit (zie looksLikeUnreadableFolderPlaceholder)
+  // en meldt het als dat de hele drop was — anders lijkt een drop die alleen
+  // hieraan strandde stilletjes niets te doen.
+  function filterUnreadableFolders(items: DroppedFile[], usedFallback: boolean): DroppedFile[] {
+    if (!usedFallback) return items
+    const real = items.filter((i) => !looksLikeUnreadableFolderPlaceholder(i.file))
+    if (real.length < items.length) {
+      setError('Slepen van een map wordt niet ondersteund in deze browser. Gebruik de knop "Map toevoegen" hierboven.')
+    }
+    return real
+  }
+
   async function handleZoneDrop(e: React.DragEvent) {
     e.preventDefault()
     setDropTarget(null)
     if (!e.dataTransfer.types.includes('Files')) return
     const dataTransfer = e.dataTransfer
-    const items = await readDroppedFiles(dataTransfer)
-    if (items.length) uploadDroppedFiles(items, currentFolderId)
+    const { items, usedFallback } = await readDroppedFiles(dataTransfer)
+    const realItems = filterUnreadableFolders(items, usedFallback)
+    if (realItems.length) uploadDroppedFiles(realItems, currentFolderId)
   }
 
   async function handleFolderDrop(e: React.DragEvent, folder: SupplierFolder) {
@@ -258,8 +321,9 @@ export default function SupplierDocumentsExplorer({
     setDropTarget(null)
     if (e.dataTransfer.types.includes('Files')) {
       const dataTransfer = e.dataTransfer
-      const items = await readDroppedFiles(dataTransfer)
-      if (items.length) uploadDroppedFiles(items, folder.id)
+      const { items, usedFallback } = await readDroppedFiles(dataTransfer)
+      const realItems = filterUnreadableFolders(items, usedFallback)
+      if (realItems.length) uploadDroppedFiles(realItems, folder.id)
       return
     }
     const docId = e.dataTransfer.getData(DOC_DRAG_TYPE)
@@ -310,6 +374,22 @@ export default function SupplierDocumentsExplorer({
               disabled={uploading}
               onChange={(e) => {
                 if (e.target.files?.length) uploadFlatFiles(e.target.files, currentFolderId)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#DDD8D2] bg-white px-3 py-1.5 text-sm text-[#1C1B19] hover:border-[#C9A96E] transition-colors">
+            <FolderUp size={14} />
+            {uploading ? 'Bezig...' : 'Map toevoegen'}
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              disabled={uploading}
+              {...FOLDER_PICKER_PROPS}
+              onChange={(e) => {
+                if (e.target.files?.length) uploadDroppedFiles(filesFromWebkitRelativePaths(e.target.files), currentFolderId)
                 e.target.value = ''
               }}
             />
@@ -372,15 +452,13 @@ export default function SupplierDocumentsExplorer({
                     onDragStart={(e) => e.dataTransfer.setData(DOC_DRAG_TYPE, doc.id)}
                     className="flex items-center justify-between gap-4 px-4 py-2.5 bg-white cursor-grab active:cursor-grabbing"
                   >
-                    <a
-                      href={doc.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 min-w-0 text-sm font-medium text-[#1C1B19] hover:underline truncate"
+                    <button
+                      onClick={() => setPreviewDoc(doc)}
+                      className="flex items-center gap-2.5 min-w-0 text-sm font-medium text-[#1C1B19] hover:underline truncate text-left"
                     >
-                      <File size={15} className="text-[#6B6560] shrink-0" />
+                      <FileIcon size={15} className="text-[#6B6560] shrink-0" />
                       {doc.filename}
-                    </a>
+                    </button>
                     <div className="flex items-center gap-3 shrink-0 text-xs text-[#9A948D]">
                       <span>{formatSize(doc.size_bytes)}</span>
                       <span>
@@ -397,6 +475,60 @@ export default function SupplierDocumentsExplorer({
           </div>
         )}
       </div>
+
+      {previewDoc && <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
     </div>
+  )
+}
+
+function DocumentPreviewModal({ doc, onClose }: { doc: SupplierDocument; onClose: () => void }) {
+  const kind = previewKindFor(doc.filename)
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="w-[95vw] max-w-5xl h-[85vh] max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="pr-8 truncate">{doc.filename}</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 min-h-0 overflow-hidden rounded-lg border border-[#DDD8D2] bg-[#F7F5F2]">
+          {kind === 'pdf' && <iframe src={doc.file_url} className="w-full h-full" title={doc.filename} />}
+          {kind === 'image' && (
+            <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element -- externe Supabase Storage-URL, geen lokaal asset dat next/image kan optimaliseren */}
+              <img src={doc.file_url} alt={doc.filename} className="max-w-full max-h-full object-contain" />
+            </div>
+          )}
+          {kind === 'office' && (
+            <iframe
+              src={`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(doc.file_url)}`}
+              className="w-full h-full"
+              title={doc.filename}
+            />
+          )}
+          {kind === 'unsupported' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+              <p className="text-sm text-[#6B6560]">Voor dit bestandstype is geen voorbeeld beschikbaar in het dashboard.</p>
+              <a
+                href={doc.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-[#C9A96E] underline"
+              >
+                Open het bestand in een nieuw tabblad
+              </a>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <a
+            href={doc.file_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-[#6B6560] hover:text-[#1C1B19] underline"
+          >
+            Open in nieuw tabblad
+          </a>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
