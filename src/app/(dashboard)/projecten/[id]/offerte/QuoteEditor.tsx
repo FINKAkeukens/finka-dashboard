@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
@@ -284,6 +285,9 @@ export default function QuoteEditor({
   )
   const [customerConnections, setCustomerConnections] = useState<ConnectionRow[]>(
     initialQuote?.customer_connections ?? []
+  )
+  const [includeAansluitschemaBijlage, setIncludeAansluitschemaBijlage] = useState(
+    initialQuote?.include_aansluitschema_bijlage ?? false
   )
   const connectionsImageInputRef = useRef<HTMLInputElement>(null)
   const [customerClosingHeading, setCustomerClosingHeading] = useState(initialQuote?.customer_closing_heading ?? '')
@@ -854,6 +858,7 @@ export default function QuoteEditor({
       customer_connections_intro: customerConnectionsIntro || null,
       customer_connections_disclaimer: customerConnectionsDisclaimer || null,
       customer_connections: customerConnections,
+      include_aansluitschema_bijlage: includeAansluitschemaBijlage,
       customer_closing_heading: customerClosingHeading || null,
       customer_closing_text: customerClosingText || null,
       customer_closing_quote: customerClosingQuote || null,
@@ -1886,6 +1891,20 @@ export default function QuoteEditor({
                     className={`w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19] resize-none ${markerClass(customerConnectionsDisclaimer)}`}
                   />
                   <p className="text-xs text-[#9A948D]">Leeg laten = geen disclaimer tonen.</p>
+                </div>
+
+                <div className="flex items-start gap-2 pt-1">
+                  <Checkbox
+                    id="include-aansluitschema-bijlage"
+                    checked={includeAansluitschemaBijlage}
+                    onCheckedChange={(v) => setIncludeAansluitschemaBijlage(v === true)}
+                  />
+                  <label htmlFor="include-aansluitschema-bijlage" className="text-sm text-[#1C1B19] cursor-pointer">
+                    Aansluitschema toevoegen als bijlage
+                    <span className="block text-xs text-[#6B6560]">
+                      Voegt het aansluitschema (tekening + schema) van het tabblad Aansluitschema toe als aparte bijlage helemaal achteraan de offerte.
+                    </span>
+                  </label>
                 </div>
               </>
             )}

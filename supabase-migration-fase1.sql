@@ -1989,3 +1989,15 @@ ALTER TABLE finka_configurator_options ADD CONSTRAINT finka_configurator_options
 
 ALTER TABLE finka_configurator_scenarios
   ADD COLUMN IF NOT EXISTS accessoires_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL;
+
+-- =========================================================
+-- 74. Aansluitschema optioneel als bijlage in de klant-offerte — staff kan
+--    ervoor kiezen om het interne aansluitschema (schema-tabel + tekening(en)
+--    met pins, zelfde brondata als het tabblad Aansluitschema) ook aan het
+--    einde van de klant-facing offerte toe te voegen, in de huisstijl van de
+--    offerte i.p.v. de interne PDF-opmaak. Standaard uit (false) — bestaande
+--    offertes tonen dus niets extra's totdat staff het bewust aanzet.
+-- =========================================================
+
+ALTER TABLE finka_quotes
+  ADD COLUMN IF NOT EXISTS include_aansluitschema_bijlage BOOLEAN NOT NULL DEFAULT false;

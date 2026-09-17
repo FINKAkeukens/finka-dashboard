@@ -464,6 +464,7 @@ export interface Quote {
   customer_connections_intro: string | null
   customer_connections_disclaimer: string | null
   customer_connections: ConnectionRow[]
+  include_aansluitschema_bijlage: boolean
   customer_intro_text: string | null
   customer_closing_heading: string | null
   customer_closing_text: string | null
