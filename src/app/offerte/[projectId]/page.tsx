@@ -3,8 +3,7 @@ export const dynamic = 'force-dynamic'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { ConnectionItem, ConnectionRow, ConnectionSchema, Customer, CustomerCostLine, Project, QUOTE_PAGE_ANCHORS, Quote, QuoteCustomerSection, QuotePageAnchor } from '@/lib/types'
-import { buildItemNumbers, CATEGORY_LABELS, CATEGORY_ORDER, formatItemNumber, PIN_TYPE_COLORS } from '@/lib/aansluitschema'
+import { ConnectionRow, Customer, CustomerCostLine, Project, QUOTE_PAGE_ANCHORS, Quote, QuoteCustomerSection, QuotePageAnchor } from '@/lib/types'
 import PrintButton from './PrintButton'
 import DownloadButton from './DownloadButton'
 
@@ -186,19 +185,6 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
     .maybeSingle() as { data: Quote | null }
 
   if (!quote) redirect(`/projecten/${projectId}?tab=offerte`)
-
-  // Aansluitschema als bijlage (optioneel, zie toggle in de editor) — alleen
-  // ophalen als hij ook echt getoond gaat worden.
-  let aansluitschemaItems: ConnectionItem[] = []
-  let aansluitschema: ConnectionSchema | null = null
-  if (quote.include_aansluitschema_bijlage) {
-    const [{ data: itemsData }, { data: schemaData }] = await Promise.all([
-      supabase.from('finka_connection_items').select('*').eq('project_id', projectId).order('sort_order'),
-      supabase.from('finka_connection_schema').select('*').eq('project_id', projectId).maybeSingle(),
-    ])
-    aansluitschemaItems = (itemsData ?? []) as ConnectionItem[]
-    aansluitschema = schemaData as ConnectionSchema | null
-  }
 
   const c = project.customer
   const sections = (quote.customer_sections ?? []) as QuoteCustomerSection[]
@@ -538,6 +524,14 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           <span className="text-sm text-gray-500">
             {c.first_name} {c.last_name} — {project.title}
           </span>
+          {quote.include_aansluitschema_bijlage && (
+            <a
+              href={`/offerte/${projectId}/bijlage-aansluitschema`}
+              className="px-5 py-2.5 border border-[#DDD8D2] text-gray-700 text-sm rounded-lg hover:bg-[#F7F5F2] transition-colors"
+            >
+              Bijlage: Aansluitschema →
+            </a>
+          )}
           <DownloadButton projectId={projectId} />
           <PrintButton />
         </div>
@@ -862,127 +856,23 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           </div>
         )}
 
-        {/* ─── Bijlage: Aansluitschema (optioneel, tekening + schema-tabel) ─── */}
-        {quote.include_aansluitschema_bijlage && (() => {
-          const applicableItems = aansluitschemaItems.filter((i) => i.van_toepassing)
-          const itemNumbers = buildItemNumbers(aansluitschemaItems)
-          const wanden = (aansluitschema?.wanden ?? []).filter((w) => w.bron_afbeelding_url && w.pins.length > 0)
-
-          return (
-            <>
-              {applicableItems.length > 0 && (
-                <div className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 6, flexShrink: 0 }}>
-                    Bijlage
-                  </div>
-                  <h2 className="serif" style={{ fontSize: 38, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 16, flexShrink: 0 }}>
-                    Aansluitschema.
-                  </h2>
-                  <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', columnCount: applicableItems.length > 10 ? 2 : 1, columnGap: 32 }}>
-                    {CATEGORY_ORDER.map((category) => {
-                      const rows = applicableItems.filter((i) => i.category === category)
-                      if (!rows.length) return null
-                      return (
-                        <div key={category} style={{ breakInside: 'avoid', marginBottom: 14 }}>
-                          <div style={{ fontSize: 9, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase', fontWeight: 600, padding: '6px 0', borderBottom: '1px solid #E6E2D9' }}>
-                            {CATEGORY_LABELS[category]}
-                          </div>
-                          {rows.map((item) => (
-                            <div key={item.id} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid #E6E2D9', breakInside: 'avoid' }}>
-                              <span style={{ fontSize: 10, color: '#9B9591', flexShrink: 0, width: 18 }}>{formatItemNumber(itemNumbers.get(item.id) ?? 0)}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 11, color: '#1C1B19', lineHeight: 1.35 }}>{item.omschrijving}</div>
-                                {(item.aantal || item.hoogte_cm || item.positie_toelichting) && (
-                                  <div style={{ fontSize: 10, color: '#6B6560', lineHeight: 1.35, marginTop: 1 }}>
-                                    {[item.aantal && `${item.aantal}x`, item.hoogte_cm && `${item.hoogte_cm} cm`, item.positie_toelichting].filter(Boolean).join(' · ')}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {wanden.map((wand) => {
-                const pinRows = wand.pins
-                  .map((pin) => {
-                    const item = pin.connection_item_id ? aansluitschemaItems.find((i) => i.id === pin.connection_item_id) : null
-                    const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
-                    const omschrijving = pin.label || item?.omschrijving || '—'
-                    return { pin, nummer, omschrijving }
-                  })
-                  .sort((a, b) => (a.nummer || 999) - (b.nummer || 999))
-                return (
-                  <div key={wand.id} className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 6, flexShrink: 0 }}>
-                      Bijlage
-                    </div>
-                    <h2 className="serif" style={{ fontSize: 38, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 16, flexShrink: 0 }}>
-                      {wand.label}.
-                    </h2>
-                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      {/* Binnenste wrapper krimpt exact naar de gerenderde
-                         afbeeldingsgrootte (maxWidth/maxHeight + width/
-                         height:auto i.p.v. de buitenste flex-box te vullen
-                         met objectFit:contain) — anders kloppen de pin-
-                         percentages niet meer zodra de afbeeldingsverhouding
-                         niet exact de containerverhouding is. */}
-                      <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={wand.bron_afbeelding_url!}
-                          alt={wand.label}
-                          style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto', borderRadius: 10, border: '1px solid #DDD8D2' }}
-                        />
-                        {wand.pins.map((pin) => {
-                          const item = pin.connection_item_id ? aansluitschemaItems.find((i) => i.id === pin.connection_item_id) : null
-                          const nummer = item ? itemNumbers.get(item.id) ?? 0 : 0
-                          return (
-                            <div
-                              key={pin.id}
-                              style={{
-                                position: 'absolute',
-                                left: `${pin.x * 100}%`,
-                                top: `${pin.y * 100}%`,
-                                transform: 'translate(-50%, -50%)',
-                                width: 22,
-                                height: 22,
-                                borderRadius: '50%',
-                                background: '#fff',
-                                border: `2px solid ${PIN_TYPE_COLORS[pin.type]}`,
-                                color: PIN_TYPE_COLORS[pin.type],
-                                fontSize: 10,
-                                fontWeight: 700,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              {nummer ? formatItemNumber(nummer) : '?'}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    <div style={{ flexShrink: 0, marginTop: 12, fontSize: 10, lineHeight: 1.6, color: '#3d3a37' }}>
-                      {pinRows.map(({ pin, nummer, omschrijving }, i) => (
-                        <span key={pin.id}>
-                          <strong>{nummer ? formatItemNumber(nummer) : '?'}</strong> {omschrijving}
-                          {pin.hoogte_cm ? `, ${pin.hoogte_cm} cm` : ''}
-                          {i < pinRows.length - 1 ? '  ·  ' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </>
-          )
-        })()}
+        {/* ─── Bijlage: Aansluitschema (optioneel) — de volledige inhoud (schema-tabel
+           + tekening met pins) staat in een apart, los downloadbaar document;
+           hier alleen een korte verwijzingspagina zodat wie de offerte
+           doorbladert weet dat de bijlage erbij hoort. ─── */}
+        {quote.include_aansluitschema_bijlage && (
+          <div className="page" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.2em', color: '#9B9591', textTransform: 'uppercase', marginBottom: 10 }}>
+              Bijlage
+            </div>
+            <h2 className="serif" style={{ fontSize: 44, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 14 }}>
+              Aansluitschema.
+            </h2>
+            <p style={{ fontSize: 12, lineHeight: 1.6, color: '#6B6560', maxWidth: 420 }}>
+              Het volledige aansluitschema — schema en tekening — is als apart document bijgevoegd.
+            </p>
+          </div>
+        )}
 
       </div>
     </>
