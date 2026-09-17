@@ -4,7 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { isStaffUser } from '@/lib/portal'
 
-const MAX_BYTES = 25 * 1024 * 1024
+// Vercel Functions accepteren tegenwoordig requestbodies tot 100MB — hier
+// iets onder blijven voor marge (multipart-overhead, andere velden in de
+// FormData). Was eerder 25MB, te krap voor productcatalogi/brochures van
+// leveranciers die als map geüpload worden.
+const MAX_BYTES = 90 * 1024 * 1024
 
 // Uploaden van een document bij een leverancier, eventueel in een specifieke
 // map. Zelfde opzet als /api/projecten/documenten/upload: alleen staff, pad
@@ -27,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Bestand of supplierId ontbreekt' }, { status: 400 })
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: 'Bestand is groter dan 25MB' }, { status: 400 })
+    return NextResponse.json({ error: `Bestand is groter dan ${MAX_BYTES / (1024 * 1024)}MB` }, { status: 400 })
   }
 
   const service = createServiceClient()
