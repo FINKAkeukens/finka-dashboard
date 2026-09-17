@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { renderPdf } from '@/lib/pdf'
 
-// Losse PDF voor de aansluitschema-bijlage, met een eigen bestandsnaam
-// (Bijlage-aansluitschema-[projectnummer]) zodat de offerte en de bijlage
-// als twee losse documenten gedownload worden i.p.v. samengevoegd. Geen
-// downloadgeschiedenis/diff hier (dat is een offerte-specifieke feature,
-// zie /api/offerte/[projectId]/pdf) — dit is puur de PDF-generatie.
+// Losse PDF voor de aansluitschema-bijlage — hergebruikt exact dezelfde
+// pagina als het tabblad Aansluitschema (/aansluitschema/[projectId]), geen
+// eigen opmaak: staff wil precies dezelfde, al goedgekeurde PDF, alleen met
+// een andere bestandsnaam (Bijlage-aansluitschema-[projectnummer]) zodat de
+// offerte en de bijlage als twee losse documenten gedownload worden i.p.v.
+// samengevoegd. Geen downloadgeschiedenis/diff hier (dat is een offerte-
+// specifieke feature, zie /api/offerte/[projectId]/pdf) — dit is puur de
+// PDF-generatie.
 export async function GET(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .eq('id', projectId)
       .single()
 
-    const pdf = await renderPdf(`${baseUrl}/offerte/${projectId}/bijlage-aansluitschema`, cookieHeader)
+    const pdf = await renderPdf(`${baseUrl}/aansluitschema/${projectId}`, cookieHeader)
     const filename = buildFilename(project?.reference_number ?? projectId)
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

@@ -514,7 +514,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
           </span>
           {quote.include_aansluitschema_bijlage && (
             <a
-              href={`/offerte/${projectId}/bijlage-aansluitschema`}
+              href={`/aansluitschema/${projectId}`}
               className="px-5 py-2.5 border border-[#DDD8D2] text-gray-700 text-sm rounded-lg hover:bg-[#F7F5F2] transition-colors"
             >
               Bijlage: Aansluitschema →
