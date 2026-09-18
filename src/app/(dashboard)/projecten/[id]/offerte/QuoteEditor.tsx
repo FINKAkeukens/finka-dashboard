@@ -464,17 +464,24 @@ export default function QuoteEditor({
   }
 
   async function uploadImage(file: File, path: string): Promise<string | null> {
-    const formData = new FormData()
-    formData.append('file', await resizeImageFile(file), file.name)
-    formData.append('path', path)
-
-    const res = await fetch('/api/upload', { method: 'POST', body: formData })
-    const body = await res.json()
-    if (!res.ok) {
-      setError(`Upload mislukt: ${body.error ?? res.statusText}`)
+    // Rechtstreeks naar Storage i.p.v. via /api/upload: Vercel Functions
+    // laten een requestbody nooit groter dan ~4,5MB door (hard, niet
+    // instelbaar) — resizeImageFile helpt vaak, maar een foto die al klein
+    // genoeg is qua afmeting (dus niet geschaald wordt) kan nog steeds
+    // zwaarder dan 4,5MB zijn en liep daar dan alsnog op vast.
+    // Geen upsert: alle aanroepers bouwen path al met Date.now() (dus altijd
+    // uniek), en de staff-only Storage-policy staat alleen een kale insert
+    // toe, geen upsert (die een update-permissie nodig heeft).
+    const resized = await resizeImageFile(file)
+    const { error: uploadError } = await supabase.storage
+      .from('offer-images')
+      .upload(path, resized, { contentType: resized.type || 'application/octet-stream' })
+    if (uploadError) {
+      setError(`Upload mislukt: ${uploadError.message}`)
       return null
     }
-    return body.url as string
+    const { data } = supabase.storage.from('offer-images').getPublicUrl(path)
+    return data.publicUrl
   }
 
   async function handlePlattegrondUpload(e: React.ChangeEvent<HTMLInputElement>) {

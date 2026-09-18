@@ -266,14 +266,19 @@ export default function AansluitschemaTab({
   async function handleUploadTekening(file: File) {
     setUploadingTekening(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('path', `${projectId}/aansluitschema-${Date.now()}-${file.name}`)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'Upload mislukt')
-      setCustomImageUrls((prev) => [...prev, body.url])
-      setSelectedImageUrls((prev) => new Set(prev).add(body.url))
+      // Rechtstreeks naar Storage i.p.v. via /api/upload: Vercel Functions
+      // laten een requestbody nooit groter dan ~4,5MB door (hard, niet
+      // instelbaar) — een niet-gecomprimeerde foto liep daar bovenop vast.
+      // Pad is altijd al uniek — geen upsert nodig (en de staff-only
+      // Storage-policy staat alleen een kale insert toe, geen upsert).
+      const path = `${projectId}/aansluitschema-${Date.now()}-${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('offer-images')
+        .upload(path, file, { contentType: file.type || 'application/octet-stream' })
+      if (uploadError) throw new Error(uploadError.message)
+      const { data } = supabase.storage.from('offer-images').getPublicUrl(path)
+      setCustomImageUrls((prev) => [...prev, data.publicUrl])
+      setSelectedImageUrls((prev) => new Set(prev).add(data.publicUrl))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload mislukt')
     } finally {

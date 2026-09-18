@@ -6,6 +6,12 @@ import { extractWerkbladSummary } from '@/lib/werkblad'
 // Zelfde patroon als de Winner Flex-route: werkblad-specificatie (PDF) wordt
 // bewaard als bijlage, en Claude destilleert er een leesbare samenvatting +
 // totaalbedrag uit voor de kostprijs-opbouw.
+//
+// De klant-browser uploadt het bestand zelf al rechtstreeks naar Storage
+// (zie WerkbladOptionEditor.tsx) — deze route krijgt alleen het path terug en
+// haalt de bytes zelf op om naar Claude te sturen. Vercel Functions laten
+// een requestbody nooit groter dan ~4,5MB door (hard, niet instelbaar), dus
+// het bestand zelf via deze route posten liep voor grotere PDF's vast.
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -13,29 +19,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
   }
 
-  const formData = await request.formData()
-  const file = formData.get('file')
-  const quoteId = formData.get('quoteId')
+  const body = await request.json().catch(() => null)
+  const quoteId = body?.quoteId
+  const path = body?.path
+  const filename = body?.filename
+  const size = body?.size
 
-  if (!(file instanceof File) || typeof quoteId !== 'string' || !quoteId) {
-    return NextResponse.json({ error: 'Bestand of offerte-id ontbreekt' }, { status: 400 })
+  if (typeof quoteId !== 'string' || !quoteId || typeof path !== 'string' || !path || typeof filename !== 'string') {
+    return NextResponse.json({ error: 'Offerte-id, path of bestandsnaam ontbreekt' }, { status: 400 })
   }
-
-  if (file.type !== 'application/pdf') {
-    return NextResponse.json({ error: 'Alleen PDF-specificaties worden op dit moment ondersteund' }, { status: 400 })
+  if (!path.startsWith(`${quoteId}/`)) {
+    return NextResponse.json({ error: 'Path hoort niet bij deze offerte' }, { status: 400 })
   }
-
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const path = `${quoteId}/werkblad-${Date.now()}-${file.name}`
 
   const service = createServiceClient()
-  const { error: uploadError } = await service.storage.from('offer-images').upload(path, buffer, {
-    upsert: true,
-    contentType: file.type,
-  })
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 })
+  const { data: downloaded, error: downloadError } = await service.storage.from('offer-images').download(path)
+  if (downloadError || !downloaded) {
+    return NextResponse.json({ error: downloadError?.message ?? 'Bestand niet gevonden in Storage' }, { status: 404 })
   }
+  if (downloaded.type !== 'application/pdf') {
+    return NextResponse.json({ error: 'Alleen PDF-specificaties worden op dit moment ondersteund' }, { status: 400 })
+  }
+  const buffer = Buffer.from(await downloaded.arrayBuffer())
 
   const { data: publicUrlData } = service.storage.from('offer-images').getPublicUrl(path)
 
@@ -55,7 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    attachment: { name: file.name, url: publicUrlData.publicUrl, size: file.size },
+    attachment: { name: filename, url: publicUrlData.publicUrl, size: typeof size === 'number' ? size : buffer.byteLength },
     summary,
     totaalExclBtw,
     summaryError,

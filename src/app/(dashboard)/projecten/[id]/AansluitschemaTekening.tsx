@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ export default function AansluitschemaTekening({
   items: ConnectionItem[]
   imageOptions: string[]
 }) {
+  const supabase = createClient()
   const [activeWandId, setActiveWandId] = useState<string | null>(wanden[0]?.id ?? null)
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
   const [draggingPinId, setDraggingPinId] = useState<string | null>(null)
@@ -129,13 +131,19 @@ export default function AansluitschemaTekening({
     if (!activeWand) return
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('path', `${projectId}/wand-${Date.now()}-${file.name}`)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'Upload mislukt')
-      updateWand(activeWand.id, { bron_afbeelding_url: body.url })
+      // Rechtstreeks naar Storage i.p.v. via /api/upload: Vercel Functions
+      // laten een requestbody nooit groter dan ~4,5MB door (hard, niet
+      // instelbaar) — een niet-gecomprimeerde foto (bv. rechtstreeks van een
+      // telefoon) liep daar bovenop vast.
+      // Pad is altijd al uniek — geen upsert nodig (en de staff-only
+      // Storage-policy staat alleen een kale insert toe, geen upsert).
+      const path = `${projectId}/wand-${Date.now()}-${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('offer-images')
+        .upload(path, file, { contentType: file.type || 'application/octet-stream' })
+      if (uploadError) throw new Error(uploadError.message)
+      const { data } = supabase.storage.from('offer-images').getPublicUrl(path)
+      updateWand(activeWand.id, { bron_afbeelding_url: data.publicUrl })
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Upload mislukt')
     } finally {

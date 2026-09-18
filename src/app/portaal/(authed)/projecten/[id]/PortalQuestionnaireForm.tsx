@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Check, FileText, Image as ImageIcon, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { createClient } from '@/lib/supabase/client'
 import { QuestionnaireCategoryItem, QuestionnaireTemplateQuestion } from '@/lib/types'
 import {
   MULTI_SELECT_OTHER_OPTION,
@@ -17,8 +18,10 @@ import {
 
 // Tekstvelden slaan op bij verlaten (onBlur), checkboxen/bestanden meteen
 // bij klikken/uploaden — zelfde gevoel als de rest van het dashboard.
-// Schrijft via /api/portaal/antwoord (en, voor bestanden, /api/portaal/
-// upload), nooit rechtstreeks naar Supabase vanuit de klant-browser.
+// Schrijft via /api/portaal/antwoord; voor bestanden vraagt /api/portaal/
+// upload eerst een kortlevende, aan één pad gebonden signed upload URL aan
+// (ná een server-side eigendomscheck) — de klant-browser uploadt de bytes
+// daarna zelf naar die URL, nooit met brede Supabase-toegang.
 export default function PortalQuestionnaireForm({
   projectId,
   categories,
@@ -35,6 +38,7 @@ export default function PortalQuestionnaireForm({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const supabase = createClient()
 
   async function save(questionId: string, answer: string): Promise<boolean> {
     setError('')
@@ -103,21 +107,38 @@ export default function PortalQuestionnaireForm({
     }
     setUploading(questionId)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('projectId', projectId)
-      formData.append('questionId', questionId)
-      const res = await fetch('/api/portaal/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error ?? 'Uploaden mislukt')
+      // Stap 1: server valideert eigendom en geeft een signed upload URL
+      // terug voor exact één, hier bepaald pad — kleine JSON-aanvraag, geen
+      // bestandsbytes (die liepen bij grotere foto's/scans vast op Vercel's
+      // harde ~4,5MB requestbody-limiet).
+      const signRes = await fetch('/api/portaal/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, questionId, filename: file.name, contentType: file.type }),
+      })
+      const signData = await signRes.json()
+      if (!signRes.ok) {
+        setError(signData.error ?? 'Uploaden mislukt')
         return
       }
+
+      // Stap 2: de daadwerkelijke bytes gaan rechtstreeks naar Storage met
+      // die token — alleen bevoegd voor dit ene pad, geen bredere toegang.
+      const { error: uploadError } = await supabase.storage
+        .from('klant-uploads')
+        .uploadToSignedUrl(signData.path, signData.token, file, { contentType: file.type })
+      if (uploadError) {
+        setError(uploadError.message)
+        return
+      }
+
       const current = parseFileAnswer(answers[questionId] ?? '')
-      const next: QuestionnaireFile[] = [...current, { url: data.url, name: data.name }]
+      const next: QuestionnaireFile[] = [...current, { url: signData.url, name: signData.name }]
       const serialized = serializeFileAnswer(next)
       updateLocal(questionId, serialized)
       save(questionId, serialized)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Uploaden mislukt')
     } finally {
       setUploading(null)
     }

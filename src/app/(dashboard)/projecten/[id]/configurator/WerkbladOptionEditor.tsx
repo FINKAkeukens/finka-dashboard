@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import WerkbladCalculator from '@/components/WerkbladCalculator'
@@ -48,6 +49,7 @@ export default function WerkbladOptionEditor({
   const [uploadError, setUploadError] = useState('')
   const [calcOpen, setCalcOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const supabase = createClient()
 
   const calcInputs: WerkbladCalcInputs = data.calc_inputs ?? defaultWerkbladCalcInputs(wbRates)
 
@@ -64,17 +66,27 @@ export default function WerkbladOptionEditor({
     setCalcOpen(false)
   }
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  async function handleUpload(file: File) {
     setUploadError('')
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('quoteId', quoteId)
+      // Eerst rechtstreeks naar Storage — Vercel Functions laten een
+      // requestbody nooit groter dan ~4,5MB door (hard, niet instelbaar).
+      // De route haalt het bestand daarna zelf op uit Storage om naar
+      // Claude te sturen.
+      // Pad is altijd al uniek — geen upsert nodig (en de staff-only
+      // Storage-policy staat alleen een kale insert toe, geen upsert).
+      const path = `${quoteId}/werkblad-${Date.now()}-${file.name}`
+      const { error: storageError } = await supabase.storage
+        .from('offer-images')
+        .upload(path, file, { contentType: file.type || 'application/pdf' })
+      if (storageError) throw new Error(storageError.message)
 
-      const res = await fetch('/api/quotes/parse-werkblad', { method: 'POST', body: formData })
+      const res = await fetch('/api/quotes/parse-werkblad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteId, path, filename: file.name, size: file.size }),
+      })
       const body = await parseUploadResponse(res)
 
       if (!res.ok) {
@@ -97,7 +109,7 @@ export default function WerkbladOptionEditor({
       setUploadError(err instanceof Error ? err.message : 'Uploaden mislukt')
     } finally {
       setUploading(false)
-      e.target.value = ''
+      if (inputRef.current) inputRef.current.value = ''
     }
   }
 
@@ -129,7 +141,16 @@ export default function WerkbladOptionEditor({
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <input ref={inputRef} type="file" accept="application/pdf" hidden onChange={handleUpload} />
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleUpload(file)
+            }}
+          />
           <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={uploading}>
             <Upload size={13} className="mr-1.5" />
             {uploading ? 'Verwerken...' : 'Specificatie uploaden'}
