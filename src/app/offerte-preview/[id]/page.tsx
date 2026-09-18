@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
+import { canAccessProject } from '@/lib/portal'
 import { redirect, notFound } from 'next/navigation'
 import { Offer, Customer, InspirationImage, OfferSpecs, OfferAttachment } from '@/lib/types'
 import PrintButton from './PrintButton'
@@ -28,6 +29,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  if (!(await canAccessProject(id))) notFound()
 
   const [{ data: customer }, { data: offer }] = await Promise.all([
     supabase.from('finka_customers').select('*').eq('id', id).single(),

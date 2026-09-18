@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto'
+import JSZip from 'jszip'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { canAccessProject } from '@/lib/portal'
 import { renderPdf } from '@/lib/pdf'
 import { buildDownloadSnapshot, diffQuoteSnapshots } from '@/lib/quote-download-diff'
 import type { Quote, QuoteDownloadSnapshot, QuoteItem } from '@/lib/types'
@@ -13,16 +15,68 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { projectId } = await params
+
+  // Zelfde eigenaarschap-check als de offertepagina zelf — anders kan een
+  // ingelogde klant hier gewoon het project-ID van een andere klant invullen
+  // en diens offerte downloaden (IDOR).
+  const { data: projectForAccessCheck } = await supabase
+    .from('finka_projects')
+    .select('customer:finka_customers(id)')
+    .eq('id', projectId)
+    .single() as { data: { customer: { id: string } | null } | null }
+  if (!(await canAccessProject(projectForAccessCheck?.customer?.id))) {
+    return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
   const cookieHeader = request.headers.get('cookie') ?? ''
 
   try {
     const pdf = await renderPdf(`${baseUrl}/offerte/${projectId}`, cookieHeader)
     const filename = await recordDownload(supabase, projectId, user.email ?? null, pdf)
+    const resolvedFilename = filename ?? `offerte-${projectId}`
+
+    // Aansluitschema-bijlage erbij (indien aangevinkt) — als 1 zip i.p.v.
+    // 2 losse automatische downloads: browsers blokkeren een 2e download
+    // die zonder nieuwe kliks van de gebruiker vanuit hetzelfde klikmoment
+    // wordt gestart, dus "in 1 handeling" kan alleen betrouwbaar als 1
+    // bestand.
+    const { data: quote } = await supabase
+      .from('finka_quotes')
+      .select('include_aansluitschema_bijlage')
+      .eq('project_id', projectId)
+      .is('archived_at', null)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (quote?.include_aansluitschema_bijlage) {
+      const { data: project } = await supabase
+        .from('finka_projects')
+        .select('reference_number')
+        .eq('id', projectId)
+        .single()
+
+      const bijlagePdf = await renderPdf(`${baseUrl}/aansluitschema/${projectId}`, cookieHeader)
+      const bijlageFilename = buildBijlageFilename(project?.reference_number ?? projectId)
+
+      const zip = new JSZip()
+      zip.file(`${resolvedFilename}.pdf`, pdf)
+      zip.file(`${bijlageFilename}.pdf`, bijlagePdf)
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
+
+      return new NextResponse(new Uint8Array(zipBuffer), {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': zipContentDispositionHeader(resolvedFilename),
+        },
+      })
+    }
+
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': contentDispositionHeader(filename ?? `offerte-${projectId}`),
+        'Content-Disposition': contentDispositionHeader(resolvedFilename),
       },
     })
   } catch (err) {
@@ -64,6 +118,18 @@ function startOfTodayIso() {
 function contentDispositionHeader(filename: string) {
   const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'")
   return `attachment; filename="${ascii}.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}.pdf`
+}
+
+function zipContentDispositionHeader(filename: string) {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, "'")
+  return `attachment; filename="${ascii}.zip"; filename*=UTF-8''${encodeURIComponent(filename)}.zip`
+}
+
+// Zelfde bestandsnaam als /api/offerte/[projectId]/bijlage-aansluitschema/pdf
+// — los gehouden (i.p.v. geïmporteerd) om die route niet afhankelijk te
+// maken van deze, en andersom.
+function buildBijlageFilename(referenceNumber: string) {
+  return `Bijlage-aansluitschema-${sanitizeFilenamePart(referenceNumber)}`
 }
 
 // Schrijft een rij naar finka_quote_downloads (datum/tijd + wat er is

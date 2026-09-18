@@ -2,8 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchRecentOfferteEmails, fetchPdfContent } from '@/lib/gmail'
 import { extractApplianceFromEmail } from '@/lib/claude'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { isStaffUser } from '@/lib/portal'
+
+// Twee legitieme aanroepers: de "Sync"-knop in de inbox-UI (staff-sessie via
+// cookie) en de wekelijkse cron (server-naar-server, geen cookie — die stuurt
+// daarom de CRON_SECRET mee, zie api/cron/route.ts). Zonder deze check kon
+// deze route vanaf het open internet aangeroepen worden en onbeperkt
+// Gmail-quota + Anthropic-kosten opsouperen.
+async function isAuthorized(request: NextRequest): Promise<boolean> {
+  const authHeader = request.headers.get('authorization')
+  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) return true
+
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return !!user && (await isStaffUser(user.id))
+}
 
 export async function POST(request: NextRequest) {
+  if (!(await isAuthorized(request))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!

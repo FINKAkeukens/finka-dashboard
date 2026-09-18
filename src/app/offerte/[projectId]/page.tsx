@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { canAccessProject } from '@/lib/portal'
 import { redirect, notFound } from 'next/navigation'
 import { Customer, CustomerCostLine, Project, QUOTE_PAGE_ANCHORS, Quote, QuoteCustomerSection, QuotePageAnchor } from '@/lib/types'
 import PrintButton from './PrintButton'
@@ -174,6 +175,7 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
     .single() as { data: (Project & { customer: Customer }) | null }
 
   if (!project) notFound()
+  if (!(await canAccessProject(project.customer?.id))) notFound()
 
   const { data: quote } = await supabase
     .from('finka_quotes')

@@ -45,3 +45,17 @@ export const isStaffUser = cache(async (userId: string): Promise<boolean> => {
   const { data } = await service.from('finka_staff_users').select('id').eq('id', userId).maybeSingle()
   return !!data
 })
+
+// Toegangscheck voor de klant-facing routes die op een project-ID draaien
+// (offerte, aansluitschema, en hun PDF-downloads): staff mag altijd, een
+// ingelogde klant alleen als `projectCustomerId` overeenkomt met zijn eigen
+// finka_customers-record. Zonder deze check kon elke ingelogde klant, puur
+// door het project-ID in de URL te wijzigen, de offerte/aansluitschema van
+// een andere klant bekijken en downloaden (IDOR).
+export async function canAccessProject(projectCustomerId: string | null | undefined): Promise<boolean> {
+  const user = await getAuthUser()
+  if (!user) return false
+  if (await isStaffUser(user.id)) return true
+  const portalCustomer = await getPortalCustomer()
+  return !!portalCustomer && portalCustomer.customer.id === projectCustomerId
+}

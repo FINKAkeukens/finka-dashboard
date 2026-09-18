@@ -29,19 +29,17 @@ export default async function KlantenPage({
     .order('created_at', { ascending: false })
 
   if (status && status !== 'alle') query = query.eq('status', status)
+  // Zoeken in de database i.p.v. de hele tabel ophalen en in JS filteren —
+  // scheelt vooral bij een groeiend klantenbestand veel onnodig dataverkeer.
+  if (q) {
+    const escaped = q.replace(/[%,]/g, '')
+    query = query.or(
+      `first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,reference_number.ilike.%${escaped}%,email.ilike.%${escaped}%,city.ilike.%${escaped}%`
+    )
+  }
 
   const { data: customers } = await query
-  const filtered = customers?.filter(c => {
-    if (!q) return true
-    const search = q.toLowerCase()
-    return (
-      c.first_name?.toLowerCase().includes(search) ||
-      c.last_name?.toLowerCase().includes(search) ||
-      c.reference_number?.toLowerCase().includes(search) ||
-      c.email?.toLowerCase().includes(search) ||
-      c.city?.toLowerCase().includes(search)
-    )
-  }) as Customer[]
+  const filtered = (customers ?? []) as Customer[]
 
   return (
     <div className="p-8 max-w-5xl">

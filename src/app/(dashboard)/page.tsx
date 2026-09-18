@@ -19,6 +19,8 @@ export default async function DashboardPage() {
     { data: projectStatuses },
     { data: allProjectsData },
     { data: customersForStatus },
+    { data: recentCustomers },
+    { data: deliveryTimesData },
   ] = await Promise.all([
     supabase.from('finka_customers').select('*', { count: 'exact', head: true }),
     supabase.from('finka_appliances').select('*', { count: 'exact', head: true }),
@@ -30,7 +32,17 @@ export default async function DashboardPage() {
       .is('archived_at', null)
       .order('created_at', { ascending: false }),
     supabase.from('finka_customers').select('status'),
+    // Deze twee hangen van niets in dit bestand af — samen met de query's
+    // hierboven ophalen i.p.v. er twee losse netwerkrondjes achteraan te
+    // plakken (was voorheen sequentieel, ná de checklist/quotes-batch).
+    supabase
+      .from('finka_customers')
+      .select('id, reference_number, first_name, last_name, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase.from('finka_delivery_times').select('brand, summary, source_email_date, updated_at'),
   ])
+  const deliveryTimes = (deliveryTimesData ?? []) as DeliveryTime[]
   const allProjects = (allProjectsData ?? []) as Project[]
 
   const projectCount = allProjects.length
@@ -185,17 +197,6 @@ export default async function DashboardPage() {
   for (const c of customersForStatus ?? []) {
     customerCountByStatus.set(c.status, (customerCountByStatus.get(c.status) ?? 0) + 1)
   }
-
-  const { data: recentCustomers } = await supabase
-    .from('finka_customers')
-    .select('id, reference_number, first_name, last_name, status, created_at')
-    .order('created_at', { ascending: false })
-    .limit(5)
-
-  const { data: deliveryTimesData } = await supabase
-    .from('finka_delivery_times')
-    .select('brand, summary, source_email_date, updated_at')
-  const deliveryTimes = (deliveryTimesData ?? []) as DeliveryTime[]
 
   return (
     <div className="p-8">

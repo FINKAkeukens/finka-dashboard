@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { canAccessProject } from '@/lib/portal'
 import { renderPdf } from '@/lib/pdf'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
@@ -10,6 +11,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const { projectId } = await params
+
+  // Zelfde eigenaarschap-check als de aansluitschema-pagina zelf — anders
+  // kan een ingelogde klant hier het project-ID van een andere klant
+  // invullen en diens aansluitschema (incl. adres) downloaden (IDOR).
+  const { data: projectForAccessCheck } = await supabase
+    .from('finka_projects')
+    .select('customer:finka_customers(id)')
+    .eq('id', projectId)
+    .single() as { data: { customer: { id: string } | null } | null }
+  if (!(await canAccessProject(projectForAccessCheck?.customer?.id))) {
+    return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
   const cookieHeader = request.headers.get('cookie') ?? ''
 

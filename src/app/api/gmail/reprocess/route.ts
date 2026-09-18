@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { isStaffUser } from '@/lib/portal'
 import { extractApplianceFromEmail } from '@/lib/claude'
 import { fetchPdfContent, getGmailClient } from '@/lib/gmail'
 
 export async function POST(request: NextRequest) {
+  // Alleen vanuit de inbox-UI aanroepbaar (staff-sessie) — anders kon
+  // iedereen op internet, zonder inloggen, hiermee Gmail/Anthropic-kosten
+  // opsouperen door willekeurige `id`'s te posten.
+  const authSupabase = await createServerClient()
+  const { data: { user } } = await authSupabase.auth.getUser()
+  if (!user || !(await isStaffUser(user.id))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { id } = await request.json()
 
   const supabase = createClient(

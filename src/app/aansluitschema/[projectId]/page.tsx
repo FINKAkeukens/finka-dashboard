@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { Fragment } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { canAccessProject } from '@/lib/portal'
 import { redirect, notFound } from 'next/navigation'
 import { CATEGORY_LABELS, CATEGORY_ORDER, buildItemNumbers, formatItemNumber, PIN_TYPE_COLORS } from '@/lib/aansluitschema'
 import { ConnectionItem, ConnectionSchema, Project } from '@/lib/types'
@@ -22,8 +23,9 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
     .from('finka_projects')
     .select('*, customer:finka_customers(id, first_name, last_name)')
     .eq('id', projectId)
-    .single() as { data: Project | null }
+    .single() as { data: (Project & { customer: { id: string } | null }) | null }
   if (!project) notFound()
+  if (!(await canAccessProject(project.customer?.id))) notFound()
 
   const [{ data: itemsData }, { data: schemaData }] = await Promise.all([
     supabase.from('finka_connection_items').select('*').eq('project_id', projectId).order('sort_order'),
