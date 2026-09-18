@@ -223,26 +223,50 @@ export default function SupplierDocumentsExplorer({
     setError('')
     const failures: string[] = []
     try {
+      // Rechtstreeks vanuit de browser naar Supabase Storage + de database
+      // i.p.v. via /api/leveranciers/documenten/upload: Vercel Functions
+      // laten een requestbody nooit groter dan ~4,5MB door (hard, niet
+      // instelbaar via code — leverde bij grotere PDF's een 413 op, altijd
+      // vóórdat onze eigen 90MB-check ooit bereikt werd). De Storage-bucket
+      // is publiek en de RLS-policy staat elke ingelogde gebruiker toe, dus
+      // dit pad werkt zonder de servertussenstop.
+      const { data: { user } } = await supabase.auth.getUser()
+
       for (const { file, folderPath } of items) {
         // Alles per bestand in één try/catch — een fout op één bestand
-        // (netwerkhikje, een niet-JSON-foutpagina, een gooiende fetch) mag
-        // nooit de rest van de batch stilletjes afbreken zonder dat er iets
-        // op het scherm verschijnt. Eerder gebeurde dat wél: alleen
-        // resolveFolderPath was afgeschermd, dus een fout ná dat punt liet
-        // de map leeg achter zonder enige melding.
+        // (netwerkhikje, een storage-fout) mag nooit de rest van de batch
+        // stilletjes afbreken zonder dat er iets op het scherm verschijnt.
         try {
           const resolvedFolderId = await resolveFolderPath(folderPath, targetFolderId)
-          const formData = new FormData()
-          formData.append('file', file)
-          formData.append('supplierId', supplierId)
-          if (resolvedFolderId) formData.append('folderId', resolvedFolderId)
-          const res = await fetch('/api/leveranciers/documenten/upload', { method: 'POST', body: formData })
-          const data = await res.json().catch(() => ({ error: `Onverwacht antwoord van de server (status ${res.status})` }))
-          if (!res.ok) {
-            failures.push(`${file.name}: ${data.error ?? 'Uploaden mislukt'}`)
+
+          const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : ''
+          const path = `${supplierId}/${crypto.randomUUID()}${extension}`
+          const { error: uploadError } = await supabase.storage
+            .from('leverancier-documenten')
+            .upload(path, file, { contentType: file.type || 'application/octet-stream' })
+          if (uploadError) {
+            failures.push(`${file.name}: ${uploadError.message}`)
             continue
           }
-          setDocuments((prev) => [data.document as SupplierDocument, ...prev])
+          const { data: urlData } = supabase.storage.from('leverancier-documenten').getPublicUrl(path)
+
+          const { data: inserted, error: insertError } = await supabase
+            .from('finka_supplier_documents')
+            .insert({
+              supplier_id: supplierId,
+              folder_id: resolvedFolderId,
+              filename: file.name,
+              file_url: urlData.publicUrl,
+              size_bytes: file.size,
+              uploaded_by: user?.email ?? null,
+            })
+            .select()
+            .single()
+          if (insertError) {
+            failures.push(`${file.name}: ${insertError.message}`)
+            continue
+          }
+          setDocuments((prev) => [inserted as SupplierDocument, ...prev])
         } catch (err) {
           failures.push(`${file.name}: ${err instanceof Error ? err.message : 'Uploaden mislukt'}`)
         }
