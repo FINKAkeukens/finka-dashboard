@@ -104,18 +104,42 @@ export default function DocumentenTab({
     setUploading(true)
     setError('')
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('projectId', projectId)
-      const res = await fetch('/api/projecten/documenten/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error ?? 'Uploaden mislukt')
+      // Rechtstreeks vanuit de browser naar Supabase Storage + de database
+      // i.p.v. via /api/projecten/documenten/upload: Vercel Functions laten
+      // een requestbody nooit groter dan ~4,5MB door (hard, niet instelbaar
+      // via code) — grotere scans/PDF's kregen daardoor altijd een 413,
+      // vóórdat onze eigen 25MB-check ooit bereikt werd. Zelfde fix als bij
+      // de leveranciersdocumenten.
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const extension = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : ''
+      const path = `${projectId}/${crypto.randomUUID()}${extension}`
+      const { error: uploadError } = await supabase.storage
+        .from('project-documenten')
+        .upload(path, file, { contentType: file.type || 'application/octet-stream' })
+      if (uploadError) {
+        setError(uploadError.message)
         return
       }
-      setDocuments((prev) => [data.document as ProjectDocument, ...prev])
-    } catch {
-      setError('Uploaden mislukt')
+      const { data: urlData } = supabase.storage.from('project-documenten').getPublicUrl(path)
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('finka_project_documents')
+        .insert({
+          project_id: projectId,
+          filename: file.name,
+          file_url: urlData.publicUrl,
+          uploaded_by: user?.email ?? null,
+        })
+        .select()
+        .single()
+      if (insertError) {
+        setError(insertError.message)
+        return
+      }
+      setDocuments((prev) => [inserted as ProjectDocument, ...prev])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Uploaden mislukt')
     } finally {
       setUploading(false)
     }
