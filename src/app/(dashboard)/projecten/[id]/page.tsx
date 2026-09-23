@@ -370,7 +370,12 @@ export default async function ProjectDetailPage({
       ) : tab === 'offerte' ? (
         <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} defaultTexts={offerteDefaultTexts} />
       ) : tab === 'financieel' ? (
-        <FinancieelTab items={financialItems} btwPercentage={financialBtwPercentage} />
+        <FinancieelTab
+          items={financialItems}
+          btwPercentage={financialBtwPercentage}
+          akkoordDate={dates.akkoord.date}
+          afrondingDate={dates.afronding.date}
+        />
       ) : tab === 'planning' ? (
         <PlanningTab projectId={id} milestones={milestones} />
       ) : tab === 'checklist' ? (

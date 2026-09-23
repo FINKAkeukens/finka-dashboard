@@ -2001,3 +2001,38 @@ ALTER TABLE finka_configurator_scenarios
 
 ALTER TABLE finka_quotes
   ADD COLUMN IF NOT EXISTS include_aansluitschema_bijlage BOOLEAN NOT NULL DEFAULT false;
+
+-- =========================================================
+-- 75. Inmeten als los aan/uit te vinken post in de Configurator-optie
+--    "Opslag, levering en montage". Het bedrag stond alleen als
+--    standaardwaarde (250) in de kostprijs-opbouw en kwam daardoor niet
+--    terug in de klantprijs van een kostenoverzicht — dat verschilde dus
+--    van de Offerte. Tarief hier instelbaar (Instellingen → Euroline-
+--    tarieven), net als de andere posten. Bestaande opties hebben het
+--    vinkje niet en rekenen dus 0, tot je het aanzet.
+-- =========================================================
+
+ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS inmeten_tarief NUMERIC NOT NULL DEFAULT 250;
+
+-- =========================================================
+-- 76. Betaaldatum per kostenregel (project-tabblad Financieel). Het
+--    "Betaald"-vinkje legde alleen vast dát een bedrag bevestigd is, niet
+--    wanneer. Wordt bij aanvinken op die dag gezet en is daarna handmatig
+--    aan te passen; uitvinken wist de datum weer. Bestaande, al aangevinkte
+--    regels houden NULL (datum onbekend) tot je er zelf een invult.
+-- =========================================================
+
+ALTER TABLE finka_project_financials ADD COLUMN IF NOT EXISTS betaald_op DATE;
+
+-- =========================================================
+-- 77. Projectstatus "Geannuleerd". Projecten met deze status verdwijnen uit
+--    alle overzichten (dashboard, planning, projectenlijst, financieel
+--    overzicht) maar blijven gewoon bestaan — via het statusfilter
+--    "Geannuleerd" in de projectenlijst zijn ze terug te vinden, en op de
+--    klantpagina blijven ze staan zodat de historie per klant compleet is.
+--    Staat bewust achteraan (sort_order 7), na "On hold".
+-- =========================================================
+
+INSERT INTO finka_project_statuses (label, sort_order, color)
+SELECT 'Geannuleerd', 7, '#EF4444'
+WHERE NOT EXISTS (SELECT 1 FROM finka_project_statuses WHERE label = 'Geannuleerd');

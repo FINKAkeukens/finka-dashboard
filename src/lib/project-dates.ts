@@ -68,6 +68,18 @@ export function isOnHold(project: Pick<Project, 'status'>): boolean {
   return project.status?.label === ON_HOLD_STATUS_LABEL
 }
 
+// Geannuleerde projecten blijven gewoon bestaan (offertes, documenten en
+// historie hangen eraan), maar tellen nergens meer mee: ze verdwijnen uit het
+// dashboard, de planning, de projectenlijst en het financieel overzicht. Terug
+// te vinden via het statusfilter "Geannuleerd" in de projectenlijst; op de
+// klantpagina blijven ze staan zodat de historie per klant compleet is.
+// Zelfde label-herkenning als On hold hierboven: statussen zijn data.
+export const CANCELLED_STATUS_LABEL = 'Geannuleerd'
+
+export function isCancelled(project: { status?: { label: string } | null }): boolean {
+  return project.status?.label === CANCELLED_STATUS_LABEL
+}
+
 // Aantal dagen dat een project al stilligt (tot vandaag). Null zolang de
 // begindatum niet bekend is.
 export function onHoldDays(onHoldSince: string | null): number | null {

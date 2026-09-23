@@ -140,7 +140,7 @@ export default function KostenView({
 
       <RegisterSection
         title="Kosten"
-        description='Doorlopende bedrijfskosten (huur, personeel, ...) — het jaartotaal telt automatisch mee als "Bedrijfskosten" op de PNL-pagina.'
+        description='Doorlopende bedrijfskosten (huur, personeel, ...) — het jaartotaal telt automatisch mee als "Bedrijfskosten" op het financieel overzicht projecten.'
         grandTotal={expensesGrandTotal}
         items={expenses}
         getDate={(e) => e.expense_date}

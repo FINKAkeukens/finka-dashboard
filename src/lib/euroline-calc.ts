@@ -23,6 +23,7 @@ export const DEFAULT_EUROLINE_RATES: EurolineRates = {
   installatie_buitengebied_per_m1: 250,
   service_tarief_per_uur: 75,
   service_minimum: 250,
+  inmeten_tarief: 250,
   updated_at: '',
 }
 
@@ -37,6 +38,7 @@ export const DEFAULT_EUROLINE_INPUTS: EurolineInputs = {
   levering_extra_lostijd_halfuren: 0,
   werkblad_levering: 'geen',
   service_uren: 0,
+  inmeten: false,
 }
 
 // "Inbegrepen"-posten uit het Euroline-tarievenblad — dingen die altijd al
@@ -71,6 +73,7 @@ export interface EurolineTotals {
   levering: number
   installatie: number
   service: number
+  inmeten: number
 }
 
 export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRates): EurolineTotals {
@@ -98,11 +101,17 @@ export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRat
       : 0
   )
 
-  return { opslag, levering, installatie, service }
+  // Vaste post, los aan/uit te vinken — geen Euroline-tarief, maar hij hoort
+  // in dezelfde optie omdat hij in de kostprijs-opbouw naast opslag/levering/
+  // installatie/service staat. Uitgevinkt (of een oudere optie zonder dit
+  // veld) levert 0 op, zodat de kostenrij Inmeten dan leeg blijft.
+  const inmeten = round2(inputs.inmeten ? rates.inmeten_tarief : 0)
+
+  return { opslag, levering, installatie, service, inmeten }
 }
 
-// Klantvriendelijke samenvatting — som van de 4 posten, zoals die in de
-// kostprijs-opbouw (Opslag/Levering/Installatie/Service) terechtkomen.
+// Klantvriendelijke samenvatting — som van de posten zoals die in de
+// kostprijs-opbouw (Opslag/Levering/Installatie/Service/Inmeten) terechtkomen.
 export function eurolineTotaalExclBtw(totals: EurolineTotals): number {
-  return round2(totals.opslag + totals.levering + totals.installatie + totals.service)
+  return round2(totals.opslag + totals.levering + totals.installatie + totals.service + totals.inmeten)
 }

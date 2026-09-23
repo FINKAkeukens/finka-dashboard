@@ -240,6 +240,9 @@ export interface ProjectFinancialItem {
   // zodra `betaald` is aangevinkt.
   werkelijk_bedrag: number | null
   betaald: boolean
+  // Datum waarop "betaald" is aangevinkt (standaard die dag), daarna vrij aan
+  // te passen. NULL zolang het vinkje uit staat — uitvinken wist de datum.
+  betaald_op: string | null
   created_at: string
   updated_at: string
 }
@@ -318,6 +321,11 @@ export interface EurolineInputs {
   levering_extra_lostijd_halfuren: number
   werkblad_levering: EurolineWerkbladLevering
   service_uren: number
+  // Inmeten is geen Euroline-post maar een eigen vaste kostenrij; hij hoort
+  // hier omdat hij in dezelfde Configurator-optie (Opslag, levering en
+  // montage) aan/uit gezet wordt. Ontbreekt bij oudere opties — behandel dat
+  // als false (zie DEFAULT_EUROLINE_INPUTS).
+  inmeten: boolean
 }
 
 // Los instelbare Euroline-tarieven (§ Instellingen) — één rij, overal
@@ -339,6 +347,7 @@ export interface EurolineRates {
   installatie_buitengebied_per_m1: number
   service_tarief_per_uur: number
   service_minimum: number
+  inmeten_tarief: number
   updated_at: string
 }
 

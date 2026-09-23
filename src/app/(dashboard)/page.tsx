@@ -5,7 +5,7 @@ import { Users, Zap, Mail, TrendingUp, FolderKanban } from 'lucide-react'
 import Link from 'next/link'
 import { DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
-import { averageDays, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
+import { averageDays, CANCELLED_STATUS_LABEL, isCancelled, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
 import { getIsoWeek } from '@/lib/iso-week'
 import DeliveryTimesWidget from './DeliveryTimesWidget'
 
@@ -16,7 +16,7 @@ export default async function DashboardPage() {
     { count: customerCount },
     { count: applianceCount },
     { count: inboxCount },
-    { data: projectStatuses },
+    { data: projectStatusesData },
     { data: allProjectsData },
     { data: customersForStatus },
     { data: recentCustomers },
@@ -43,7 +43,16 @@ export default async function DashboardPage() {
     supabase.from('finka_delivery_times').select('brand, summary, source_email_date, updated_at'),
   ])
   const deliveryTimes = (deliveryTimesData ?? []) as DeliveryTime[]
-  const allProjects = (allProjectsData ?? []) as Project[]
+
+  // "Geannuleerd" is geen fase in de pijplijn, dus geen kolom in het
+  // faseoverzicht. Eén gefilterde lijst voor álle plekken die dit raster
+  // gebruiken — ook de doorlooptijd-balk eronder rekent met dit aantal
+  // kolommen, die zou anders scheef lopen.
+  const projectStatuses = (projectStatusesData ?? []).filter((s) => s.label !== CANCELLED_STATUS_LABEL)
+
+  // Geannuleerde projecten tellen nergens op dit dashboard mee — niet in de
+  // aantallen, niet in de fases en niet in de doorlooptijden.
+  const allProjects = ((allProjectsData ?? []) as Project[]).filter((p) => !isCancelled(p))
 
   const projectCount = allProjects.length
   const projectCountByStatus = new Map<string, number>()

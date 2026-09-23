@@ -25,6 +25,7 @@ const FIELDS: { key: RateKey; label: string; hint: string }[] = [
   { key: 'installatie_buitengebied_per_m1', label: 'Installatie — per m1 (buitengebied)', hint: '' },
   { key: 'service_tarief_per_uur', label: 'Service — tarief per uur (nacalculatie)', hint: '' },
   { key: 'service_minimum', label: 'Service — minimumbedrag zodra er service is', hint: '' },
+  { key: 'inmeten_tarief', label: 'Inmeten — vast bedrag (aan/uit te vinken per project)', hint: '' },
 ]
 
 export default function EurolineRatesForm({ rates }: { rates: EurolineRates | null }) {

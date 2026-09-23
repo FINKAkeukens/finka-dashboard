@@ -6,6 +6,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { formatPrice } from '@/lib/appliance-utils'
 import { selectOnFocus } from '@/lib/utils'
 import { CostCategoryKey, ProjectFinancialItem } from '@/lib/types'
+import { format } from 'date-fns'
+import { nl } from 'date-fns/locale'
 
 function round2(n: number) {
   return Math.round(n * 100) / 100
@@ -136,6 +138,7 @@ function TotalsRow({ label, t, bold }: { label: string; t: GroupTotals; bold?: b
       <td className={`px-3 py-2.5 align-top text-right ${textClass}`}>{formatPrice(t.prijsKlant)}</td>
       <td className={`px-3 py-2.5 align-top text-right bg-[#C9A96E]/10 ${textClass}`}>{formatPrice(t.werkelijkSum)}</td>
       <td className="px-3 py-2.5" />
+      <td className="px-3 py-2.5" />
       <td className={`px-3 py-2.5 align-top text-right ${weight} ${confirmClass(allConfirmed, verschilClass(verschil))}`}>
         {signedPrice(verschil)}
       </td>
@@ -147,6 +150,67 @@ function TotalsRow({ label, t, bold }: { label: string; t: GroupTotals; bold?: b
   )
 }
 
+// Lokale datum van vandaag (niet toISOString: dat is UTC en zet 's avonds de
+// dag terug).
+function vandaagISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export interface PnlMaand {
+  key: string
+  label: string
+  omzet: number
+  kosten: number
+  marge: number
+}
+
+// PNL per project, per maand. Er is geen maandboekhouding, dus:
+// - de omzet (prijs klant, excl. btw) valt volledig in de maand waarin de
+//   offerte akkoord ging — dat is het moment waarop de opbrengst vastligt;
+// - kosten vallen in de maand van hun betaaldatum. Zolang die leeg is (nog
+//   niet betaald, of nooit ingevuld) tellen ze mee in de akkoord-maand, zodat
+//   het totaal onderaan altijd gelijk blijft aan het overzicht hierboven;
+// - de reeks loopt van de akkoord-maand tot de afronding, of tot de huidige
+//   maand zolang het project nog loopt.
+export function buildProjectPnl(
+  items: ProjectFinancialItem[],
+  omzet: number,
+  akkoordDate: string | null,
+  afrondingDate: string | null
+): PnlMaand[] {
+  if (!akkoordDate) return []
+  const startKey = akkoordDate.slice(0, 7)
+  const eindKandidaat = (afrondingDate ?? vandaagISO()).slice(0, 7)
+  // Een afronding vóór het akkoord (of een rare datum) mag de reeks niet
+  // omkeren — dan tonen we alleen de akkoord-maand.
+  const eindKey = eindKandidaat < startKey ? startKey : eindKandidaat
+
+  const maanden = new Map<string, PnlMaand>()
+  const [startJaar, startMaand] = startKey.split('-').map(Number)
+  for (let i = 0; ; i++) {
+    const d = new Date(startJaar, startMaand - 1 + i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    maanden.set(key, { key, label: format(d, 'MMMM yyyy', { locale: nl }), omzet: 0, kosten: 0, marge: 0 })
+    if (key >= eindKey || i > 240) break
+  }
+
+  const eersteMaand = maanden.get(startKey)!
+  eersteMaand.omzet = round2(omzet)
+
+  for (const item of items) {
+    const bedrag = Number(item.werkelijk_bedrag ?? item.begroot_bedrag ?? 0)
+    if (!bedrag) continue
+    const key = item.betaald_op ? item.betaald_op.slice(0, 7) : startKey
+    // Een betaaldatum buiten de reeks (bv. vooruitbetaald vóór akkoord) valt
+    // terug op de dichtstbijzijnde maand binnen de reeks.
+    const doel = maanden.get(key) ?? (key < startKey ? eersteMaand : [...maanden.values()][maanden.size - 1])
+    doel.kosten = round2(doel.kosten + bedrag)
+  }
+
+  return [...maanden.values()].map((m) => ({ ...m, marge: round2(m.omzet - m.kosten) }))
+}
+
 // Begroot vs. werkelijk per kostencategorie, gegroepeerd in Inkoop/Diensten
 // — zelfde opbouw als FINKA's eigen financiële sjabloon (Kosten/Opslag%/
 // Prijs klant/Bruto marge), aangevuld met de werkelijke kosten zodra die
@@ -154,9 +218,16 @@ function TotalsRow({ label, t, bold }: { label: string; t: GroupTotals; bold?: b
 export default function FinancieelTab({
   items: initialItems,
   btwPercentage,
+  akkoordDate,
+  afrondingDate,
 }: {
   items: ProjectFinancialItem[]
   btwPercentage: number
+  // Begin en eind van de PNL per project onderaan — komen uit de projecttijdlijn
+  // (akkoord uit de offerte, afronding uit de mijlpaal Oplevering of de
+  // handmatige datum).
+  akkoordDate: string | null
+  afrondingDate: string | null
 }) {
   const supabase = createClient()
   const [items, setItems] = useState<ProjectFinancialItem[]>(initialItems)
@@ -180,10 +251,25 @@ export default function FinancieelTab({
 
   async function toggleBetaald(item: ProjectFinancialItem) {
     const betaald = !item.betaald
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, betaald } : i)))
+    // Aanvinken zet de datum van vandaag (tenzij er al eentje stond, bv. na
+    // opnieuw aanvinken van een handmatig ingevulde datum); uitvinken wist 'm.
+    const betaald_op = betaald ? item.betaald_op ?? vandaagISO() : null
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, betaald, betaald_op } : i)))
     const { error: updError } = await supabase
       .from('finka_project_financials')
-      .update({ betaald, updated_at: new Date().toISOString() })
+      .update({ betaald, betaald_op, updated_at: new Date().toISOString() })
+      .eq('id', item.id)
+    if (updError) setError(updError.message)
+  }
+
+  // Handmatig aangepaste betaaldatum — leeg laten mag, dan is alleen bekend
+  // dát het betaald is en niet wanneer.
+  async function saveBetaaldOp(item: ProjectFinancialItem, value: string) {
+    const betaald_op = value || null
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, betaald_op } : i)))
+    const { error: updError } = await supabase
+      .from('finka_project_financials')
+      .update({ betaald_op, updated_at: new Date().toISOString() })
       .eq('id', item.id)
     if (updError) setError(updError.message)
   }
@@ -208,6 +294,14 @@ export default function FinancieelTab({
   const btwBedrag = round2(grandTotal.prijsKlant * (btwPercentage / 100))
   const totaalInclBtw = round2(grandTotal.prijsKlant + btwBedrag)
 
+  // Zelfde omzet (prijs klant, excl. btw) en kosten als hierboven, alleen
+  // uitgesplitst per maand — zie buildProjectPnl.
+  const pnlMaanden = buildProjectPnl(items, grandTotal.prijsKlant, akkoordDate, afrondingDate)
+  const pnlTotaal = pnlMaanden.reduce(
+    (t, m) => ({ omzet: round2(t.omzet + m.omzet), kosten: round2(t.kosten + m.kosten), marge: round2(t.marge + m.marge) }),
+    { omzet: 0, kosten: 0, marge: 0 }
+  )
+
   return (
     <div className="space-y-4">
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">{error}</p>}
@@ -227,6 +321,10 @@ export default function FinancieelTab({
               <ColHeader label="Prijs klant" unit="€" className="w-24" />
               <ColHeader label="Werkelijke kosten" unit="€" className="w-36 bg-[#C9A96E]/10" />
               <th className="text-center px-2 py-3 text-xs font-medium text-[#6B6560] w-14">Betaald</th>
+              <th className="text-left px-3 py-3 text-xs font-medium text-[#6B6560] w-36">
+                Betaald op
+                <span className="block text-[10px] font-normal text-[#9A948D] normal-case">datum</span>
+              </th>
               <ColHeader label="Verschil kosten" unit="€" className="w-32" />
               <ColHeader label="Marge werkelijk" unit="€" className="w-32" />
             </tr>
@@ -279,6 +377,23 @@ export default function FinancieelTab({
                           />
                         </div>
                       </td>
+                      <td className="px-3 py-2.5 align-top">
+                        {item.betaald ? (
+                          <input
+                            type="date"
+                            value={item.betaald_op ?? ''}
+                            onChange={(e) => saveBetaaldOp(item, e.target.value)}
+                            title="Betaaldatum — aan te passen"
+                            className={`w-full text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] focus:bg-white ${
+                              item.betaald_op ? 'text-[#1C1B19]' : 'text-[#9A948D]'
+                            }`}
+                          />
+                        ) : (
+                          // Geen datumveld zolang "Betaald" uit staat — zo kan er
+                          // ook geen betaaldatum ontstaan zonder bevestiging.
+                          <span className="block px-2 py-1 text-sm text-[#9A948D]">—</span>
+                        )}
+                      </td>
                       <td className={`px-3 py-2.5 align-top text-right ${item.betaald ? 'font-semibold' : 'font-medium'} ${confirmClass(item.betaald, verschilClass(f.verschilKosten))}`}>
                         {signedPrice(f.verschilKosten)}
                       </td>
@@ -296,16 +411,65 @@ export default function FinancieelTab({
           <tfoot>
             <TotalsRow label="Totaal" t={grandTotal} bold />
             <tr className="bg-white">
-              <td colSpan={8} className="px-3 py-2 text-right text-xs text-[#6B6560]">Btw ({btwPercentage}%)</td>
+              <td colSpan={9} className="px-3 py-2 text-right text-xs text-[#6B6560]">Btw ({btwPercentage}%)</td>
               <td className="px-3 py-2 text-right text-xs text-[#6B6560]">{formatPrice(btwBedrag)}</td>
             </tr>
             <tr className="bg-white border-t border-[#DDD8D2]">
-              <td colSpan={8} className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">Totaal (incl. btw)</td>
+              <td colSpan={9} className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">Totaal (incl. btw)</td>
               <td className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">{formatPrice(totaalInclBtw)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
+
+      {/* PNL per project: dezelfde omzet/kosten als hierboven, maar uitgesplitst
+         over de maanden dat het project loopt. */}
+      {pnlMaanden.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-x-auto">
+          <div className="px-3 pt-4 pb-2">
+            <h3 className="text-sm font-medium text-[#1C1B19]">PNL per maand</h3>
+            <p className="text-xs text-[#6B6560] mt-0.5">
+              De omzet valt in de maand van akkoord; kosten tellen in de maand van hun betaaldatum. Kostenregels zonder betaaldatum staan in de akkoord-maand, dus het totaal is altijd gelijk aan het overzicht hierboven.
+            </p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#DDD8D2] bg-[#F7F5F2]">
+                <th className="text-left px-3 py-3 text-xs font-medium text-[#6B6560]">Maand</th>
+                <ColHeader label="Omzet" unit="€ excl. btw" className="w-36" />
+                <ColHeader label="Kosten" unit="€" className="w-36" />
+                <ColHeader label="Marge" unit="€" className="w-36" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#DDD8D2]">
+              {pnlMaanden.map((m) => (
+                <tr key={m.key}>
+                  <td className="px-3 py-2.5 text-[#1C1B19] capitalize">{m.label}</td>
+                  <td className="px-3 py-2.5 text-right text-[#6B6560]">{m.omzet ? formatPrice(m.omzet) : '—'}</td>
+                  <td className="px-3 py-2.5 text-right text-[#6B6560]">{m.kosten ? formatPrice(m.kosten) : '—'}</td>
+                  <td className={`px-3 py-2.5 text-right font-medium ${margeClass(m.marge)}`}>
+                    {m.omzet || m.kosten ? formatPrice(m.marge) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[#1C1B19] bg-[#F7F5F2]">
+                <td className="px-3 py-2.5 text-sm font-semibold text-[#1C1B19]">Totaal</td>
+                <td className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">{formatPrice(pnlTotaal.omzet)}</td>
+                <td className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">{formatPrice(pnlTotaal.kosten)}</td>
+                <td className={`px-3 py-2.5 text-right text-sm font-semibold ${margeClass(pnlTotaal.marge)}`}>{formatPrice(pnlTotaal.marge)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {pnlMaanden.length === 0 && (
+        <p className="text-xs text-[#6B6560]">
+          Een PNL per maand verschijnt hier zodra de offerte op &quot;Akkoord&quot; staat — die datum bepaalt de eerste maand.
+        </p>
+      )}
     </div>
   )
 }

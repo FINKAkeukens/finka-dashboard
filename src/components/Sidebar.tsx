@@ -58,7 +58,10 @@ const groups: NavGroup[] = [
   {
     label: 'Financieel',
     items: [
-      { href: '/financieel', label: 'PNL', icon: TrendingUp },
+      // Staat al onder de groepskop "Financieel" — voluit ("Financieel
+      // overzicht projecten", zoals de paginakop) breekt in de 224px brede
+      // zijbalk over drie regels af.
+      { href: '/financieel', label: 'Overzicht projecten', icon: TrendingUp },
       { href: '/financieel/balans', label: 'Balans', icon: Scale },
       { href: '/financieel/kosten', label: 'Kosten', icon: Receipt },
     ],
@@ -97,7 +100,7 @@ export default function Sidebar() {
   const supabase = createClient()
 
   // Actief item = de langste href die bij dit pad past — voorkomt dat bv.
-  // zowel "PNL" (/financieel) als "Kosten" (/financieel/kosten) allebei
+  // zowel "Overzicht projecten" (/financieel) als "Kosten" (/financieel/kosten) allebei
   // actief lijken op /financieel/kosten.
   const activeHref = groups
     .flatMap((g) => g.items.map((i) => i.href))

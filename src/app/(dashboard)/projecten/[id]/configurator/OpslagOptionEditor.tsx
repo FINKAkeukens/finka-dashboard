@@ -154,6 +154,21 @@ export default function OpslagOptionEditor({
           </div>
           <p className="text-[10px] text-[#9A948D]">€{rates.service_tarief_per_uur}/uur, minimum €{rates.service_minimum} zodra er service is</p>
         </div>
+
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Inmeten</Label>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+              <Checkbox
+                checked={inputs.inmeten}
+                onCheckedChange={(v) => updateInput({ inmeten: v === true })}
+              />
+              Inmeten meerekenen (€{rates.inmeten_tarief.toFixed(2)})
+            </label>
+            <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.inmeten)}</span>
+          </div>
+          <p className="text-[10px] text-[#9A948D]">Vult de kostenrij &quot;Inmeten&quot; in de offerte — uitgevinkt blijft die op €0.</p>
+        </div>
       </div>
 
       <div className="flex items-center justify-between border-t border-[#DDD8D2] pt-3">

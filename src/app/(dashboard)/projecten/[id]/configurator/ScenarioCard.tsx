@@ -102,6 +102,7 @@ export default function ScenarioCard({
     klantprijsExclBtw += totals.levering * (1 + marginFor('levering') / 100)
     klantprijsExclBtw += totals.installatie * (1 + marginFor('installatie') / 100)
     klantprijsExclBtw += totals.service * (1 + marginFor('service') / 100)
+    klantprijsExclBtw += totals.inmeten * (1 + marginFor('inmeten') / 100)
   }
   const klantprijsInclBtw = klantprijsExclBtw * (1 + btwPercentage / 100)
 

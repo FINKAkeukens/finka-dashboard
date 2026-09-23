@@ -243,6 +243,7 @@ export default function ConfiguratorTab({
         costBreakdown = patchCostRow(costBreakdown, 'levering', totals.levering)
         costBreakdown = patchCostRow(costBreakdown, 'installatie', totals.installatie)
         costBreakdown = patchCostRow(costBreakdown, 'service', totals.service)
+        costBreakdown = patchCostRow(costBreakdown, 'inmeten', totals.inmeten)
       }
       // Apparatuur en accessoires werken identiek (zelfde datavorm), maar elk
       // met een eigen kostenrij, klantsectie en offerteregel-type — zo wist de

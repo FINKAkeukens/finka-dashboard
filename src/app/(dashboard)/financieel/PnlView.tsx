@@ -21,11 +21,18 @@ export interface ProjectFigures {
   omzetInclBtw: number
   omzetExclBtw: number
   // Kostprijs = som van de werkelijke kosten in de interne kostprijs-
-  // opbouw (subtotal), dus zonder marge en zonder btw.
+  // opbouw (subtotal), dus zonder marge en zonder btw. Staat niet meer als
+  // kolom in de tabel, maar voedt nog wel de winst-en-verliesrekening
+  // onderaan ("Kostprijs van de omzet").
   kostprijs: number
-  // Marge = omzet zonder btw min kostprijs — ruwe brutomarge-indicatie,
-  // geen boekhoudkundig sluitende winst-en-verliesrekening.
+  // Marge begroot = omzet zonder btw min de begrote kostprijs — ruwe
+  // brutomarge-indicatie, geen boekhoudkundig sluitende w&v-rekening.
   margeExclBtw: number
+  // Werkelijke kosten uit het Financieel-tabblad van het project (begroot vs.
+  // werkelijk). Zonder ingevulde rijen gelijk aan de begrote kostprijs, zodat
+  // "marge werkelijk" dan hetzelfde toont i.p.v. de volle omzet.
+  werkelijkeKosten: number
+  margeWerkelijk: number
 }
 
 export interface Totals {
@@ -33,6 +40,8 @@ export interface Totals {
   omzetExclBtw: number
   kostprijs: number
   margeExclBtw: number
+  werkelijkeKosten: number
+  margeWerkelijk: number
   aantal: number
 }
 
@@ -83,9 +92,9 @@ export default function PnlView({
   return (
     <div className="p-8 max-w-5xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-[#1C1B19]">PNL</h1>
+        <h1 className="text-2xl font-semibold text-[#1C1B19]">Financieel overzicht projecten</h1>
         <p className="text-sm text-[#6B6560] mt-1">
-          Winst- en verliesrekening op basis van geaccordeerde offertes, per jaar en maand. &quot;Omzet&quot; is wat de klant betaalt (incl. btw); &quot;Kostprijs&quot; komt uit de interne kostprijs-opbouw per offerte. Bedrijfskosten beheer je op de{' '}
+          Winst- en verliesrekening op basis van geaccordeerde offertes, per jaar en maand. &quot;Omzet&quot; is wat de klant betaalt, zonder btw; &quot;Kostprijs&quot; komt uit de interne kostprijs-opbouw per offerte. Zo is de marge overal gewoon omzet min kostprijs. Bedrijfskosten beheer je op de{' '}
           <Link href="/financieel/kosten" className="text-[#C9A96E] hover:underline">Kosten-pagina</Link>.
         </p>
       </div>
@@ -101,8 +110,8 @@ export default function PnlView({
           {/* Totaal over alle jaren heen */}
           <div className="grid grid-cols-4 gap-4 mb-8">
             <div className="bg-white rounded-xl border border-[#DDD8D2] p-5">
-              <span className="text-sm text-[#6B6560]">Totale omzet</span>
-              <p className="text-2xl font-semibold text-[#1C1B19] mt-1">{formatPrice(grandTotal.omzetInclBtw)}</p>
+              <span className="text-sm text-[#6B6560]">Totale omzet (excl. btw)</span>
+              <p className="text-2xl font-semibold text-[#1C1B19] mt-1">{formatPrice(grandTotal.omzetExclBtw)}</p>
             </div>
             <div className="bg-white rounded-xl border border-[#DDD8D2] p-5">
               <span className="text-sm text-[#6B6560]">Totale kostprijs</span>
@@ -125,7 +134,7 @@ export default function PnlView({
                 <div className="flex items-baseline justify-between">
                   <h2 className="text-lg font-semibold text-[#1C1B19]">{yearEntry.year}</h2>
                   <div className="text-sm text-[#6B6560]">
-                    {formatPrice(yearEntry.total.omzetInclBtw)} omzet · {formatPrice(yearEntry.total.margeExclBtw)} marge ({margePercentage(yearEntry.total)}%) · {yearEntry.total.aantal} projecten
+                    {formatPrice(yearEntry.total.omzetExclBtw)} omzet · {formatPrice(yearEntry.total.margeExclBtw)} marge begroot ({margePercentage(yearEntry.total)}%) · {formatPrice(yearEntry.total.margeWerkelijk)} werkelijk · {yearEntry.total.aantal} projecten
                   </div>
                 </div>
 
@@ -134,7 +143,7 @@ export default function PnlView({
                     <div className="px-5 py-3 border-b border-[#DDD8D2] bg-[#F7F5F2] flex items-center justify-between">
                       <h3 className="text-sm font-medium text-[#1C1B19] capitalize">{monthEntry.label} {yearEntry.year}</h3>
                       <span className="text-xs text-[#6B6560]">
-                        {formatPrice(monthEntry.total.omzetInclBtw)} omzet · {formatPrice(monthEntry.total.margeExclBtw)} marge ({margePercentage(monthEntry.total)}%) · {monthEntry.total.aantal} projecten
+                        {formatPrice(monthEntry.total.omzetExclBtw)} omzet · {formatPrice(monthEntry.total.margeExclBtw)} marge begroot ({margePercentage(monthEntry.total)}%) · {formatPrice(monthEntry.total.margeWerkelijk)} werkelijk · {monthEntry.total.aantal} projecten
                       </span>
                     </div>
                     <table className="w-full text-sm">
@@ -143,9 +152,9 @@ export default function PnlView({
                           <th className="text-left px-5 py-2 text-xs font-medium text-[#6B6560]">Project</th>
                           <th className="text-left px-5 py-2 text-xs font-medium text-[#6B6560]">Klant</th>
                           <th className="text-left px-5 py-2 text-xs font-medium text-[#6B6560] w-28">Akkoord op</th>
-                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Omzet</th>
-                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Kostprijs</th>
-                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Marge</th>
+                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Omzet (excl. btw)</th>
+                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Marge begroot</th>
+                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Marge werkelijk</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#DDD8D2]">
@@ -159,9 +168,9 @@ export default function PnlView({
                             </td>
                             <td className="px-5 py-2.5 text-[#6B6560]">{p.customerName}</td>
                             <td className="px-5 py-2.5 text-[#6B6560]">{p.dateLabel}</td>
-                            <td className="px-5 py-2.5 text-right text-[#1C1B19]">{formatPrice(p.omzetInclBtw)}</td>
-                            <td className="px-5 py-2.5 text-right text-[#6B6560]">{formatPrice(p.kostprijs)}</td>
-                            <td className="px-5 py-2.5 text-right font-medium text-[#1C1B19]">{formatPrice(p.margeExclBtw)}</td>
+                            <td className="px-5 py-2.5 text-right text-[#1C1B19]">{formatPrice(p.omzetExclBtw)}</td>
+                            <td className="px-5 py-2.5 text-right text-[#6B6560]">{formatPrice(p.margeExclBtw)}</td>
+                            <td className="px-5 py-2.5 text-right font-medium text-[#1C1B19]">{formatPrice(p.margeWerkelijk)}</td>
                           </tr>
                         ))}
                       </tbody>

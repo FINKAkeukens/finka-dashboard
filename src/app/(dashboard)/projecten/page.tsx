@@ -7,6 +7,7 @@ import { nl } from 'date-fns/locale'
 import { ArrowRight, Plus } from 'lucide-react'
 import { Project, ProjectMilestone, ProjectStatus } from '@/lib/types'
 import { leadTimeDays, milestoneLabel, urgencyClass } from '@/lib/planning'
+import { CANCELLED_STATUS_LABEL, isCancelled } from '@/lib/project-dates'
 import ProjectsTable, { type ProjectRow } from './ProjectsTable'
 
 // Eerstvolgende nog-niet-afgeronde mijlpaal met een datum — bepaalt zowel de
@@ -26,12 +27,18 @@ export default async function ProjectenPage({
   const { status } = await searchParams
   const supabase = await createClient()
 
+  // "archief" is geen status maar een eigen weergave: juist de projecten die
+  // met de knop Archiveren verborgen zijn. Die waren tot nu toe nergens meer
+  // terug te vinden — zie de knop Gearchiveerd in de filterbalk hieronder.
+  const toontArchief = status === 'archief'
+
   let query = supabase
     .from('finka_projects')
     .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
-    .is('archived_at', null)
 
-  if (status && status !== 'alle') query = query.eq('status_id', status)
+  query = toontArchief ? query.not('archived_at', 'is', null) : query.is('archived_at', null)
+
+  if (status && status !== 'alle' && !toontArchief) query = query.eq('status_id', status)
 
   // De statuslijst hangt niet van de projecten af, dus die hoeft er niet op
   // te wachten — samen ophalen scheelt een netwerkrondje.
@@ -40,7 +47,13 @@ export default async function ProjectenPage({
     query,
   ])
   const statuses = statusesData as ProjectStatus[] | null
-  const projects = (projectsData ?? []) as Project[]
+  // Geannuleerde projecten staan niet in "Alle" of in een andere status — ze
+  // verschijnen alleen als je expliciet op het filter "Geannuleerd" klikt.
+  const geannuleerdStatusId = statuses?.find((s) => s.label === CANCELLED_STATUS_LABEL)?.id
+  const toontGeannuleerd = !!status && status !== 'alle' && status === geannuleerdStatusId
+  // In het archief laten we alles zien wat daar staat, ook als het project
+  // daarnaast geannuleerd is.
+  const projects = ((projectsData ?? []) as Project[]).filter((p) => toontGeannuleerd || toontArchief || !isCancelled(p))
 
   // Portaalactiviteit en mijlpalen hangen allebei alleen van de project-id's
   // af, niet van elkaar — dus ook samen, weer een rondje minder.
@@ -145,6 +158,17 @@ export default async function ProjectenPage({
             {s.label}
           </Link>
         ))}
+        <Link
+          href="/projecten?status=archief"
+          title="Projecten die met de knop Archiveren zijn opgeborgen"
+          className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+            toontArchief
+              ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
+              : 'bg-white text-[#9A948D] border-[#DDD8D2] hover:border-[#1C1B19]'
+          }`}
+        >
+          Gearchiveerd
+        </Link>
       </div>
 
       {!rows.length ? (

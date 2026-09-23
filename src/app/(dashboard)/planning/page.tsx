@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { Project, ProjectMilestone } from '@/lib/types'
+import { isCancelled } from '@/lib/project-dates'
 import PlanningAgenda, { PlanningProject } from './PlanningAgenda'
 
 export default async function PlanningOverviewPage() {
@@ -24,7 +25,8 @@ export default async function PlanningOverviewPage() {
       .order('sort_order'),
   ])
 
-  const projects = (projectsData ?? []) as Project[]
+  // Een geannuleerd project hoeft niet meer ingepland te worden.
+  const projects = ((projectsData ?? []) as Project[]).filter((p) => !isCancelled(p))
   const projectIds = projects.map((p) => p.id)
   const generalTasks = (generalData ?? []) as ProjectMilestone[]
 
