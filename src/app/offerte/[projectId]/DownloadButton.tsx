@@ -37,8 +37,12 @@ async function downloadFromEndpoint(endpoint: string, fallbackFilename: string):
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  // Bewust niet meteen vrijgeven: Safari leest de blob pas tijdens het
+  // wegschrijven, en een directe revoke brak de download soms af.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
   return null
 }
 
@@ -60,6 +64,11 @@ export default function DownloadButton({
         return
       }
       if (includeAansluitschemaBijlage) {
+        // Even wachten voordat de tweede download start: browsers (Safari
+        // voorop) zien twee downloads die direct na elkaar uit hetzelfde
+        // klikmoment komen als één handeling, en bundelen of blokkeren die
+        // dan. Met deze pauze komen het twee losse PDF-bestanden.
+        await new Promise((resolve) => setTimeout(resolve, 1500))
         const bijlageError = await downloadFromEndpoint(
           `/api/offerte/${projectId}/bijlage-aansluitschema/pdf`,
           `Bijlage-aansluitschema-${projectId}.pdf`

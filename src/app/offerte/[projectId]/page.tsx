@@ -222,21 +222,28 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   // regelbudget-verdeling als voorheen (§ 02 Wat zit erin), nu herbruikbaar
   // per groep i.p.v. één keer over de hele sections-array. Een sectie met
   // heel veel punten wordt eerst opgeknipt in stukken die wél op één pagina
-  // passen (18 regels in 2 kolommen ≈ 9 rijen, ruim binnen het budget van 11).
+  // passen (18 regels in 2 kolommen ≈ 9 rijen). Passen twee stukken samen op
+  // één pagina, dan worden ze verderop weer samengevoegd tot één blok.
   function renderSectionGroup(groupSections: QuoteCustomerSection[], anchorKey: string) {
     const MAX_LINES_PER_SECTION_PAGE = 18
-    const visibleSections = groupSections
+    // sourceKey/chunkIndex houden bij welke stukken bij dezelfde sectie horen.
+    // Het "(vervolg)"-label wordt pas ná de paginaverdeling bepaald: stukken
+    // die op één pagina eindigen worden weer samengevoegd, dus dan is er geen
+    // vervolg (zie mergedPages hieronder).
+    type ChunkedSection = QuoteCustomerSection & { sourceKey: number; chunkIndex: number }
+    const visibleSections: ChunkedSection[] = groupSections
       .map((s) => ({ ...s, lines: s.lines.filter((l) => l.included && l.text.trim()) }))
       .filter((s) => s.lines.length > 0 || (s.images && s.images.length > 0))
-      .flatMap((s) => {
-        if (s.lines.length <= MAX_LINES_PER_SECTION_PAGE) return [s]
-        const chunks: typeof s[] = []
+      .flatMap((s, sourceKey) => {
+        if (s.lines.length <= MAX_LINES_PER_SECTION_PAGE) return [{ ...s, sourceKey, chunkIndex: 0 }]
+        const chunks: ChunkedSection[] = []
         for (let i = 0; i < s.lines.length; i += MAX_LINES_PER_SECTION_PAGE) {
           chunks.push({
             ...s,
             lines: s.lines.slice(i, i + MAX_LINES_PER_SECTION_PAGE),
-            title: i === 0 ? s.title : `${s.title} (vervolg)`,
             images: i === 0 ? s.images : [],
+            sourceKey,
+            chunkIndex: chunks.length,
           })
         }
         return chunks
@@ -300,7 +307,29 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
     }
     if (current.length) sectionPages.push(current)
 
-    return sectionPages.map((pageSections, pageIdx) => {
+    // Stukken van dezelfde sectie die op één pagina terechtkomen weer
+    // samenvoegen — anders staat er "Kasten" met direct eronder "Kasten
+    // (vervolg)" op diezelfde pagina. Alleen een stuk dat daadwerkelijk op een
+    // nieuwe pagina begint houdt het "(vervolg)"-label. Samenvoegen kost nooit
+    // extra ruimte: de sectie-overhead (+1) valt weg en één lijst van N regels
+    // verdeelt zich efficiënter over de 2 kolommen dan twee losse lijsten.
+    const mergedPages = sectionPages.map((pageSections) => {
+      const merged: ChunkedSection[] = []
+      for (const section of pageSections) {
+        const previous = merged[merged.length - 1]
+        if (previous && previous.sourceKey === section.sourceKey) {
+          previous.lines = [...previous.lines, ...section.lines]
+          continue
+        }
+        merged.push({
+          ...section,
+          title: section.chunkIndex > 0 ? `${section.title} (vervolg)` : section.title,
+        })
+      }
+      return merged
+    })
+
+    return mergedPages.map((pageSections, pageIdx) => {
       const showHeading = !headingState.shown
       if (showHeading) headingState.shown = true
       const photoMaxHeight = showHeading ? PHOTO_ONLY_MAX_HEIGHT.withHeading : PHOTO_ONLY_MAX_HEIGHT.withoutHeading
