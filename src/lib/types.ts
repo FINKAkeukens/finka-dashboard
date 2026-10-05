@@ -327,7 +327,8 @@ export interface EurolineInputs {
   // als false (zie DEFAULT_EUROLINE_INPUTS).
   inmeten: boolean
   // Brandstoftoeslag: percentage over het leveringsbedrag, los aan/uit te
-  // zetten per project. Ontbreekt bij oudere opties — behandel dat als false.
+  // zetten per project. Staat standaard aan (DEFAULT_EUROLINE_INPUTS); bij
+  // oudere opties ontbreekt de sleutel en geldt diezelfde standaard.
   brandstoftoeslag: boolean
 }
 

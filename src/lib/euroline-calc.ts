@@ -42,7 +42,12 @@ export const DEFAULT_EUROLINE_INPUTS: EurolineInputs = {
   werkblad_levering: 'geen',
   service_uren: 0,
   inmeten: false,
-  brandstoftoeslag: false,
+  // Standaard aan: Euroline rekent de brandstoftoeslag standaard door. Let op
+  // dat dit ook geldt voor opties van vóór dit veld — die hebben de sleutel
+  // niet opgeslagen en vallen hier dus op terug (zie readData in
+  // OpslagOptionEditor, dat DEFAULT_EUROLINE_INPUTS onder de opgeslagen
+  // invoer legt).
+  brandstoftoeslag: true,
 }
 
 // "Inbegrepen"-posten uit het Euroline-tarievenblad — dingen die altijd al
