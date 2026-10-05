@@ -26,6 +26,8 @@ const FIELDS: { key: RateKey; label: string; hint: string }[] = [
   { key: 'service_tarief_per_uur', label: 'Service — tarief per uur (nacalculatie)', hint: '' },
   { key: 'service_minimum', label: 'Service — minimumbedrag zodra er service is', hint: '' },
   { key: 'inmeten_tarief', label: 'Inmeten — vast bedrag (aan/uit te vinken per project)', hint: '' },
+  // Let op: geen euro's maar een percentage — zie computeEurolineTotals.
+  { key: 'brandstoftoeslag_percentage', label: 'Brandstoftoeslag — % over de levering (aan/uit te vinken per project)', hint: '' },
 ]
 
 export default function EurolineRatesForm({ rates }: { rates: EurolineRates | null }) {

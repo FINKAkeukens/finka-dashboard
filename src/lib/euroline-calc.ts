@@ -24,6 +24,9 @@ export const DEFAULT_EUROLINE_RATES: EurolineRates = {
   service_tarief_per_uur: 75,
   service_minimum: 250,
   inmeten_tarief: 250,
+  // 0 = geen toeslag zolang het echte percentage niet is ingevuld; bewust
+  // geen verzonnen standaard, dat zou stilletjes de klantprijs veranderen.
+  brandstoftoeslag_percentage: 0,
   updated_at: '',
 }
 
@@ -39,6 +42,7 @@ export const DEFAULT_EUROLINE_INPUTS: EurolineInputs = {
   werkblad_levering: 'geen',
   service_uren: 0,
   inmeten: false,
+  brandstoftoeslag: false,
 }
 
 // "Inbegrepen"-posten uit het Euroline-tarievenblad — dingen die altijd al
@@ -70,10 +74,15 @@ export const EUROLINE_INBEGREPEN: Record<'opslag' | 'levering' | 'installatie' |
 
 export interface EurolineTotals {
   opslag: number
+  // Inclusief de brandstoftoeslag hieronder — die is geen eigen kostenrij in
+  // de kostprijs-opbouw maar een opslag op het transport.
   levering: number
   installatie: number
   service: number
   inmeten: number
+  // Puur om te tonen hoeveel de toeslag bedraagt; zit al in `levering`, dus
+  // NOOIT apart meetellen in een som (zie eurolineTotaalExclBtw).
+  brandstoftoeslag: number
 }
 
 export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRates): EurolineTotals {
@@ -83,7 +92,7 @@ export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRat
     : 0
 
   const opslag = round2(rates.opslag_base + inputs.opslag_extra_weken * rates.opslag_per_week_extra)
-  const levering = round2(
+  const leveringZonderBrandstof = round2(
     rates.levering_base +
     (inputs.levering_groter ? rates.levering_groter_toeslag : 0) +
     (inputs.levering_niet_begane_grond ? rates.levering_niet_begane_grond : 0) +
@@ -92,6 +101,15 @@ export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRat
     inputs.levering_extra_lostijd_halfuren * rates.levering_extra_lostijd_per_halfuur +
     werkbladLeveringToeslag
   )
+  // Brandstoftoeslag: percentage over het volledige leveringsbedrag (basis +
+  // alle toeslagen), zoals een vervoerder die rekent. Hij telt op in
+  // `levering` i.p.v. in een eigen kostenrij — in de kostprijs-opbouw hoort
+  // hij bij Levering/transport. Uitgevinkt (of een oudere optie zonder dit
+  // veld) levert 0 op, net als een percentage van 0.
+  const brandstoftoeslag = round2(
+    inputs.brandstoftoeslag ? leveringZonderBrandstof * (rates.brandstoftoeslag_percentage / 100) : 0
+  )
+  const levering = round2(leveringZonderBrandstof + brandstoftoeslag)
   const installatie = round2(
     inputs.montage_meters * (inputs.installatie_buitengebied ? rates.installatie_buitengebied_per_m1 : rates.installatie_per_m1)
   )
@@ -107,11 +125,12 @@ export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRat
   // veld) levert 0 op, zodat de kostenrij Inmeten dan leeg blijft.
   const inmeten = round2(inputs.inmeten ? rates.inmeten_tarief : 0)
 
-  return { opslag, levering, installatie, service, inmeten }
+  return { opslag, levering, installatie, service, inmeten, brandstoftoeslag }
 }
 
 // Klantvriendelijke samenvatting — som van de posten zoals die in de
 // kostprijs-opbouw (Opslag/Levering/Installatie/Service/Inmeten) terechtkomen.
+// `brandstoftoeslag` hoort hier bewust NIET bij: die zit al in `levering`.
 export function eurolineTotaalExclBtw(totals: EurolineTotals): number {
   return round2(totals.opslag + totals.levering + totals.installatie + totals.service + totals.inmeten)
 }

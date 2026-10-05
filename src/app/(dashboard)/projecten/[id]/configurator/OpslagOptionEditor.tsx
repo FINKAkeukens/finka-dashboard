@@ -117,6 +117,13 @@ export default function OpslagOptionEditor({
               />
               Buiten werkgebied Euroline (+€{rates.levering_buiten_werkgebied.toFixed(2)})
             </label>
+            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+              <Checkbox
+                checked={inputs.brandstoftoeslag}
+                onCheckedChange={(v) => updateInput({ brandstoftoeslag: v === true })}
+              />
+              Brandstoftoeslag (+{rates.brandstoftoeslag_percentage}% over de levering)
+            </label>
             <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
               Extra lostijd (halve uren)
               <NumberInput
@@ -139,7 +146,10 @@ export default function OpslagOptionEditor({
             </div>
             <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(totals.levering)}</span>
           </div>
-          <p className="text-[10px] text-[#9A948D]">Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)</p>
+          <p className="text-[10px] text-[#9A948D]">
+            Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)
+            {inputs.brandstoftoeslag && ` · brandstoftoeslag ${formatPrice(totals.brandstoftoeslag)}`}
+          </p>
         </div>
 
         <div className="space-y-1.5 col-span-2">

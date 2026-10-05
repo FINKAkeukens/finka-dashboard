@@ -326,6 +326,9 @@ export interface EurolineInputs {
   // montage) aan/uit gezet wordt. Ontbreekt bij oudere opties — behandel dat
   // als false (zie DEFAULT_EUROLINE_INPUTS).
   inmeten: boolean
+  // Brandstoftoeslag: percentage over het leveringsbedrag, los aan/uit te
+  // zetten per project. Ontbreekt bij oudere opties — behandel dat als false.
+  brandstoftoeslag: boolean
 }
 
 // Los instelbare Euroline-tarieven (§ Instellingen) — één rij, overal
@@ -348,6 +351,9 @@ export interface EurolineRates {
   service_tarief_per_uur: number
   service_minimum: number
   inmeten_tarief: number
+  // Percentage (bv. 8 = 8%) over het leveringsbedrag — geen euro's, anders
+  // dan alle tarieven hierboven. Zie computeEurolineTotals.
+  brandstoftoeslag_percentage: number
   updated_at: string
 }
 

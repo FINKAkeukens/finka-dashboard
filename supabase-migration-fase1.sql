@@ -2036,3 +2036,15 @@ ALTER TABLE finka_project_financials ADD COLUMN IF NOT EXISTS betaald_op DATE;
 INSERT INTO finka_project_statuses (label, sort_order, color)
 SELECT 'Geannuleerd', 7, '#EF4444'
 WHERE NOT EXISTS (SELECT 1 FROM finka_project_statuses WHERE label = 'Geannuleerd');
+
+-- =========================================================
+-- 78. Brandstoftoeslag bij de Euroline-tarieven — percentage over het
+--    leveringsbedrag (basis + alle leveringstoeslagen), zoals een vervoerder
+--    die rekent. Anders dan de overige tarieven is dit dus geen euro-bedrag
+--    maar een percentage. Per project aan/uit te vinken in de Configurator-
+--    optie "Opslag, levering en montage"; het bedrag telt op in de kostenrij
+--    Levering/transport en krijgt geen eigen rij. Standaard 0: zolang het
+--    echte percentage niet is ingevuld verandert er niets aan de prijzen.
+-- =========================================================
+
+ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS brandstoftoeslag_percentage NUMERIC NOT NULL DEFAULT 0;
