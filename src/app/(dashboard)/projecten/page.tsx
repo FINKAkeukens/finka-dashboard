@@ -19,6 +19,13 @@ function nextMilestone(milestones: ProjectMilestone[]): ProjectMilestone | null 
   return upcoming[0] ?? null
 }
 
+// Klanten sorteren op achternaam zoals in een adresboek: tussenvoegsels
+// ("van der", "de", ...) tellen niet mee, dus "Jan van Dam" staat bij de D.
+const TUSSENVOEGSELS = /^((van|de|der|den|het|ter|ten|te|in|op|'t|la|le|du|da|di|von|d')\s+)+/i
+function customerSortKey(firstName: string, lastName: string): string {
+  return `${(lastName ?? '').trim().replace(TUSSENVOEGSELS, '')} ${firstName ?? ''}`.trim().toLowerCase()
+}
+
 export default async function ProjectenPage({
   searchParams,
 }: {
@@ -34,7 +41,7 @@ export default async function ProjectenPage({
 
   let query = supabase
     .from('finka_projects')
-    .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
+    .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color, sort_order)')
 
   query = toontArchief ? query.not('archived_at', 'is', null) : query.is('archived_at', null)
 
@@ -57,7 +64,7 @@ export default async function ProjectenPage({
 
   // Portaalactiviteit en mijlpalen hangen allebei alleen van de project-id's
   // af, niet van elkaar — dus ook samen, weer een rondje minder.
-  const [{ data: activityData }, { data: milestonesData }] = projects.length
+  const [{ data: activityData }, { data: milestonesData }, { data: quotesData }] = projects.length
     ? await Promise.all([
         // Projecten waar de klant iets heeft gedaan dat staff nog niet gezien
         // heeft — zie migratie-sectie 63 / het meldingenblok op de projectpagina.
@@ -70,8 +77,21 @@ export default async function ProjectenPage({
           .from('finka_project_milestones')
           .select('*')
           .in('project_id', projects.map((p) => p.id)),
+        // Voor "Laatst bewerkt": aan de offerte wordt het meest gewerkt,
+        // terwijl het project zelf dan niet wijzigt.
+        supabase
+          .from('finka_quotes')
+          .select('project_id, updated_at')
+          .in('project_id', projects.map((p) => p.id))
+          .is('archived_at', null),
       ])
-    : [{ data: null }, { data: null }]
+    : [{ data: null }, { data: null }, { data: null }]
+
+  const lastQuoteEditByProject = new Map<string, string>()
+  for (const q of (quotesData ?? []) as { project_id: string; updated_at: string }[]) {
+    const prev = lastQuoteEditByProject.get(q.project_id)
+    if (!prev || q.updated_at > prev) lastQuoteEditByProject.set(q.project_id, q.updated_at)
+  }
 
   const projectsWithPortalActivity = new Set<string>()
   for (const row of activityData ?? []) projectsWithPortalActivity.add(row.project_id)
@@ -97,7 +117,10 @@ export default async function ProjectenPage({
     })
     // Platgeslagen tot precies de tekst die in de tabel komt te staan, zodat
     // de zoekbalken per kolom op exact dát zoeken (zie ProjectsTable).
-    .map(({ project: p, next }) => ({
+    .map(({ project: p, next }) => {
+      const quoteEdit = lastQuoteEditByProject.get(p.id)
+      const lastEdited = quoteEdit && quoteEdit > p.updated_at ? quoteEdit : p.updated_at
+      return {
       id: p.id,
       reference: p.reference_number,
       title: p.title,
@@ -111,7 +134,15 @@ export default async function ProjectenPage({
         : 'Nog niet gepland',
       milestoneClass: next ? urgencyClass(next.date as string) : '',
       hasPortalActivity: projectsWithPortalActivity.has(p.id),
-    }))
+      lastEdited: format(new Date(lastEdited), 'd MMM yyyy', { locale: nl }),
+      sort: {
+        customer: p.customer ? customerSortKey(p.customer.first_name, p.customer.last_name) : null,
+        statusOrder: p.status?.sort_order ?? null,
+        leadDays: p.first_contact_date ? leadTimeDays(p.first_contact_date) : null,
+        milestoneTime: next ? new Date(next.date as string).getTime() : null,
+        lastEditedTime: new Date(lastEdited).getTime(),
+      },
+    }})
 
   return (
     <div className="p-8 max-w-7xl">
