@@ -110,6 +110,50 @@ function parseGmailMessage(msg: gmail_v1.Schema$Message): EmailData {
   }
 }
 
+function isQuotaError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.includes('Quota exceeded') || message.includes('rateLimitExceeded') || message.includes('429')
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Haalt `items` op via `fn`, met een lage gelijktijdigheid (i.p.v. alles in
+// één Promise.all) en automatische retry-met-backoff bij een Gmail
+// "Quota exceeded" / "Units per minute per user"-fout. Zonder dit liep een
+// sync met bv. 50 nieuwe mails in één klap tegen de per-minuut-limiet van het
+// Gmail-project aan (elke messages.get(format:'full') kost al 5 quota-units,
+// 50 tegelijk = een burst van 250+ units in één keer).
+async function fetchWithThrottle<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  { concurrency = 5, delayMs = 300, maxRetries = 3 }: { concurrency?: number; delayMs?: number; maxRetries?: number } = {}
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  for (let start = 0; start < items.length; start += concurrency) {
+    const batch = items.slice(start, start + concurrency)
+    const batchResults = await Promise.all(
+      batch.map(async (item) => {
+        let attempt = 0
+        while (true) {
+          try {
+            return await fn(item)
+          } catch (err) {
+            if (!isQuotaError(err) || attempt >= maxRetries) throw err
+            attempt++
+            // Oplopende pauze (2s, 4s, 8s) — geeft de per-minuut-quota tijd om te resetten.
+            await sleep(2000 * 2 ** (attempt - 1))
+          }
+        }
+      })
+    )
+    batchResults.forEach((r, i) => { results[start + i] = r })
+    if (start + concurrency < items.length) await sleep(delayMs)
+  }
+  return results
+}
+
 export async function fetchRecentOfferteEmails(refreshToken: string, maxResults = 50): Promise<EmailData[]> {
   const gmail = await getGmailClient(refreshToken)
 
@@ -132,16 +176,14 @@ export async function fetchRecentOfferteEmails(refreshToken: string, maxResults 
 
   if (!data.messages?.length) return []
 
-  const messages = await Promise.all(
-    data.messages.map(async ({ id }) => {
-      const { data: msg } = await gmail.users.messages.get({
-        userId: 'me',
-        id: id!,
-        format: 'full',
-      })
-      return msg
+  const messages = await fetchWithThrottle(data.messages, async ({ id }) => {
+    const { data: msg } = await gmail.users.messages.get({
+      userId: 'me',
+      id: id!,
+      format: 'full',
     })
-  )
+    return msg
+  })
 
   return messages.map(parseGmailMessage)
 }
