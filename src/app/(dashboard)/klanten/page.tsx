@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Search } from 'lucide-react'
 import { Customer } from '@/lib/types'
+import ArchiveCustomerButton from './ArchiveCustomerButton'
 
 const statusColors: Record<string, string> = {
   prospect: 'bg-blue-50 text-blue-700 border-blue-100',
@@ -23,12 +24,17 @@ export default async function KlantenPage({
   const { q, status } = await searchParams
   const supabase = await createClient()
 
+  // "archief" is geen klantstatus maar een eigen weergave — net als bij
+  // projecten: alleen de gearchiveerde klanten, met een knop om terug te zetten.
+  const toontArchief = status === 'archief'
+
   let query = supabase
     .from('finka_customers')
     .select('*')
     .order('created_at', { ascending: false })
 
-  if (status && status !== 'alle') query = query.eq('status', status)
+  query = toontArchief ? query.not('archived_at', 'is', null) : query.is('archived_at', null)
+  if (status && status !== 'alle' && !toontArchief) query = query.eq('status', status)
   // Zoeken in de database i.p.v. de hele tabel ophalen en in JS filteren —
   // scheelt vooral bij een groeiend klantenbestand veel onnodig dataverkeer.
   if (q) {
@@ -46,7 +52,9 @@ export default async function KlantenPage({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#1C1B19]">Klanten</h1>
-          <p className="text-sm text-[#6B6560] mt-0.5">{customers?.length ?? 0} klanten totaal</p>
+          <p className="text-sm text-[#6B6560] mt-0.5">
+            {customers?.length ?? 0} {toontArchief ? 'gearchiveerde klanten' : 'klanten totaal'}
+          </p>
         </div>
         <Link
           href="/klanten/nieuw"
@@ -82,6 +90,17 @@ export default async function KlantenPage({
               {s === 'alle' ? 'Alle' : statusLabels[s]}
             </Link>
           ))}
+          <Link
+            href={`/klanten?${q ? `q=${q}&` : ''}status=archief`}
+            title="Klanten die met de archiefknop zijn opgeborgen"
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              toontArchief
+                ? 'bg-[#1C1B19] text-white border-[#1C1B19]'
+                : 'bg-white text-[#9A948D] border-[#DDD8D2] hover:border-[#1C1B19]'
+            }`}
+          >
+            Gearchiveerd
+          </Link>
         </div>
       </div>
 
@@ -89,10 +108,12 @@ export default async function KlantenPage({
       <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
         {!filtered?.length ? (
           <div className="py-16 text-center">
-            <p className="text-sm text-[#6B6560]">Geen klanten gevonden</p>
-            <Link href="/klanten/nieuw" className="text-sm text-[#C9A96E] hover:underline mt-1 inline-block">
-              Klant toevoegen →
-            </Link>
+            <p className="text-sm text-[#6B6560]">{toontArchief ? 'Geen gearchiveerde klanten' : 'Geen klanten gevonden'}</p>
+            {!toontArchief && (
+              <Link href="/klanten/nieuw" className="text-sm text-[#C9A96E] hover:underline mt-1 inline-block">
+                Klant toevoegen →
+              </Link>
+            )}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -104,6 +125,7 @@ export default async function KlantenPage({
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Telefoon</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-[#6B6560]">Toegevoegd</th>
+                <th className="w-12" />
               </tr>
             </thead>
             <tbody className="divide-y divide-[#DDD8D2]">
@@ -128,6 +150,13 @@ export default async function KlantenPage({
                   </td>
                   <td className="px-5 py-3.5 text-[#6B6560] text-xs">
                     {new Date(c.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </td>
+                  <td className="px-3 py-3.5 text-right">
+                    <ArchiveCustomerButton
+                      customerId={c.id}
+                      customerName={`${c.first_name} ${c.last_name}`}
+                      archived={!!c.archived_at}
+                    />
                   </td>
                 </tr>
               ))}

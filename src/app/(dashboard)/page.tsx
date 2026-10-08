@@ -22,7 +22,7 @@ export default async function DashboardPage() {
     { data: recentCustomers },
     { data: deliveryTimesData },
   ] = await Promise.all([
-    supabase.from('finka_customers').select('*', { count: 'exact', head: true }),
+    supabase.from('finka_customers').select('*', { count: 'exact', head: true }).is('archived_at', null),
     supabase.from('finka_appliances').select('*', { count: 'exact', head: true }),
     supabase.from('finka_email_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('finka_project_statuses').select('id, label, color, sort_order').order('sort_order'),
@@ -31,13 +31,14 @@ export default async function DashboardPage() {
       .select('*, customer:finka_customers(first_name, last_name), status:finka_project_statuses(id, label, color, sort_order)')
       .is('archived_at', null)
       .order('created_at', { ascending: false }),
-    supabase.from('finka_customers').select('status'),
+    supabase.from('finka_customers').select('status').is('archived_at', null),
     // Deze twee hangen van niets in dit bestand af — samen met de query's
     // hierboven ophalen i.p.v. er twee losse netwerkrondjes achteraan te
     // plakken (was voorheen sequentieel, ná de checklist/quotes-batch).
     supabase
       .from('finka_customers')
       .select('id, reference_number, first_name, last_name, status, created_at')
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('finka_delivery_times').select('brand, summary, source_email_date, updated_at'),

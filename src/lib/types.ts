@@ -23,6 +23,8 @@ export interface Customer {
   auth_user_id: string | null
   created_at: string
   updated_at: string
+  // Gearchiveerd = verborgen uit het klantenoverzicht, niet verwijderd (zie ArchiveCustomerButton).
+  archived_at: string | null
 }
 
 export interface Supplier {
