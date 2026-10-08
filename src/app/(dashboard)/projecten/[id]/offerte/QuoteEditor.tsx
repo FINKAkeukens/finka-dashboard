@@ -11,7 +11,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { ACCESSOIRE_APPLIANCE_TYPES, formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteDiscount, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -313,6 +313,9 @@ export default function QuoteEditor({
   const [overallMarginPercentage, setOverallMarginPercentage] = useState(0)
   const [totalValue, setTotalValue] = useState(initialQuote?.total_price ?? 0)
   const [totalSource, setTotalSource] = useState<FieldSource>(initialQuote?.total_price_source ?? 'auto')
+  // Kortingsregels — bedrag incl. BTW, zoals de klant 'm ziet. Wordt van de
+  // klantprijs afgetrokken en in de klantversie per regel getoond.
+  const [discounts, setDiscounts] = useState<QuoteDiscount[]>(initialQuote?.discounts ?? [])
 
   // Apparatuur- en accessoire-kosten volgen live uit de interne regels — geen
   // handmatige invoer nodig zolang de rij op 'auto' staat. Elk type voedt
@@ -387,13 +390,34 @@ export default function QuoteEditor({
   const totaalPrijsExclBtw = round2(costBreakdown.reduce((sum, r) => sum + displayedCost(r) * (1 + r.marge_percentage / 100), 0))
   const totaalPrijsInclBtw = round2(totaalPrijsExclBtw * (1 + btwPercentage / 100))
 
-  // Huidige (blended) marge zoals die nu daadwerkelijk uit de categorietabel
-  // volgt — dit getal en de tabel kunnen dus nooit uit elkaar lopen.
-  const effectiveMarginEuro = round2(totaalPrijsExclBtw - totaalKostenExclMarge)
-  const effectiveMarginPercentage = totaalKostenExclMarge > 0 ? round2((effectiveMarginEuro / totaalKostenExclMarge) * 100) : 0
-  const effectiveNettoPercentageOfPrice = totaalPrijsExclBtw > 0 ? round2((effectiveMarginEuro / totaalPrijsExclBtw) * 100) : 0
+  // Korting gaat volledig van de marge af: de kostprijs blijft gelijk, de
+  // klant betaalt minder. Bedrag is incl. BTW, dus voor de marge omrekenen
+  // naar excl. BTW.
+  const kortingInclBtw = round2(discounts.reduce((sum, d) => sum + (d.amount || 0), 0))
+  const kortingExclBtw = round2(kortingInclBtw / (1 + btwPercentage / 100))
+  const klantprijsExclBtw = round2(totaalPrijsExclBtw - kortingExclBtw)
+  const klantprijsInclBtw = round2(totaalPrijsInclBtw - kortingInclBtw)
 
-  const liveTotal = totalSource === 'auto' ? totaalPrijsInclBtw : round2(totalValue)
+  // Huidige (blended) marge zoals die nu daadwerkelijk uit de categorietabel
+  // volgt (minus eventuele korting) — dit getal en de tabel kunnen dus nooit
+  // uit elkaar lopen.
+  const effectiveMarginEuro = round2(klantprijsExclBtw - totaalKostenExclMarge)
+  const effectiveMarginPercentage = totaalKostenExclMarge > 0 ? round2((effectiveMarginEuro / totaalKostenExclMarge) * 100) : 0
+  const effectiveNettoPercentageOfPrice = klantprijsExclBtw > 0 ? round2((effectiveMarginEuro / klantprijsExclBtw) * 100) : 0
+
+  const liveTotal = totalSource === 'auto' ? klantprijsInclBtw : round2(totalValue)
+
+  function addDiscount() {
+    setDiscounts((prev) => [...prev, { description: '', amount: 0 }])
+  }
+
+  function updateDiscount(index: number, patch: Partial<QuoteDiscount>) {
+    setDiscounts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)))
+  }
+
+  function removeDiscount(index: number) {
+    setDiscounts((prev) => prev.filter((_, i) => i !== index))
+  }
 
   async function createQuote() {
     setCreating(true)
@@ -814,7 +838,7 @@ export default function QuoteEditor({
       werkelijke_kosten: displayedCost(r),
       werkelijke_kosten_source: displayedCostSource(r),
     }))
-    const finalTotal = totalSource === 'auto' ? totaalPrijsInclBtw : totalValue
+    const finalTotal = totalSource === 'auto' ? klantprijsInclBtw : totalValue
     // Eerste keer dat de status op 'akkoord' komt te staan — voor de
     // omzet-rapportage op /financieel. Blijft daarna staan, ook als de
     // status later weer wijzigt (historisch moment van accorderen).
@@ -837,6 +861,10 @@ export default function QuoteEditor({
       subtotal_source: 'auto' as const,
       korting_percentage: 0,
       korting_percentage_source: 'def' as const,
+      // Lege regels (geen bedrag) niet opslaan — die tellen toch nergens mee.
+      discounts: discounts
+        .filter((d) => d.amount)
+        .map((d) => ({ description: d.description.trim() || 'Korting', amount: round2(d.amount) })),
       btw_percentage: btwPercentage,
       total_price: finalTotal,
       total_price_source: totalSource,
@@ -855,7 +883,10 @@ export default function QuoteEditor({
       customer_closing_quote: customerClosingQuote || null,
       customer_disclaimer_text: customerDisclaimerText || null,
       page_disclaimers: pageDisclaimers,
-      customer_price: customerPriceSource === 'def' ? null : customerPriceValue,
+      // 'auto' volgt de actuele berekening (incl. korting) i.p.v. de momentopname
+      // van toen er op ↺ werd geklikt — anders rekent een later gewijzigde
+      // korting niet door naar de klantversie.
+      customer_price: customerPriceSource === 'def' ? null : customerPriceSource === 'auto' ? liveTotal : customerPriceValue,
       customer_price_source: customerPriceSource,
       updated_by: changedBy,
       updated_at: new Date().toISOString(),
@@ -1404,6 +1435,47 @@ export default function QuoteEditor({
             </div>
           </div>
 
+          <div className="space-y-2 pt-2 border-t border-[#DDD8D2]">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Korting (bedrag incl. BTW)</Label>
+              <button
+                type="button"
+                onClick={addDiscount}
+                className="inline-flex items-center gap-1 text-xs text-[#6B6560] hover:text-[#1C1B19]"
+              >
+                <Plus size={11} />
+                Korting toevoegen
+              </button>
+            </div>
+            {discounts.map((d, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={d.description}
+                  onChange={(e) => updateDiscount(i, { description: e.target.value })}
+                  placeholder="Omschrijving, bijv. Showroomkorting"
+                  className={`h-8 flex-1 min-w-0 text-sm ${markerClass(d.description)}`}
+                />
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-sm text-[#6B6560]">−€</span>
+                  <NumberInput
+                    min={0}
+                    value={d.amount}
+                    onChange={(amount) => updateDiscount(i, { amount: round2(amount) })}
+                    className="h-8 w-24 text-right"
+                  />
+                </div>
+                <button type="button" onClick={() => removeDiscount(i)} title="Korting verwijderen">
+                  <X size={13} className="text-[#9A948D] hover:text-red-600" />
+                </button>
+              </div>
+            ))}
+            {discounts.length > 0 && totalSource === 'in' && (
+              <p className="text-xs text-amber-700">
+                Het totaal hierboven is handmatig ingevuld, dus de korting wordt daar niet automatisch vanaf gehaald. Klik op ↺ om terug te gaan naar automatisch.
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm pt-2 border-t border-[#DDD8D2]">
             <span className="text-[#6B6560]">Inkoopprijs</span>
             <span className="text-right font-medium text-[#1C1B19]">{formatPrice(totaalKostenExclMarge)}</span>
@@ -1413,8 +1485,18 @@ export default function QuoteEditor({
               {formatPrice(effectiveMarginEuro)} <span className="text-[#9A948D] font-normal">({effectiveMarginPercentage.toFixed(1)}%)</span>
             </span>
 
+            {kortingInclBtw > 0 && (
+              <>
+                <span className="text-[#6B6560]">Klantprijs vóór korting</span>
+                <span className="text-right text-[#6B6560]">{formatPrice(totaalPrijsInclBtw)}</span>
+
+                <span className="text-[#6B6560]">Korting</span>
+                <span className="text-right text-[#6B6560]">−{formatPrice(kortingInclBtw)}</span>
+              </>
+            )}
+
             <span className="text-[#6B6560]">Klantprijs</span>
-            <span className="text-right font-medium text-[#1C1B19]">{formatPrice(totaalPrijsInclBtw)}</span>
+            <span className="text-right font-medium text-[#1C1B19]">{formatPrice(klantprijsInclBtw)}</span>
 
             <span className="text-[#6B6560]">Netto marge</span>
             <span className="text-right font-medium text-[#1C1B19]">{effectiveNettoPercentageOfPrice.toFixed(1)}%</span>
@@ -1434,7 +1516,7 @@ export default function QuoteEditor({
             variant="outline"
             size="sm"
             className="w-full"
-            onClick={() => { setCustomerPriceValue(totaalPrijsInclBtw); setCustomerPriceSource('in') }}
+            onClick={() => { setCustomerPriceValue(klantprijsInclBtw); setCustomerPriceSource('in') }}
           >
             Gebruik als klantprijs in de offerte
           </Button>
@@ -1878,7 +1960,7 @@ export default function QuoteEditor({
         <FieldWithSource label="Prijsindicatie voor de klant" source={customerPriceSource}>
           <div className="flex items-center gap-2 max-w-xs">
             <NumberInput
-              value={customerPriceValue}
+              value={customerPriceSource === 'auto' ? liveTotal : customerPriceValue}
               onChange={(v) => { setCustomerPriceValue(round2(v)); setCustomerPriceSource('in') }}
               className="font-semibold"
             />
@@ -1888,6 +1970,11 @@ export default function QuoteEditor({
               </button>
             )}
           </div>
+          {kortingInclBtw > 0 && (
+            <p className="text-xs text-[#9A948D] mt-1">
+              Dit is het bedrag ná korting. De kortingsregels ({formatPrice(kortingInclBtw)}) staan met omschrijving op de prijspagina en, als je kostenregels gebruikt, op de kostenpagina.
+            </p>
+          )}
         </FieldWithSource>
 
         <div className="space-y-1.5">

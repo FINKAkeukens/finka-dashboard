@@ -4,9 +4,10 @@ import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { NumberInput } from '@/components/ui/number-input'
-import { formatPrice } from '@/lib/appliance-utils'
-import { Appliance, ApparatuurOptionData, ApparatuurOptionItem, ConfiguratorOption, OfferAttachment } from '@/lib/types'
-import { FileText, Plus, Trash2, Upload, X, Zap } from 'lucide-react'
+import { formatPrice, packageAppliances } from '@/lib/appliance-utils'
+import { Appliance, AppliancePackage, ApparatuurOptionData, ApparatuurOptionItem, ConfiguratorOption, OfferAttachment } from '@/lib/types'
+import { FileText, Package, Plus, Trash2, Upload, X, Zap } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import AppliancePickerModal from '../offerte/AppliancePickerModal'
 
 function readData(data: ConfiguratorOption['data']): ApparatuurOptionData {
@@ -75,6 +76,10 @@ export default function ApparatuurOptionEditor({
 }) {
   const data = readData(option.data)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [packagesOpen, setPackagesOpen] = useState(false)
+  const [packages, setPackages] = useState<AppliancePackage[] | null>(null)
+  const [packagesError, setPackagesError] = useState('')
+  const [packageNotice, setPackageNotice] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -106,6 +111,46 @@ export default function ApparatuurOptionEditor({
       )
     const nextItems = [...kept, ...added]
     onChange({ data: { ...data, items: nextItems }, cost_total: itemsTotal(nextItems) })
+  }
+
+  // Pakketten (samengesteld op /apparatuur) pas ophalen als de keuzelijst
+  // opengaat — altijd vers, zodat een net aangemaakt pakket er meteen in staat.
+  async function openPackages() {
+    setPackagesError('')
+    setPackagesOpen(true)
+    const { data: rows, error } = await supabase.from('finka_appliance_packages').select('*').order('name')
+    if (error) setPackagesError(error.message)
+    else setPackages(rows as AppliancePackage[])
+  }
+
+  // Voegt alle apparaten van het pakket in één keer toe. Alleen apparaten die
+  // in déze sectie horen (de `appliances`-prop is al gefilterd op apparatuur
+  // vs. accessoires) — een kraan uit een pakket komt dus bij Accessoires
+  // terecht als je daar hetzelfde pakket toevoegt. Wat al in de lijst staat
+  // wordt niet dubbel toegevoegd.
+  function addPackage(pkg: AppliancePackage) {
+    const inPackage = packageAppliances(pkg, appliances)
+    const currentApplianceIds = new Set(data.items.map((i) => i.appliance_id))
+    const toAdd = inPackage.filter((a) => !currentApplianceIds.has(a.id))
+    const otherSection = pkg.appliance_ids.length - inPackage.length
+    const added = toAdd.map((a) =>
+      newItem({
+        appliance_id: a.id,
+        description: `${a.brand} ${a.model}`,
+        brand: a.brand,
+        model: a.model,
+        unit_price: a.price ?? 0,
+      })
+    )
+    if (added.length) {
+      const nextItems = [...data.items, ...added]
+      onChange({ data: { ...data, items: nextItems }, cost_total: itemsTotal(nextItems) })
+    }
+    const notes = [`${added.length} apparaat${added.length === 1 ? '' : 'en'} uit "${pkg.name}" toegevoegd`]
+    if (inPackage.length > toAdd.length) notes.push(`${inPackage.length - toAdd.length} stond${inPackage.length - toAdd.length === 1 ? '' : 'en'} er al in`)
+    if (otherSection > 0) notes.push(`${otherSection} ${otherSection === 1 ? "hoort" : "horen"} bij een andere sectie of ${otherSection === 1 ? "bestaat" : "bestaan"} niet meer`)
+    setPackageNotice(notes.join(' · '))
+    setPackagesOpen(false)
   }
 
   const libraryApplianceIds = data.items.filter((i) => i.appliance_id).map((i) => i.appliance_id as string)
@@ -197,6 +242,48 @@ export default function ApparatuurOptionEditor({
         initialSelectedIds={libraryApplianceIds}
       />
 
+      <Dialog open={packagesOpen} onOpenChange={setPackagesOpen}>
+        <DialogContent className="w-[95vw] max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Pakket toevoegen</DialogTitle>
+          </DialogHeader>
+          {packagesError && <p className="text-sm text-red-600">{packagesError}</p>}
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+            {packages === null ? (
+              <p className="text-sm text-[#6B6560] py-6 text-center">Laden...</p>
+            ) : !packages.length ? (
+              <p className="text-sm text-[#6B6560] py-6 text-center">
+                Nog geen pakketten — maak ze aan in de Apparatuur-bibliotheek via &ldquo;Pakketten&rdquo;.
+              </p>
+            ) : (
+              packages.map((pkg) => {
+                const inSection = packageAppliances(pkg, appliances)
+                const total = inSection.reduce((sum, a) => sum + (a.price ?? 0), 0)
+                return (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => addPackage(pkg)}
+                    disabled={!inSection.length}
+                    className="w-full text-left rounded-xl border border-[#DDD8D2] px-3 py-2.5 hover:border-[#1C1B19] transition-colors disabled:opacity-50 disabled:hover:border-[#DDD8D2]"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-[#1C1B19]">{pkg.name}</span>
+                      <span className="text-sm font-medium text-[#1C1B19] shrink-0">{formatPrice(total)}</span>
+                    </div>
+                    <p className="text-xs text-[#6B6560] mt-0.5 truncate">
+                      {inSection.length
+                        ? inSection.map((a) => `${a.brand} ${a.model}`).join(' · ')
+                        : 'Geen apparaten voor deze sectie'}
+                    </p>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -264,6 +351,10 @@ export default function ApparatuurOptionEditor({
             <Zap size={13} className="mr-1.5" />
             {pickerLabel}
           </Button>
+          <Button variant="outline" size="sm" onClick={openPackages}>
+            <Package size={13} className="mr-1.5" />
+            Pakket toevoegen
+          </Button>
           <Button variant="outline" size="sm" onClick={addManualItem}>
             <Plus size={13} className="mr-1.5" />
             Losse regel
@@ -272,6 +363,8 @@ export default function ApparatuurOptionEditor({
           <span className="text-sm font-medium text-[#1C1B19]">Totaal: {formatPrice(option.cost_total)}</span>
         </div>
       </div>
+
+      {packageNotice && <p className="text-xs text-green-700 -mt-2">{packageNotice}</p>}
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-[#6B6560]">{uploadHint}</p>

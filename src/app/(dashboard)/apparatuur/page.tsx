@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { Appliance } from '@/lib/types'
 import ApplianceLibrary from './ApplianceLibrary'
+import PackagesManager from './PackagesManager'
 
 export default async function ApparatuurPage() {
   const supabase = await createClient()
@@ -33,6 +34,7 @@ export default async function ApparatuurPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <PackagesManager appliances={(appliances ?? []) as Appliance[]} />
           <Link href="/apparatuur/inbox"
             className="flex items-center gap-1.5 bg-white text-[#1C1B19] text-sm px-4 py-2 rounded-lg border border-[#DDD8D2] hover:border-[#1C1B19] transition-colors">
             Offerte inbox

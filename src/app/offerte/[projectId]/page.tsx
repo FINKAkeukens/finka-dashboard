@@ -197,6 +197,10 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   const heroImage = quote.cover_image_url ?? quote.standaard_afbeeldingen?.[0] ?? null
   const remainingRenders = quote.render_urls ?? []
   const price = quote.customer_price ?? quote.total_price
+  // Kortingen zijn al van `price` afgetrokken (zie QuoteEditor) — hier alleen
+  // nog per regel met omschrijving tonen.
+  const discounts = (quote.discounts ?? []).filter((d) => d.amount > 0)
+  const discountTotal = discounts.reduce((s, d) => s + d.amount, 0)
 
   // Secties gegroepeerd op anchor (welk vast blok ze voorafgaan — zie
   // QuotePageAnchor in types.ts en de "Vóór: ..."-keuze in QuoteEditor.tsx).
@@ -656,11 +660,18 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                   <div style={{ fontSize: 13, color: '#1C1B19' }}>€ {formatPrice(line.amount)}</div>
                 </div>
               ))}
+              {discounts.map((d, i) => (
+                <div key={`korting-${i}`} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>Korting</div>
+                  <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(d.description)}</div>
+                  <div style={{ fontSize: 13, color: '#1C1B19' }}>− € {formatPrice(d.amount)}</div>
+                </div>
+              ))}
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0' }}>
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#1C1B19', textTransform: 'uppercase', fontWeight: 600 }}>Totaal</div>
                 <div />
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPrice(costLines.reduce((s, l) => s + l.amount, 0))}</div>
+                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPrice(costLines.reduce((s, l) => s + l.amount, 0) - discountTotal)}</div>
                   <div style={{ fontSize: 9, color: '#9B9591', textTransform: 'uppercase', letterSpacing: '0.08em' }}>incl. BTW</div>
                 </div>
               </div>
@@ -684,6 +695,15 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
             <div className="serif" style={{ fontSize: 56, fontWeight: 300, color: '#FAF8F5', lineHeight: 1, letterSpacing: '-0.02em' }}>
               €{formatPrice(price)}
             </div>
+            {discounts.length > 0 && (
+              <div style={{ marginTop: 18, fontSize: 11, color: '#9B9591', textAlign: 'center', lineHeight: 1.7 }}>
+                {discounts.map((d, i) => (
+                  <div key={i}>
+                    Inclusief {renderInline(d.description)} <span style={{ color: '#FAF8F5' }}>− €{formatPrice(d.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {quote.customer_disclaimer_text && (
               <div style={{ marginTop: 22, fontSize: 11, color: '#9B9591', textAlign: 'center', maxWidth: 340, lineHeight: 1.6 }}>
                 {renderInline(quote.customer_disclaimer_text)}

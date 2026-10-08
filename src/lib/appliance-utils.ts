@@ -1,4 +1,4 @@
-import { Appliance, ApplianceSpecs, ApplianceType, EnergyLabel, OvenSubtype, ProductLine } from '@/lib/types'
+import { Appliance, AppliancePackage, ApplianceSpecs, ApplianceType, EnergyLabel, OvenSubtype, ProductLine } from '@/lib/types'
 
 // Types uit de bibliotheek die als accessoire gelden i.p.v. als apparatuur:
 // ze horen in de offerte bij regeltype 'accessoire', in de kostenrij
@@ -248,4 +248,13 @@ export function specEntries(type: string, specs: ApplianceSpecs): { label: strin
   }
 
   return entries.filter((e): e is { label: string; value: string } => e.value != null)
+}
+
+// Apparaten van een pakket in de vaste type-volgorde van de rest van de app.
+// Apparaten die inmiddels uit de bibliotheek zijn verwijderd vallen weg.
+export function packageAppliances(pkg: AppliancePackage, appliances: Appliance[]): Appliance[] {
+  return pkg.appliance_ids
+    .map((id) => appliances.find((a) => a.id === id))
+    .filter((a): a is Appliance => !!a)
+    .sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type))
 }

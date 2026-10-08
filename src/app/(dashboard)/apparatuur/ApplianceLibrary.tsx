@@ -27,7 +27,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Search, X, ShoppingCart, Trash2, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
+import { Search, X, ShoppingCart, Trash2, ChevronRight, ChevronDown, ExternalLink, Package } from 'lucide-react'
 
 const PRODUCT_LINE_FILTER_NONE = '__geen_lijn__'
 
@@ -108,12 +108,32 @@ function SelectionBar({
   onClear: () => void
 }) {
   const [inclBtw, setInclBtw] = useState(false)
+  const [savingPackage, setSavingPackage] = useState(false)
+  const [packageSaved, setPackageSaved] = useState('')
   if (selected.size === 0) return null
 
   const selectedItems = appliances.filter(a => selected.has(a.id))
   const totalExcl = selectedItems.reduce((sum, a) => sum + (a.price ?? 0), 0)
   const totalIncl = totalExcl * 1.21
   const withPrice = selectedItems.filter(a => a.price).length
+
+  // Huidige selectie in één keer vastleggen als benoemd pakket — beheren
+  // (hernoemen, apparaten wijzigen) gaat daarna via de knop "Pakketten".
+  async function saveAsPackage() {
+    const name = prompt('Naam van het pakket:')?.trim()
+    if (!name) return
+    setSavingPackage(true)
+    const { error } = await createClient()
+      .from('finka_appliance_packages')
+      .insert({ name, appliance_ids: selectedItems.map(a => a.id) })
+    setSavingPackage(false)
+    if (error) {
+      alert(`Pakket opslaan mislukt: ${error.message}`)
+      return
+    }
+    setPackageSaved(name)
+    setTimeout(() => setPackageSaved(''), 3000)
+  }
 
   return (
     <div className="fixed bottom-0 left-56 right-0 z-50 border-t border-white/10 bg-[#1C1B19] px-6 py-3 text-white shadow-2xl">
@@ -128,6 +148,14 @@ function SelectionBar({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-4">
+          <button
+            onClick={saveAsPackage}
+            disabled={savingPackage}
+            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20 disabled:opacity-50"
+          >
+            <Package size={13} />
+            {packageSaved ? `Opgeslagen als "${packageSaved}"` : savingPackage ? 'Opslaan...' : 'Opslaan als pakket'}
+          </button>
           <button
             onClick={() => setInclBtw(!inclBtw)}
             className="rounded-lg bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20"

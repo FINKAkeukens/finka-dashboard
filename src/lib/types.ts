@@ -435,6 +435,21 @@ export interface CostBreakdownItem {
   marge_percentage_source: FieldSource
 }
 
+export interface QuoteDiscount {
+  description: string
+  amount: number
+}
+
+// Zelf benoemde set apparaten uit de bibliotheek — zie /apparatuur
+// (PackagesManager) en "Pakket toevoegen" in ApparatuurOptionEditor.
+export interface AppliancePackage {
+  id: string
+  name: string
+  appliance_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
 export interface Quote {
   id: string
   project_id: string
@@ -460,6 +475,9 @@ export interface Quote {
   subtotal_source: FieldSource
   korting_percentage: number
   korting_percentage_source: FieldSource
+  // Kortingsregels, bedrag incl. BTW — al afgetrokken van total_price (zie
+  // QuoteEditor) en in de klantversie per regel met omschrijving getoond.
+  discounts: QuoteDiscount[] | null
   btw_percentage: number
   total_price: number
   total_price_source: FieldSource

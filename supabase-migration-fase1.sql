@@ -2010,8 +2010,7 @@ ALTER TABLE finka_quotes
 --    van de Offerte. Tarief hier instelbaar (Instellingen → Euroline-
 --    tarieven), net als de andere posten. Bestaande opties hebben het
 --    vinkje niet en rekenen dus 0, tot je het aanzet.
--- =========================================================
-
+-- ==================================================
 ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS inmeten_tarief NUMERIC NOT NULL DEFAULT 250;
 
 -- =========================================================
@@ -2048,3 +2047,35 @@ WHERE NOT EXISTS (SELECT 1 FROM finka_project_statuses WHERE label = 'Geannuleer
 -- =========================================================
 
 ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS brandstoftoeslag_percentage NUMERIC NOT NULL DEFAULT 0;
+=======
+-- 79. Apparatuurpakketten — een zelf benoemde set apparaten uit de
+--    bibliotheek (bv. "Siemens basis": oven + inductie + afzuigkap +
+--    vaatwasser), samen te stellen op /apparatuur en vanuit elk project met
+--    één klik in een Configurator-apparatuuroptie te zetten. appliance_ids
+--    als array (volgorde = volgorde van toevoegen); een later uit de
+--    bibliotheek verwijderd apparaat wordt bij toevoegen gewoon overgeslagen.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_appliance_packages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  appliance_ids UUID[] NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_appliance_packages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_appliance_packages;
+CREATE POLICY "Staff only" ON finka_appliance_packages FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_appliance_packages TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 80. Kortingsregels op de offerte — lijst van { description, amount },
+--    bedrag incl. BTW (zoals de klant 'm ziet). Wordt van de klantprijs
+--    afgetrokken (total_price is dus ná korting) en in de klantversie als
+--    losse regel met omschrijving getoond. De oude, nooit gebruikte kolom
+--    korting_percentage blijft ongemoeid.
+-- =========================================================
+
+ALTER TABLE finka_quotes
+  ADD COLUMN IF NOT EXISTS discounts JSONB NOT NULL DEFAULT '[]'::jsonb;
