@@ -36,7 +36,7 @@ export default function PortalTabBar({
         <Link
           key={tab.id}
           href={`${pathname}?tab=${tab.id}`}
-          className={`shrink-0 px-2.5 sm:px-4 py-2.5 text-[13px] sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+          className={`shrink-0 px-1.5 min-[400px]:px-2.5 sm:px-4 py-2.5 text-[13px] sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
             activeTab === tab.id
               ? 'border-[#1C1B19] text-[#1C1B19]'
               : 'border-transparent text-[#6B6560] hover:text-[#1C1B19]'
