@@ -188,7 +188,7 @@ export default function DocumentenTab({
             <FolderOpen size={15} className="text-[#6B6560]" />
             Standaard in het portaal
             <span className="font-normal text-[#6B6560]">
-              · klant is {CUSTOMER_TYPE_LABELS[customerType ?? 'consument'].toLowerCase()}
+              · klant: {CUSTOMER_TYPE_LABELS[customerType ?? 'consument']}
             </span>
           </p>
           <div className="flex items-center gap-3 text-xs shrink-0">
