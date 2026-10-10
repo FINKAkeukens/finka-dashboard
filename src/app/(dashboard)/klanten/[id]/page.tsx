@@ -3,7 +3,9 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Mail, Phone, MapPin } from 'lucide-react'
+import { ArrowLeft, Eye, Mail, Phone, MapPin } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import EditCustomerForm from './EditCustomerForm'
 import TabBar from './TabBar'
 import OfferteEditor from './OfferteEditor'
@@ -104,8 +106,20 @@ export default async function KlantDetailPage({
         )}
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-start gap-2">
         <InvitePortalButton customerId={id} hasPortalAccount={!!customer.auth_user_id} />
+        {/* Opent het portaal zoals deze klant het ziet, alleen-lezen — zie
+            /api/portaal/voorbeeld. Werkt ook als de klant nog niet is
+            uitgenodigd. */}
+        <a
+          href={`/api/portaal/voorbeeld?klant=${id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(buttonVariants({ variant: 'outline' }), 'gap-1.5')}
+        >
+          <Eye size={14} />
+          Bekijk als klant
+        </a>
       </div>
 
       <TabBar activeTab={tab} />

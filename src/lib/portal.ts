@@ -1,4 +1,5 @@
 import { cache } from 'react'
+import { cookies } from 'next/headers'
 import { createClient } from './supabase/server'
 import { createServiceClient } from './supabase/service'
 import { Customer } from './types'
@@ -14,6 +15,8 @@ export const getAuthUser = cache(async () => {
   return user
 })
 
+export const PORTAL_PREVIEW_COOKIE = 'finka_portal_preview'
+
 // Klantportaal-sessie: de sessie zelf komt (net als bij staff) uit de
 // cookie-based client, maar de koppeling naar finka_customers loopt via de
 // service-role client — dezelfde "server-side valideren, nooit rechtstreeks
@@ -22,7 +25,7 @@ export const getAuthUser = cache(async () => {
 // Ook gecached: portaal-layout en -page roepen dit allebei aan, dat scheelde
 // per paginabezoek twee overbodige rondjes (auth + klant-lookup).
 export const getPortalCustomer = cache(
-  async (): Promise<{ userId: string; customer: Customer } | null> => {
+  async (): Promise<{ userId: string; customer: Customer; preview: boolean } | null> => {
     const user = await getAuthUser()
     if (!user) return null
 
@@ -32,9 +35,23 @@ export const getPortalCustomer = cache(
       .select('*')
       .eq('auth_user_id', user.id)
       .maybeSingle()
-    if (!customer) return null
+    if (customer) return { userId: user.id, customer: customer as Customer, preview: false }
 
-    return { userId: user.id, customer: customer as Customer }
+    // "Bekijk als klant": staff opent het portaal van een klant via
+    // /api/portaal/voorbeeld, dat deze cookie zet. Alleen geldig voor
+    // staff — een klant (of wie dan ook) die de cookie zelf zet, komt hier
+    // niet langs de isStaffUser-check. Alleen-lezen: de portaal-API-routes
+    // zoeken de klant zelf op via auth_user_id en weigeren staff dus altijd.
+    const previewCustomerId = (await cookies()).get(PORTAL_PREVIEW_COOKIE)?.value
+    if (previewCustomerId && (await isStaffUser(user.id))) {
+      const { data: previewCustomer } = await service
+        .from('finka_customers')
+        .select('*')
+        .eq('id', previewCustomerId)
+        .maybeSingle()
+      if (previewCustomer) return { userId: user.id, customer: previewCustomer as Customer, preview: true }
+    }
+    return null
   }
 )
 
