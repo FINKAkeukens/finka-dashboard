@@ -12,7 +12,7 @@ export default async function PortalAuthedLayout({ children }: { children: React
 
   return (
     <div className="min-h-screen bg-[#F7F5F2]">
-      <header className="bg-white border-b border-[#DDD8D2] px-6 py-4 flex items-center justify-between">
+      <header className="bg-white border-b border-[#DDD8D2] px-4 sm:px-6 py-4 flex items-center justify-between">
         <Link href="/portaal" className="flex items-center gap-2">
           <span className="text-base font-semibold tracking-tight text-[#1C1B19]">FINKA</span>
           <span className="text-xs text-[#6B6560]">Klantportaal</span>
@@ -24,7 +24,7 @@ export default async function PortalAuthedLayout({ children }: { children: React
           <PortalLogoutButton />
         </div>
       </header>
-      <main className="max-w-2xl mx-auto p-6">{children}</main>
+      <main className="max-w-2xl mx-auto p-4 sm:p-6">{children}</main>
     </div>
   )
 }
