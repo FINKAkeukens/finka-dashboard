@@ -2135,13 +2135,16 @@ GRANT ALL ON TABLE finka_standard_documents TO anon, authenticated, service_role
 --    Bestaande documenten worden elk hun eigen reeks, geldig vanaf het begin.
 -- =========================================================
 
-ALTER TABLE finka_standard_documents ADD COLUMN IF NOT EXISTS series_id UUID;
-UPDATE finka_standard_documents SET series_id = id WHERE series_id IS NULL;
-ALTER TABLE finka_standard_documents ALTER COLUMN series_id SET DEFAULT gen_random_uuid();
-ALTER TABLE finka_standard_documents ALTER COLUMN series_id SET NOT NULL;
-ALTER TABLE finka_standard_documents ADD COLUMN IF NOT EXISTS valid_from DATE;
-
 -- featured: direct zichtbaar bovenaan het portaal (boven de tabbladen), met
 -- bekijk- en downloadknop — bedoeld voor de algemene voorwaarden. Geldt per
 -- reeks (alle versies krijgen dezelfde waarde).
-ALTER TABLE finka_standard_documents ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE finka_standard_documents
+  ADD COLUMN IF NOT EXISTS series_id UUID,
+  ADD COLUMN IF NOT EXISTS valid_from DATE,
+  ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+
+UPDATE finka_standard_documents SET series_id = id WHERE series_id IS NULL;
+
+ALTER TABLE finka_standard_documents
+  ALTER COLUMN series_id SET DEFAULT gen_random_uuid(),
+  ALTER COLUMN series_id SET NOT NULL;
