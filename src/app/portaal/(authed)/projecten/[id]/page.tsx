@@ -4,11 +4,12 @@ import { redirect, notFound } from 'next/navigation'
 import { Check } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
+import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff, StandardDocument } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
+import { standardDocumentsFor } from '@/lib/standard-documents'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
-import PortalDocumentenList, { type PortalDocumentRow } from './PortalDocumentenList'
+import PortalDocumentenList, { type PortalDocumentRow, type PortalStandardDocumentRow } from './PortalDocumentenList'
 import PortalMaatformulier from './PortalMaatformulier'
 
 export default async function PortalProjectPage({
@@ -43,6 +44,7 @@ export default async function PortalProjectPage({
     { data: uploadedDocsData },
     { data: maatformulierData },
     { data: signoffData },
+    { data: standardDocsData },
   ] = await Promise.all([
     service.from('finka_checklist_items').select('*').eq('project_id', id),
     service.from('finka_questionnaire_categories').select('*').order('sort_order', { ascending: true }),
@@ -59,6 +61,9 @@ export default async function PortalProjectPage({
       .order('uploaded_at', { ascending: false }),
     service.from('finka_maatformulier_items').select('*').eq('project_id', id).order('sort_order', { ascending: true }),
     service.from('finka_maatformulier_signoff').select('*').eq('project_id', id).maybeSingle(),
+    // Standaarddocumenten (algemene voorwaarden, onderhoudsinstructies, ...)
+    // uit Instellingen — gefilterd op het klanttype hieronder.
+    service.from('finka_standard_documents').select('*').eq('active', true),
   ])
   // Alleen punten die staff expliciet zichtbaar heeft gezet voor de klant —
   // zie de oog-knop bij Checklist (project) en Instellingen > Checklist-
@@ -107,6 +112,11 @@ export default async function PortalProjectPage({
       approved_at: d.approved_at,
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  const standardDocuments: PortalStandardDocumentRow[] = standardDocumentsFor(
+    (standardDocsData ?? []) as StandardDocument[],
+    session.customer.customer_type
+  ).map((d) => ({ id: d.id, name: d.title, url: d.file_url }))
 
   // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
   const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)
@@ -188,7 +198,7 @@ export default async function PortalProjectPage({
       ) : tab === 'maatformulier' ? (
         <PortalMaatformulier projectId={id} items={maatformulierItems} signoff={maatformulierSignoff} />
       ) : tab === 'documenten' ? (
-        <PortalDocumentenList documents={documents} />
+        <PortalDocumentenList documents={documents} standardDocuments={standardDocuments} />
       ) : (
         <PortalQuestionnaireForm
           projectId={id}

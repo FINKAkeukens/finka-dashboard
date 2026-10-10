@@ -22,6 +22,7 @@ import {
   Ruler,
   FileText,
   Truck,
+  FolderOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -90,6 +91,7 @@ const groups: NavGroup[] = [
       { href: '/instellingen/vragenlijst', label: 'Vragenlijst', icon: HelpCircle },
       { href: '/instellingen/maatformulier', label: 'Ruimte gereed', icon: Ruler },
       { href: '/instellingen/teksten', label: 'Standaardteksten', icon: FileText },
+      { href: '/instellingen/documenten', label: 'Standaarddocumenten', icon: FolderOpen },
     ],
   },
 ]

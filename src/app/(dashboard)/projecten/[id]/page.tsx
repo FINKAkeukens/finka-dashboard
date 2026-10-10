@@ -20,10 +20,11 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff } from '@/lib/types'
+import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
 import { leadTimeDays } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 import { DEFAULT_TEXTS } from '@/lib/default-texts'
+import { standardDocumentsFor } from '@/lib/standard-documents'
 
 export default async function ProjectDetailPage({
   params,
@@ -192,16 +193,26 @@ export default async function ProjectDetailPage({
 
   let documentDownloads: QuoteDownloadMeta[] = []
   let projectDocuments: ProjectDocument[] = []
+  let customerType: CustomerType | null = null
+  let portalStandardDocuments: StandardDocument[] = []
   if (tab === 'documenten') {
-    const [{ data: quotesForProject }, { data: documentsData }] = await Promise.all([
+    const [{ data: quotesForProject }, { data: documentsData }, { data: customerTypeData }, { data: standardDocsData }] = await Promise.all([
       supabase.from('finka_quotes').select('id').eq('project_id', id),
       supabase
         .from('finka_project_documents')
         .select('*')
         .eq('project_id', id)
         .order('uploaded_at', { ascending: false }),
+      // Los opgehaald (niet in de project-select bovenaan), zodat alleen dit
+      // tabblad iets merkt als migratie-sectie 81 nog niet gedraaid is.
+      (project as Project).customer_id
+        ? supabase.from('finka_customers').select('customer_type').eq('id', (project as Project).customer_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from('finka_standard_documents').select('*').eq('active', true),
     ])
     projectDocuments = (documentsData ?? []) as ProjectDocument[]
+    customerType = (customerTypeData as { customer_type: CustomerType } | null)?.customer_type ?? null
+    portalStandardDocuments = standardDocumentsFor((standardDocsData ?? []) as StandardDocument[], customerType)
     const quoteIds = (quotesForProject ?? []).map((q) => q.id)
     if (quoteIds.length) {
       const { data } = await supabase
@@ -396,7 +407,14 @@ export default async function ProjectDetailPage({
       ) : tab === 'notities' ? (
         <NotesPanel projectId={id} />
       ) : tab === 'documenten' ? (
-        <DocumentenTab projectId={id} downloads={documentDownloads} documents={projectDocuments} />
+        <DocumentenTab
+          projectId={id}
+          downloads={documentDownloads}
+          documents={projectDocuments}
+          customerId={(project as Project).customer_id}
+          customerType={customerType}
+          standardDocuments={portalStandardDocuments}
+        />
       ) : (
         <ComingSoonTab
           moduleName={

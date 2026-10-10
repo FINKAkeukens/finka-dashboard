@@ -2047,7 +2047,7 @@ WHERE NOT EXISTS (SELECT 1 FROM finka_project_statuses WHERE label = 'Geannuleer
 -- =========================================================
 
 ALTER TABLE finka_euroline_rates ADD COLUMN IF NOT EXISTS brandstoftoeslag_percentage NUMERIC NOT NULL DEFAULT 0;
-=======
+-- =========================================================
 -- 79. Apparatuurpakketten — een zelf benoemde set apparaten uit de
 --    bibliotheek (bv. "Siemens basis": oven + inductie + afzuigkap +
 --    vaatwasser), samen te stellen op /apparatuur en vanuit elk project met
@@ -2079,3 +2079,46 @@ GRANT ALL ON TABLE finka_appliance_packages TO anon, authenticated, service_role
 
 ALTER TABLE finka_quotes
   ADD COLUMN IF NOT EXISTS discounts JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- =========================================================
+-- 81. Standaarddocumenten in het klantenportaal + klanttype.
+--
+--    finka_customers.customer_type: 'consument' (B2C) of 'bedrijf' (B2B),
+--    aan te klikken op de klantkaart. Bestaande klanten worden 'consument'.
+--
+--    finka_standard_documents: documenten die bij élk project in het
+--    portaal (tabblad Documenten) staan, zonder ze per project te uploaden —
+--    bv. algemene voorwaarden en onderhoudsinstructies. Beheer via
+--    Instellingen → Standaarddocumenten. Eén bron: een vervangen bestand
+--    geldt meteen voor alle klanten. `audience` bepaalt wie het ziet:
+--      iedereen  -> alle klanten
+--      consument -> alleen klanten met customer_type 'consument' (B2C-voorwaarden)
+--      bedrijf   -> alleen klanten met customer_type 'bedrijf'   (B2B-voorwaarden)
+--    Bestanden staan in de bestaande bucket project-documenten onder
+--    standaard/ (storage_path, om bij vervangen/verwijderen op te ruimen).
+--    Het portaal leest via de service-role (zoals alle portaal-code), dus
+--    alleen een staff-policy nodig.
+-- =========================================================
+
+ALTER TABLE finka_customers
+  ADD COLUMN IF NOT EXISTS customer_type TEXT NOT NULL DEFAULT 'consument'
+  CHECK (customer_type IN ('consument', 'bedrijf'));
+
+CREATE TABLE IF NOT EXISTS finka_standard_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  audience TEXT NOT NULL DEFAULT 'iedereen' CHECK (audience IN ('iedereen', 'consument', 'bedrijf')),
+  filename TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  storage_path TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_standard_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_standard_documents;
+CREATE POLICY "Staff only" ON finka_standard_documents FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_standard_documents TO anon, authenticated, service_role;

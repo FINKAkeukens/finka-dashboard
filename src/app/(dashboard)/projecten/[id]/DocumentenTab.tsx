@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle2, Clock, Eye, EyeOff, FileSignature, FileText, Trash2, Upload } from 'lucide-react'
-import type { ProjectDocument, QuoteDownloadMeta } from '@/lib/types'
+import { CheckCircle2, Clock, Eye, EyeOff, FileSignature, FileText, FolderOpen, Trash2, Upload } from 'lucide-react'
+import type { CustomerType, ProjectDocument, QuoteDownloadMeta, StandardDocument } from '@/lib/types'
+import { CUSTOMER_TYPE_LABELS } from '@/lib/standard-documents'
 
 // Twee soorten documenten in één lijst: automatisch bewaarde offerte-PDF's
 // (finka_quote_downloads, ontstaan bij het downloaden van een offerte) en
@@ -63,10 +65,17 @@ export default function DocumentenTab({
   projectId,
   downloads: initialDownloads,
   documents: initialDocuments,
+  customerId,
+  customerType,
+  standardDocuments,
 }: {
   projectId: string
   downloads: QuoteDownloadMeta[]
   documents: ProjectDocument[]
+  customerId: string | null
+  customerType: CustomerType | null
+  // Al gefilterd op het klanttype — precies wat de klant in het portaal ziet.
+  standardDocuments: StandardDocument[]
 }) {
   const supabase = createClient()
   const [downloads, setDownloads] = useState<QuoteDownloadMeta[]>(initialDownloads)
@@ -170,6 +179,43 @@ export default function DocumentenTab({
           }}
         />
       </label>
+
+      {/* Standaarddocumenten (Instellingen) staan automatisch in het portaal;
+          hier alleen ter info, welke precies hangt af van consument/bedrijf. */}
+      <div className="rounded-xl border border-[#DDD8D2] bg-[#F7F5F2] px-5 py-3.5 text-sm space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <p className="flex items-center gap-2 font-medium text-[#1C1B19]">
+            <FolderOpen size={15} className="text-[#6B6560]" />
+            Standaard in het portaal
+            <span className="font-normal text-[#6B6560]">
+              · klant is {CUSTOMER_TYPE_LABELS[customerType ?? 'consument'].toLowerCase()}
+            </span>
+          </p>
+          <div className="flex items-center gap-3 text-xs shrink-0">
+            {customerId && (
+              <Link href={`/klanten/${customerId}`} className="text-[#6B6560] hover:text-[#1C1B19] hover:underline">
+                Klanttype wijzigen
+              </Link>
+            )}
+            <Link href="/instellingen/documenten" className="text-[#6B6560] hover:text-[#1C1B19] hover:underline">
+              Standaarddocumenten beheren
+            </Link>
+          </div>
+        </div>
+        {standardDocuments.length ? (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 pl-[23px]">
+            {standardDocuments.map((d) => (
+              <li key={d.id}>
+                <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-[#1C1B19] hover:underline">
+                  {d.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pl-[23px] text-xs text-[#9A948D]">Nog geen standaarddocumenten voor dit klanttype.</p>
+        )}
+      </div>
 
       {!rows.length ? (
         <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-16 text-center">

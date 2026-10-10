@@ -1,4 +1,7 @@
 export type CustomerStatus = 'prospect' | 'actief' | 'afgerond' | 'on-hold'
+// B2C/B2B — bepaalt o.a. welke algemene voorwaarden de klant in het portaal
+// ziet (zie StandardDocument.audience). Migratie-sectie 81.
+export type CustomerType = 'consument' | 'bedrijf'
 export type ApplianceCategory = 'budget' | 'midden' | 'premium'
 export type ApplianceType = 'kookplaat' | 'oven' | 'vaatwasser' | 'afzuigkap' | 'koelkast' | 'koelvries' | 'vriezer' | 'wijnklimaatkast' | 'combi-oven' | 'magnetron' | 'kokendwaterkraan' | 'kraan' | 'spoelbak' | 'anders'
 export type OvenSubtype = 'solo' | 'combi-magnetron' | 'stoom'
@@ -18,6 +21,7 @@ export interface Customer {
   city: string | null
   notes: string | null
   status: CustomerStatus
+  customer_type: CustomerType
   // Gekoppeld Supabase Auth-account voor het klantportaal (/portaal) — NULL
   // zolang de klant nog niet is uitgenodigd. Zie src/lib/portal.ts.
   auth_user_id: string | null
@@ -1097,6 +1101,24 @@ export interface ProjectDocument {
   approval_required: boolean
   approved_at: string | null
   approved_by: string | null
+}
+
+// Standaarddocument dat bij élk project in het klantenportaal staan (algemene
+// voorwaarden, onderhoudsinstructies, ...) — beheerd op Instellingen →
+// Standaarddocumenten. Migratie-sectie 81.
+export type StandardDocumentAudience = 'iedereen' | CustomerType
+export interface StandardDocument {
+  id: string
+  title: string
+  audience: StandardDocumentAudience
+  filename: string
+  file_url: string
+  storage_path: string | null
+  active: boolean
+  sort_order: number
+  updated_by: string | null
+  created_at: string
+  updated_at: string
 }
 
 // Mappenstructuur + documenten per leverancier (los van de apparatuur-

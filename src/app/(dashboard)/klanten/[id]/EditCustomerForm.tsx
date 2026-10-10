@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Customer } from '@/lib/types'
 import { Edit, Trash2 } from 'lucide-react'
+import CustomerTypeField from '../CustomerTypeField'
 
 export default function EditCustomerForm({ customer }: { customer: Customer }) {
   const [editing, setEditing] = useState(false)
@@ -32,6 +33,7 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
         city: form.get('city') as string || null,
         notes: form.get('notes') as string || null,
         status: form.get('status') as string,
+        customer_type: (form.get('customer_type') as string) || 'consument',
         updated_at: new Date().toISOString(),
       })
       .eq('id', customer.id)
@@ -95,6 +97,7 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
           <Input name="city" defaultValue={customer.city ?? ''} />
         </div>
       </div>
+      <CustomerTypeField defaultValue={customer.customer_type} />
       <div className="space-y-1.5">
         <Label>Status</Label>
         <select name="status" defaultValue={customer.status}

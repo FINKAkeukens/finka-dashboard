@@ -76,6 +76,9 @@ export default async function KlantDetailPage({
           <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColors[customer.status]}`}>
             {statusLabels[customer.status]}
           </span>
+          {customer.customer_type === 'bedrijf' && (
+            <span className="text-xs px-2 py-0.5 rounded-full border border-[#DDD8D2] bg-[#F7F5F2] text-[#6B6560]">Bedrijf (B2B)</span>
+          )}
         </div>
         <p className="text-sm font-mono text-[#6B6560]">{customer.reference_number}</p>
       </div>

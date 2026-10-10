@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import CustomerTypeField from '../CustomerTypeField'
 
 export default function NieuweKlantPage() {
   const router = useRouter()
@@ -32,6 +33,7 @@ export default function NieuweKlantPage() {
         city: form.get('city') as string || null,
         notes: form.get('notes') as string || null,
         status: form.get('status') as string,
+        customer_type: (form.get('customer_type') as string) || 'consument',
         reference_number: '',
       })
       .select()
@@ -101,6 +103,8 @@ export default function NieuweKlantPage() {
             <Input id="city" name="city" />
           </div>
         </div>
+
+        <CustomerTypeField />
 
         <div className="space-y-1.5">
           <Label htmlFor="status">Status</Label>
