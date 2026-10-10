@@ -1121,6 +1121,8 @@ export interface StandardDocument {
   // geldt al vanaf het begin). Zie standardDocumentsFor + migratie-sectie 82.
   series_id: string
   valid_from: string | null
+  // Bovenaan het portaal, boven de tabbladen (bv. de algemene voorwaarden).
+  featured: boolean
   updated_by: string | null
   created_at: string
   updated_at: string

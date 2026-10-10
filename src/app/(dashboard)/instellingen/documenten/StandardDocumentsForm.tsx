@@ -110,6 +110,14 @@ export default function StandardDocumentsForm({ documents: initial }: { document
     if (updError) setError(updError.message)
   }
 
+  // Ook per reeks: een nieuwe versie van de voorwaarden moet net zo goed
+  // bovenaan het portaal staan als de vorige.
+  async function updateSeriesFeatured(series: string, featured: boolean) {
+    setDocuments((prev) => prev.map((d) => (seriesId(d) === series ? { ...d, featured } : d)))
+    const { error: updError } = await supabase.from('finka_standard_documents').update({ featured }).eq('series_id', series)
+    if (updError) setError(updError.message)
+  }
+
   async function insertDocument(file: File, fields: Partial<StandardDocument>) {
     const { path, url } = await uploadFile(file)
     const { data, error: insertError } = await supabase
@@ -168,6 +176,7 @@ export default function StandardDocumentsForm({ documents: initial }: { document
       await insertDocument(versionFile, {
         title: versionTitle.trim() || versionFile.name.replace(/\.[^.]+$/, ''),
         audience: series.versions[0].audience,
+        featured: series.versions[0].featured,
         sort_order: series.sortOrder,
         series_id: series.id,
         valid_from: versionDate || today,
@@ -264,6 +273,18 @@ export default function StandardDocumentsForm({ documents: initial }: { document
                   <span className="flex-1 text-xs text-[#6B6560]">
                     {series.versions.length === 1 ? '1 versie' : `${series.versions.length} versies`}
                   </span>
+                  <label
+                    className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-[#1C1B19]"
+                    title="Direct zichtbaar bij het openen van het portaal, boven de tabbladen, met een downloadknop"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!series.versions[0].featured}
+                      onChange={(e) => updateSeriesFeatured(series.id, e.target.checked)}
+                      className="accent-[#1C1B19]"
+                    />
+                    Bovenaan in portaal
+                  </label>
                   <select
                     value={series.versions[0].audience}
                     onChange={(e) => updateSeriesAudience(series.id, e.target.value as StandardDocumentAudience)}

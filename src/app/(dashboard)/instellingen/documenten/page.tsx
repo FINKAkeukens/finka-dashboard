@@ -19,7 +19,8 @@ export default async function StandaardDocumentenPage() {
           Deze documenten staan automatisch bij élk project in het klantenportaal (tabblad Documenten), zoals de
           algemene voorwaarden en onderhoudsinstructies. Komt er een nieuwe versie, gebruik dan &quot;Nieuwe versie&quot;
           met een ingangsdatum: klanten die vóór die datum akkoord gaven op hun offerte, blijven de versie zien die toen
-          gold. Met &quot;Voor wie&quot; bepaal je of een document voor iedereen is of alleen voor consumenten
+          gold. Met &quot;Bovenaan in portaal&quot; staat een document direct bij het openen van het portaal in beeld, met
+          een downloadknop (bedoeld voor de algemene voorwaarden). Met &quot;Voor wie&quot; bepaal je of een document voor iedereen is of alleen voor consumenten
           (B2C) of bedrijven (B2B) — welk type een klant is, stel je in op de klantkaart.
         </p>
       </div>

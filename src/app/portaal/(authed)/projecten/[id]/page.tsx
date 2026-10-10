@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect, notFound } from 'next/navigation'
-import { Check } from 'lucide-react'
+import { Check, Download, FileText } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
 import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff, StandardDocument } from '@/lib/types'
@@ -114,13 +114,19 @@ export default async function PortalProjectPage({
     })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  const standardDocuments: PortalStandardDocumentRow[] = standardDocumentsFor(
+  const visibleStandardDocuments = standardDocumentsFor(
     (standardDocsData ?? []) as StandardDocument[],
     session.customer.customer_type,
     // Na akkoord blijven de voorwaarden van dát moment staan, ook als er
     // later een nieuwe versie is geüpload.
     termsReferenceDate((quotesForProject ?? []).map((q) => q.akkoord_at))
-  ).map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url) }))
+  )
+  // Uitgelichte documenten (algemene voorwaarden) staan boven de tabbladen,
+  // de rest onder "Algemene documenten" op het tabblad Documenten.
+  const featuredDocuments = visibleStandardDocuments.filter((d) => d.featured)
+  const standardDocuments: PortalStandardDocumentRow[] = visibleStandardDocuments
+    .filter((d) => !d.featured)
+    .map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url) }))
 
   // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
   const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)
@@ -144,6 +150,34 @@ export default async function PortalProjectPage({
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-[#1C1B19]">{(project as Project).title}</h1>
+
+      {featuredDocuments.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
+          {featuredDocuments.map((d) => (
+            <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 text-sm">
+              <FileText size={15} className="text-[#6B6560] shrink-0" />
+              <span className="flex-1 min-w-0 font-medium text-[#1C1B19]">{d.title}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={fileHref(d.file_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs px-3 py-1.5 rounded-full border border-[#DDD8D2] text-[#1C1B19] hover:border-[#C9A96E] transition-colors"
+                >
+                  Bekijken
+                </a>
+                <a
+                  href={`${fileHref(d.file_url)}?download=${encodeURIComponent(d.filename)}`}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-[#1C1B19] text-white hover:bg-[#3d3a37] transition-colors"
+                >
+                  <Download size={12} />
+                  Downloaden
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <PortalTabBar activeTab={tab} hasMaatformulier={hasMaatformulier} />
 

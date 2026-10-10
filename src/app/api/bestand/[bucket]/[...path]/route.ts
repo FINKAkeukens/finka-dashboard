@@ -13,7 +13,7 @@ import type { Customer, StandardDocument } from '@/lib/types'
 const SIGNED_URL_SECONDS = 300
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ bucket: string; path: string[] }> }
 ) {
   const { bucket, path: segments } = await params
@@ -34,7 +34,12 @@ export async function GET(
     }
   }
 
-  const { data, error } = await service.storage.from(bucket).createSignedUrl(path, SIGNED_URL_SECONDS)
+  // ?download=<bestandsnaam> → de browser slaat het bestand op i.p.v. het
+  // te openen (Content-Disposition: attachment), onder die naam.
+  const downloadName = new URL(request.url).searchParams.get('download')?.replace(/[\\/:*?"<>|]/g, '').slice(0, 150)
+  const { data, error } = await service.storage
+    .from(bucket)
+    .createSignedUrl(path, SIGNED_URL_SECONDS, downloadName ? { download: downloadName } : undefined)
   if (error || !data) return NextResponse.json({ error: 'Bestand niet gevonden' }, { status: 404 })
 
   const response = NextResponse.redirect(data.signedUrl, 302)
