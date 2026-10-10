@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser, getPortalCustomer, isStaffUser } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { standardDocumentsFor } from '@/lib/standard-documents'
+import { isForCustomerType } from '@/lib/standard-documents'
 import { isProtectedBucket, type ProtectedBucket } from '@/lib/storage-url'
 import type { Customer, StandardDocument } from '@/lib/types'
 
@@ -52,7 +52,9 @@ async function customerMayOpen(
   // klanttype het document actief is.
   if (bucket === 'project-documenten' && path.startsWith('standaard/')) {
     const { data } = await service.from('finka_standard_documents').select('*').eq('storage_path', path)
-    return standardDocumentsFor((data ?? []) as StandardDocument[], customer.customer_type).length > 0
+    // Elke versie (ook een oudere): een klant met een vroeger akkoord ziet
+    // juist de versie die toen gold — zie standardDocumentsFor.
+    return ((data ?? []) as StandardDocument[]).some((d) => isForCustomerType(d, customer.customer_type))
   }
 
   // Alle andere paden beginnen met het project-ID:

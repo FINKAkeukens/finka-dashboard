@@ -2122,3 +2122,21 @@ ALTER TABLE finka_standard_documents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Staff only" ON finka_standard_documents;
 CREATE POLICY "Staff only" ON finka_standard_documents FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
 GRANT ALL ON TABLE finka_standard_documents TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 82. Versies van standaarddocumenten met een ingangsdatum.
+--
+--    Een nieuwe versie van bv. de algemene voorwaarden vervangt de oude niet,
+--    maar komt ernaast in dezelfde reeks (series_id). valid_from = de dag
+--    vanaf wanneer die versie geldt (NULL = vanaf het begin). Per project
+--    toont het portaal per reeks de nieuwste versie die gold op de dag van
+--    het eerste akkoord op een offerte (of vandaag, zonder akkoord) — zo
+--    houden klanten die al akkoord gaven de voorwaarden van dat moment.
+--    Bestaande documenten worden elk hun eigen reeks, geldig vanaf het begin.
+-- =========================================================
+
+ALTER TABLE finka_standard_documents ADD COLUMN IF NOT EXISTS series_id UUID;
+UPDATE finka_standard_documents SET series_id = id WHERE series_id IS NULL;
+ALTER TABLE finka_standard_documents ALTER COLUMN series_id SET DEFAULT gen_random_uuid();
+ALTER TABLE finka_standard_documents ALTER COLUMN series_id SET NOT NULL;
+ALTER TABLE finka_standard_documents ADD COLUMN IF NOT EXISTS valid_from DATE;

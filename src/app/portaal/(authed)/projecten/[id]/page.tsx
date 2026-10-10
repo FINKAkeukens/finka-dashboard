@@ -6,7 +6,7 @@ import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
 import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff, StandardDocument } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
-import { standardDocumentsFor } from '@/lib/standard-documents'
+import { standardDocumentsFor, termsReferenceDate } from '@/lib/standard-documents'
 import { fileHref } from '@/lib/storage-url'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
@@ -51,7 +51,7 @@ export default async function PortalProjectPage({
     service.from('finka_questionnaire_categories').select('*').order('sort_order', { ascending: true }),
     service.from('finka_questionnaire_templates').select('*').order('sort_order', { ascending: true }),
     service.from('finka_questionnaire_responses').select('*').eq('project_id', id),
-    service.from('finka_quotes').select('id').eq('project_id', id),
+    service.from('finka_quotes').select('id, akkoord_at').eq('project_id', id),
     // Alleen downloads/documenten die staff expliciet zichtbaar heeft gezet —
     // zie de oog-knop op het Documenten-tabblad (migratie-sectie 56).
     service
@@ -116,7 +116,10 @@ export default async function PortalProjectPage({
 
   const standardDocuments: PortalStandardDocumentRow[] = standardDocumentsFor(
     (standardDocsData ?? []) as StandardDocument[],
-    session.customer.customer_type
+    session.customer.customer_type,
+    // Na akkoord blijven de voorwaarden van dát moment staan, ook als er
+    // later een nieuwe versie is geüpload.
+    termsReferenceDate((quotesForProject ?? []).map((q) => q.akkoord_at))
   ).map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url) }))
 
   // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.

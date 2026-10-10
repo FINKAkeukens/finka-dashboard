@@ -24,7 +24,7 @@ import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, Con
 import { leadTimeDays } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 import { DEFAULT_TEXTS } from '@/lib/default-texts'
-import { standardDocumentsFor } from '@/lib/standard-documents'
+import { standardDocumentsFor, termsReferenceDate } from '@/lib/standard-documents'
 
 export default async function ProjectDetailPage({
   params,
@@ -212,7 +212,11 @@ export default async function ProjectDetailPage({
     ])
     projectDocuments = (documentsData ?? []) as ProjectDocument[]
     customerType = (customerTypeData as { customer_type: CustomerType } | null)?.customer_type ?? null
-    portalStandardDocuments = standardDocumentsFor((standardDocsData ?? []) as StandardDocument[], customerType)
+    portalStandardDocuments = standardDocumentsFor(
+      (standardDocsData ?? []) as StandardDocument[],
+      customerType,
+      termsReferenceDate([(akkoordQuote as { akkoord_at: string } | null)?.akkoord_at])
+    )
     const quoteIds = (quotesForProject ?? []).map((q) => q.id)
     if (quoteIds.length) {
       const { data } = await supabase
@@ -414,6 +418,7 @@ export default async function ProjectDetailPage({
           customerId={(project as Project).customer_id}
           customerType={customerType}
           standardDocuments={portalStandardDocuments}
+          termsFixedOn={(akkoordQuote as { akkoord_at: string } | null)?.akkoord_at ?? null}
         />
       ) : (
         <ComingSoonTab

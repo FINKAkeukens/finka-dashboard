@@ -17,8 +17,9 @@ export default async function StandaardDocumentenPage() {
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Standaarddocumenten</h1>
         <p className="text-sm text-[#6B6560] mt-1">
           Deze documenten staan automatisch bij élk project in het klantenportaal (tabblad Documenten), zoals de
-          algemene voorwaarden en onderhoudsinstructies. Vervang je hier een bestand, dan zien alle klanten meteen de
-          nieuwe versie. Met &quot;Voor wie&quot; bepaal je of een document voor iedereen is of alleen voor consumenten
+          algemene voorwaarden en onderhoudsinstructies. Komt er een nieuwe versie, gebruik dan &quot;Nieuwe versie&quot;
+          met een ingangsdatum: klanten die vóór die datum akkoord gaven op hun offerte, blijven de versie zien die toen
+          gold. Met &quot;Voor wie&quot; bepaal je of een document voor iedereen is of alleen voor consumenten
           (B2C) of bedrijven (B2B) — welk type een klant is, stel je in op de klantkaart.
         </p>
       </div>

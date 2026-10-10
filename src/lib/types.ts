@@ -1116,6 +1116,11 @@ export interface StandardDocument {
   storage_path: string | null
   active: boolean
   sort_order: number
+  // Versies van hetzelfde document (bv. AV consumenten v2026-3 en v2026-4)
+  // delen een series_id; valid_from is de ingangsdatum (YYYY-MM-DD, NULL =
+  // geldt al vanaf het begin). Zie standardDocumentsFor + migratie-sectie 82.
+  series_id: string
+  valid_from: string | null
   updated_by: string | null
   created_at: string
   updated_at: string

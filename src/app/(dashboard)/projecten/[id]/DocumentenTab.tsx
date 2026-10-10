@@ -69,6 +69,7 @@ export default function DocumentenTab({
   customerId,
   customerType,
   standardDocuments,
+  termsFixedOn,
 }: {
   projectId: string
   downloads: QuoteDownloadMeta[]
@@ -77,6 +78,8 @@ export default function DocumentenTab({
   customerType: CustomerType | null
   // Al gefilterd op het klanttype — precies wat de klant in het portaal ziet.
   standardDocuments: StandardDocument[]
+  // Moment van het eerste akkoord: vanaf dan liggen de versies vast.
+  termsFixedOn: string | null
 }) {
   const supabase = createClient()
   const [downloads, setDownloads] = useState<QuoteDownloadMeta[]>(initialDownloads)
@@ -215,6 +218,13 @@ export default function DocumentenTab({
           </ul>
         ) : (
           <p className="pl-[23px] text-xs text-[#9A948D]">Nog geen standaarddocumenten voor dit klanttype.</p>
+        )}
+        {termsFixedOn && standardDocuments.length > 0 && (
+          <p className="pl-[23px] text-xs text-[#9A948D]">
+            Versies die golden bij het akkoord op{' '}
+            {new Date(termsFixedOn).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })} — latere
+            versies krijgt deze klant niet te zien.
+          </p>
         )}
       </div>
 
