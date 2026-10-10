@@ -5,6 +5,7 @@ import { Check, FileText, Image as ImageIcon, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { QuestionnaireCategoryItem, QuestionnaireTemplateQuestion } from '@/lib/types'
+import { fileHref } from '@/lib/storage-url'
 import {
   MULTI_SELECT_OTHER_OPTION,
   parseFileAnswer,
@@ -220,7 +221,7 @@ export default function PortalQuestionnaireForm({
                           ) : (
                             <ImageIcon size={14} className="text-[#6B6560] shrink-0" />
                           )}
-                          <a href={f.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-[#1C1B19] hover:underline">
+                          <a href={fileHref(f.url)} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-[#1C1B19] hover:underline">
                             {f.name}
                           </a>
                           <button onClick={() => removeFile(q.id, i)} title="Verwijderen">

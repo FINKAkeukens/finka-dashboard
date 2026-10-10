@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff, FileText, Image as ImageIcon } from 'lucide-react'
 import { QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion } from '@/lib/types'
 import { multiSelectDisplayValues, parseFileAnswer, parseMultiSelectAnswer } from '@/lib/questionnaire'
+import { fileHref } from '@/lib/storage-url'
 
 // Alleen-lezen wat de antwoorden betreft — de klant vult dit zelf in via
 // het klantportaal (/portaal/projecten/[id]) — maar het oog-icoontje per
@@ -145,7 +146,7 @@ export default function VragenlijstTab({
                           {files.map((f, i) => (
                             <a
                               key={i}
-                              href={f.url}
+                              href={fileHref(f.url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-sm text-[#1C1B19] hover:underline w-fit"

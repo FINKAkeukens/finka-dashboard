@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowDown, ArrowUp, Eye, EyeOff, FileText, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { AUDIENCE_LABELS } from '@/lib/standard-documents'
 import type { StandardDocument, StandardDocumentAudience } from '@/lib/types'
+import { fileHref } from '@/lib/storage-url'
 
 const BUCKET = 'project-documenten'
 
@@ -222,7 +223,7 @@ export default function StandardDocumentsForm({ documents: initial }: { document
               </div>
               <div className="flex items-center gap-3 pl-[25px] text-xs text-[#6B6560]">
                 <FileText size={13} className="shrink-0" />
-                <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-[#1C1B19]">
+                <a href={fileHref(doc.file_url)} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-[#1C1B19]">
                   {doc.filename}
                 </a>
                 <span className="text-[#9A948D] shrink-0">

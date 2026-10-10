@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { CheckCircle2, Clock, Eye, EyeOff, FileSignature, FileText, FolderOpen, Trash2, Upload } from 'lucide-react'
 import type { CustomerType, ProjectDocument, QuoteDownloadMeta, StandardDocument } from '@/lib/types'
 import { CUSTOMER_TYPE_LABELS } from '@/lib/standard-documents'
+import { fileHref } from '@/lib/storage-url'
 
 // Twee soorten documenten in één lijst: automatisch bewaarde offerte-PDF's
 // (finka_quote_downloads, ontstaan bij het downloaden van een offerte) en
@@ -206,7 +207,7 @@ export default function DocumentenTab({
           <ul className="flex flex-wrap gap-x-4 gap-y-1 pl-[23px]">
             {standardDocuments.map((d) => (
               <li key={d.id}>
-                <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-[#1C1B19] hover:underline">
+                <a href={fileHref(d.file_url)} target="_blank" rel="noopener noreferrer" className="text-[#1C1B19] hover:underline">
                   {d.title}
                 </a>
               </li>
@@ -230,7 +231,7 @@ export default function DocumentenTab({
                   <FileText size={16} className="text-[#6B6560] shrink-0" />
                   {row.url ? (
                     <a
-                      href={row.url}
+                      href={fileHref(row.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-medium text-[#1C1B19] hover:underline truncate"

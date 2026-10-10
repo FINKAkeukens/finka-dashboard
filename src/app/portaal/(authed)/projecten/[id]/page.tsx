@@ -7,6 +7,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff, StandardDocument } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import { standardDocumentsFor } from '@/lib/standard-documents'
+import { fileHref } from '@/lib/storage-url'
 import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
 import PortalDocumentenList, { type PortalDocumentRow, type PortalStandardDocumentRow } from './PortalDocumentenList'
@@ -97,7 +98,7 @@ export default async function PortalProjectPage({
       kind: 'download' as const,
       id: d.id,
       name: `${d.filename ?? 'Offerte'}.pdf`,
-      url: d.pdf_url as string,
+      url: fileHref(d.pdf_url as string),
       date: d.downloaded_at,
       approval_required: d.approval_required,
       approved_at: d.approved_at,
@@ -106,7 +107,7 @@ export default async function PortalProjectPage({
       kind: 'document' as const,
       id: d.id,
       name: d.filename,
-      url: d.file_url,
+      url: fileHref(d.file_url),
       date: d.uploaded_at,
       approval_required: d.approval_required,
       approved_at: d.approved_at,
@@ -116,7 +117,7 @@ export default async function PortalProjectPage({
   const standardDocuments: PortalStandardDocumentRow[] = standardDocumentsFor(
     (standardDocsData ?? []) as StandardDocument[],
     session.customer.customer_type
-  ).map((d) => ({ id: d.id, name: d.title, url: d.file_url }))
+  ).map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url) }))
 
   // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
   const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)
