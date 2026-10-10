@@ -41,9 +41,17 @@ export default function StandardDocumentsForm({ documents: initial }: { document
   }
 
   // Best-effort: een achtergebleven oud bestand is geen ramp, dus een fout
-  // hier mag het vervangen/verwijderen niet tegenhouden.
+  // hier mag het vervangen/verwijderen niet tegenhouden. Via een API-route,
+  // zie de uitleg daar.
   async function removeFile(path: string | null) {
-    if (path) await supabase.storage.from(BUCKET).remove([path])
+    if (!path) return
+    try {
+      await fetch('/api/instellingen/standaarddocumenten/bestand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    } catch {}
   }
 
   async function currentUserEmail() {
