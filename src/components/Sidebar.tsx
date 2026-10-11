@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link, { useLinkStatus } from 'next/link'
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -190,6 +190,19 @@ export default function Sidebar() {
   )
 }
 
+// Inhoud van een onderbalk-knop. useLinkStatus moet ín de Link zitten: zo
+// licht de getikte knop meteen op, ook als de pagina nog onderweg is.
+function TabContent({ icon: Icon, label, active }: { icon: NavItem['icon']; label: string; active: boolean }) {
+  const { pending } = useLinkStatus()
+  const on = active || pending
+  return (
+    <span className={cn('flex flex-col items-center gap-1 text-[11px]', on ? 'text-[#1C1B19] font-medium' : 'text-[#9A948D]')}>
+      <Icon size={20} strokeWidth={on ? 2.2 : 1.8} className={pending ? 'animate-pulse' : undefined} />
+      {label}
+    </span>
+  )
+}
+
 // Telefoon (< md): onderbalk zoals in een app, met de vier meest gebruikte
 // pagina's en "Meer" voor de rest van het menu. Op desktop onzichtbaar.
 export function MobileNav() {
@@ -233,18 +246,15 @@ export function MobileNav() {
           {mobileTabs.map(({ href, label, icon: Icon }) => {
             const active = !menuOpen && href === activeHref
             return (
+              // Wel prefetch (in tegenstelling tot de rest van het menu): haalt
+              // alleen het laadscherm vooraf op, zodat een tik direct reageert.
               <Link
                 key={href}
                 href={href}
-                prefetch={false}
                 onClick={() => setMenuOpen(false)}
-                className={cn(
-                  'flex flex-col items-center justify-center gap-1 text-[11px]',
-                  active ? 'text-[#1C1B19] font-medium' : 'text-[#9A948D]'
-                )}
+                className="flex flex-col items-center justify-center"
               >
-                <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
-                {label}
+                <TabContent icon={Icon} label={label} active={active} />
               </Link>
             )
           })}
