@@ -62,7 +62,7 @@ export default function NewProjectForm({
   }
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 md:p-8 max-w-2xl">
       <Link href="/projecten" className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19] mb-6">
         <ArrowLeft size={14} />
         Terug naar projecten

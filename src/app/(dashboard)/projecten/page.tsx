@@ -145,19 +145,20 @@ export default async function ProjectenPage({
     }})
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 md:p-8 max-w-7xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#1C1B19]">Projecten</h1>
           <p className="text-sm text-[#6B6560] mt-0.5">{projects.length} projecten totaal</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/planning" className="flex items-center gap-1 text-sm text-[#C9A96E] hover:underline">
+          {/* Op de telefoon staat Planning al in de onderbalk. */}
+          <Link href="/planning" className="hidden md:flex items-center gap-1 text-sm text-[#C9A96E] hover:underline">
             Bekijk tijdlijn <ArrowRight size={14} />
           </Link>
           <Link
             href="/projecten/nieuw"
-            className="flex items-center gap-1.5 bg-[#1C1B19] text-white text-sm px-4 py-2 rounded-lg hover:bg-[#2D2C2A] transition-colors"
+            className="flex items-center gap-1.5 whitespace-nowrap bg-[#1C1B19] text-white text-sm px-4 py-2 rounded-lg hover:bg-[#2D2C2A] transition-colors"
           >
             <Plus size={15} />
             Nieuw project

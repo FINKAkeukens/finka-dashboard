@@ -74,8 +74,8 @@ export default function DeliveryTimesWidget({
 
   return (
     <div className="max-w-6xl bg-white rounded-xl border border-[#DDD8D2] p-5 mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <div className="flex items-center gap-2">
             <Truck size={16} className="text-[#C9A96E]" />
             <h2 className="text-sm font-semibold text-[#1C1B19]">Actuele levertijden</h2>
@@ -96,7 +96,7 @@ export default function DeliveryTimesWidget({
 
       {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(['artego', 'sachsen'] as const).map((brand) => {
           const entry = byBrand.get(brand)
           const parsed = entry?.summary ? parseSummary(entry.summary) : null

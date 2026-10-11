@@ -51,7 +51,7 @@ export default async function PlanningOverviewPage() {
   }))
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Planning</h1>
         <p className="text-sm text-[#6B6560] mt-1">

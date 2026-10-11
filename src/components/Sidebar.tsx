@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +23,8 @@ import {
   FileText,
   Truck,
   FolderOpen,
+  Menu,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -96,10 +98,18 @@ const groups: NavGroup[] = [
   },
 ]
 
-export default function Sidebar() {
+// Vaste knoppen in de onderbalk op de telefoon — wat je onderweg het meest
+// nodig hebt. De rest van het menu zit achter "Meer".
+const mobileTabs: NavItem[] = [
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/planning', label: 'Planning', icon: CalendarRange },
+  { href: '/projecten', label: 'Projecten', icon: FolderKanban },
+  { href: '/klanten', label: 'Klanten', icon: Users },
+]
+
+function useNav() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
 
   // Actief item = de langste href die bij dit pad past — voorkomt dat bv.
   // zowel "Overzicht projecten" (/financieel) als "Kosten" (/financieel/kosten) allebei
@@ -110,46 +120,61 @@ export default function Sidebar() {
     .sort((a, b) => b.length - a.length)[0]
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await createClient().auth.signOut()
     router.push('/login')
   }
 
+  return { pathname, activeHref, handleLogout }
+}
+
+function NavGroups({ activeHref, onNavigate }: { activeHref: string | undefined; onNavigate?: () => void }) {
   return (
-    <aside className="w-56 shrink-0 h-screen sticky top-0 flex flex-col bg-white border-r border-[#DDD8D2]">
+    <>
+      {groups.map((group) => (
+        <div key={group.label}>
+          <div className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-[#9A948D] uppercase">
+            {group.label}
+          </div>
+          <div className="space-y-0.5">
+            {group.items.map(({ href, label, icon: Icon }) => {
+              const active = href === activeHref
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  prefetch={false}
+                  onClick={onNavigate}
+                  className={cn(
+                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+                    active
+                      ? 'bg-[#1C1B19] text-white'
+                      : 'text-[#6B6560] hover:bg-[#F7F5F2] hover:text-[#1C1B19]'
+                  )}
+                >
+                  <Icon size={15} />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </>
+  )
+}
+
+export default function Sidebar() {
+  const { activeHref, handleLogout } = useNav()
+
+  return (
+    <aside className="hidden md:flex w-56 shrink-0 h-screen sticky top-0 flex-col bg-white border-r border-[#DDD8D2]">
       <div className="px-5 py-5 border-b border-[#DDD8D2]">
         <span className="text-base font-semibold tracking-tight text-[#1C1B19]">FINKA</span>
         <span className="text-xs text-[#6B6560] ml-2">Dashboard</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <div className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-[#9A948D] uppercase">
-              {group.label}
-            </div>
-            <div className="space-y-0.5">
-              {group.items.map(({ href, label, icon: Icon }) => {
-                const active = href === activeHref
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    prefetch={false}
-                    className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
-                      active
-                        ? 'bg-[#1C1B19] text-white'
-                        : 'text-[#6B6560] hover:bg-[#F7F5F2] hover:text-[#1C1B19]'
-                    )}
-                  >
-                    <Icon size={15} />
-                    {label}
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+        <NavGroups activeHref={activeHref} />
       </nav>
 
       <div className="px-3 py-4 border-t border-[#DDD8D2]">
@@ -162,5 +187,79 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+  )
+}
+
+// Telefoon (< md): onderbalk zoals in een app, met de vier meest gebruikte
+// pagina's en "Meer" voor de rest van het menu. Op desktop onzichtbaar.
+export function MobileNav() {
+  const { pathname, activeHref, handleLogout } = useNav()
+  // Onthoudt op welke pagina het menu open is gezet: na elke navigatie (ook
+  // via de terug-knop) klopt dat niet meer en is het menu vanzelf dicht.
+  const [openOnPath, setOpenOnPath] = useState<string | null>(null)
+  const menuOpen = openOnPath === pathname
+  const setMenuOpen = (open: boolean) => setOpenOnPath(open ? pathname : null)
+
+  const tabActive = mobileTabs.some((t) => t.href === activeHref)
+
+  return (
+    <div className="md:hidden">
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 bg-white flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-between px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 border-b border-[#DDD8D2]">
+            <div>
+              <span className="text-base font-semibold tracking-tight text-[#1C1B19]">FINKA</span>
+              <span className="text-xs text-[#6B6560] ml-2">Dashboard</span>
+            </div>
+            <button onClick={() => setMenuOpen(false)} aria-label="Menu sluiten" className="p-2 -mr-2 text-[#6B6560]">
+              <X size={20} />
+            </button>
+          </div>
+          <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+            <NavGroups activeHref={activeHref} onNavigate={() => setMenuOpen(false)} />
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[#6B6560] w-full"
+            >
+              <LogOut size={15} />
+              Uitloggen
+            </button>
+          </nav>
+        </div>
+      )}
+
+      <nav className="fixed bottom-0 inset-x-0 z-50 bg-white border-t border-[#DDD8D2] pb-[env(safe-area-inset-bottom)]">
+        <div className="grid grid-cols-5 h-16">
+          {mobileTabs.map(({ href, label, icon: Icon }) => {
+            const active = !menuOpen && href === activeHref
+            return (
+              <Link
+                key={href}
+                href={href}
+                prefetch={false}
+                onClick={() => setMenuOpen(false)}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-1 text-[11px]',
+                  active ? 'text-[#1C1B19] font-medium' : 'text-[#9A948D]'
+                )}
+              >
+                <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                {label}
+              </Link>
+            )
+          })}
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className={cn(
+              'flex flex-col items-center justify-center gap-1 text-[11px]',
+              menuOpen || (!tabActive && activeHref) ? 'text-[#1C1B19] font-medium' : 'text-[#9A948D]'
+            )}
+          >
+            <Menu size={20} />
+            Meer
+          </button>
+        </div>
+      </nav>
+    </div>
   )
 }

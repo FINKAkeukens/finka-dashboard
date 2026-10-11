@@ -12,7 +12,7 @@ export default async function StandaardDocumentenPage() {
     .order('sort_order', { ascending: true })
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 md:p-8 max-w-3xl">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Standaarddocumenten</h1>
         <p className="text-sm text-[#6B6560] mt-1">

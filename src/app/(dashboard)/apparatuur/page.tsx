@@ -25,7 +25,7 @@ export default async function ApparatuurPage() {
   ])
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-[#1C1B19]">Apparatuur</h1>

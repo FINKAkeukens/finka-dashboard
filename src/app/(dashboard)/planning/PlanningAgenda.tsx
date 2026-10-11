@@ -586,7 +586,9 @@ export default function PlanningAgenda({
                         {relativeLabel(date, today)}
                       </span>
                     </div>
-                    <div className="flex-1 min-w-0">
+                    {/* Op de telefoon staat de titel bovenaan over de volle
+                        breedte (anders kapt hij af naast het datumveld). */}
+                    <div className="order-first basis-full sm:order-none sm:basis-auto flex-1 min-w-0">
                       <input
                         title="Titel van deze taak aanpassen"
                         placeholder={milestoneLabel(entry.milestone)}

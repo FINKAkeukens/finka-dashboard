@@ -48,7 +48,7 @@ export default async function KlantenPage({
   const filtered = (customers ?? []) as Customer[]
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#1C1B19]">Klanten</h1>

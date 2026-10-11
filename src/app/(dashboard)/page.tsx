@@ -209,7 +209,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="max-w-6xl mb-8">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Dashboard</h1>
         <p className="text-sm text-[#6B6560] mt-1">Welkom terug bij FINKA</p>
@@ -218,7 +218,7 @@ export default async function DashboardPage() {
       <DeliveryTimesWidget initialData={deliveryTimes} currentWeek={getIsoWeek(new Date())} />
 
       {/* Stats */}
-      <div className="max-w-6xl grid grid-cols-4 gap-4 mb-8">
+      <div className="max-w-6xl grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
         {stats.map(({ label, value, icon: Icon, href, color }) => (
           <Link key={href} href={href} className="bg-white rounded-xl border border-[#DDD8D2] p-5 hover:border-[#C9A96E] transition-colors group">
             <div className="flex items-center justify-between mb-3">
@@ -243,7 +243,11 @@ export default async function DashboardPage() {
         {!projectStatuses?.length ? (
           <p className="text-sm text-[#6B6560]">Nog geen projectstatussen ingesteld</p>
         ) : (
-          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${projectStatuses.length}, minmax(0, 1fr))` }}>
+          // Op de telefoon onder elkaar; vanaf md alle fases naast elkaar.
+          <div
+            className="grid gap-4 grid-cols-1 md:[grid-template-columns:var(--phase-cols)]"
+            style={{ '--phase-cols': `repeat(${projectStatuses.length}, minmax(0, 1fr))` } as React.CSSProperties}
+          >
             {projectStatuses.map((s) => {
               const projectsInPhase = projectsByStatus.get(s.id) ?? []
               return (

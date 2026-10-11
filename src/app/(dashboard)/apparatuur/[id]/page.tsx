@@ -24,7 +24,7 @@ export default async function AppliancePage({ params }: { params: Promise<{ id: 
     .order('name')
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 md:p-8 max-w-2xl">
       <Link href="/apparatuur" className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19] mb-6">
         <ArrowLeft size={14} />
         Terug naar apparatuur

@@ -12,5 +12,8 @@ export const config = {
   // vóórdat de API-route zelf iets ziet. API-routes doen hun eigen
   // auth-check via supabase.auth.getUser(), dus hebben deze sessie-refresh
   // sowieso niet nodig.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // manifest.webmanifest: telefoons halen het manifest op zonder inlogcookie
+  // — zonder deze uitzondering krijgen ze een redirect naar /login en is het
+  // dashboard niet als app te installeren.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

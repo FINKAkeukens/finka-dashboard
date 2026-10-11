@@ -37,7 +37,7 @@ export default async function LeverancierDetailPage({
   ])
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 md:p-8 max-w-4xl">
       <Link href="/leveranciers" className="flex items-center gap-1.5 text-sm text-[#6B6560] hover:text-[#1C1B19] mb-6">
         <ArrowLeft size={14} />
         Terug naar leveranciers

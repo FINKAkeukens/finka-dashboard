@@ -90,7 +90,7 @@ export default function PnlView({
   }
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Financieel overzicht projecten</h1>
         <p className="text-sm text-[#6B6560] mt-1">

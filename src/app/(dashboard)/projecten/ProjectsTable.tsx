@@ -112,6 +112,8 @@ export default function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
   })
 
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
+  // Telefoon: één zoekveld over referentie, project en klant tegelijk.
+  const [mobileQuery, setMobileQuery] = useState('')
 
   // Gekozen sortering onthouden in deze browser, zodat 'ie na het openen van
   // een project en weer teruggaan nog staat. Leest pas na het mounten (niet
@@ -153,6 +155,11 @@ export default function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
     [rows, filters, sort]
   )
 
+  const mobileTerm = mobileQuery.trim().toLowerCase()
+  const mobileRows = mobileTerm
+    ? filtered.filter((row) => searchableKeys.some((key) => row[key].toLowerCase().includes(mobileTerm)))
+    : filtered
+
   function setFilter(key: SearchableKey, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
@@ -179,7 +186,62 @@ export default function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
+      {/* Telefoon: kaartjes i.p.v. de brede tabel. */}
+      <div className="md:hidden space-y-2">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A948D]" />
+          <input
+            value={mobileQuery}
+            onChange={(e) => setMobileQuery(e.target.value)}
+            placeholder="Zoek project, klant of referentie"
+            className="w-full rounded-lg border border-[#DDD8D2] bg-white py-2.5 pl-9 pr-9 text-base text-[#1C1B19] placeholder:text-[#9A948D] focus:border-[#1C1B19] focus:outline-none"
+          />
+          {mobileQuery && (
+            <button
+              type="button"
+              onClick={() => setMobileQuery('')}
+              aria-label="Zoekopdracht wissen"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9A948D]"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {!mobileRows.length ? (
+          <p className="py-12 text-center text-sm text-[#6B6560]">Geen projecten die aan de zoekopdracht voldoen</p>
+        ) : (
+          mobileRows.map((row) => (
+            <Link
+              key={row.id}
+              href={`/projecten/${row.id}`}
+              className="block bg-white rounded-xl border border-[#DDD8D2] px-4 py-3 active:bg-[#F7F5F2]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium text-[#1C1B19] truncate">{row.title}</span>
+                  {row.hasPortalActivity && <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />}
+                </span>
+                {row.statusLabel && (
+                  <span
+                    className="shrink-0 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap"
+                    style={{ borderColor: row.statusColor ?? undefined, color: row.statusColor ?? undefined }}
+                  >
+                    {row.statusLabel}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-[#6B6560] truncate mt-0.5">
+                {row.customerName || '—'} · <span className="font-mono text-xs">{row.reference}</span>
+              </p>
+              <p className="text-xs mt-1.5 truncate">
+                <span className={row.milestoneClass || 'text-[#9A948D] italic'}>{row.milestone}</span>
+              </p>
+            </Link>
+          ))
+        )}
+      </div>
+
+      <div className="hidden md:block bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#DDD8D2] bg-[#F7F5F2]">
