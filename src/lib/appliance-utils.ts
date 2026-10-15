@@ -1,4 +1,5 @@
 import { Appliance, AppliancePackage, ApplianceSpecs, ApplianceType, EnergyLabel, OvenSubtype, ProductLine } from '@/lib/types'
+import { decodeConflicts, decodeModel } from '@/lib/model-decoder'
 
 // Types uit de bibliotheek die als accessoire gelden i.p.v. als apparatuur:
 // ze horen in de offerte bij regeltype 'accessoire', in de kostenrij
@@ -394,4 +395,11 @@ export const SPEC_LABELS: Record<string, string> = {
   niche_height_cm: 'Nishoogte (cm)', niche_width_cm: 'Nisbreedte (cm)', niche_depth_cm: 'Nisdiepte (cm)',
   width_cm: 'Breedte (cm)', height_cm: 'Hoogte (cm)', depth_cm: 'Diepte (cm)',
   energy_label: 'Energielabel', db_sound: 'Geluid (dB)', color: 'Kleur', series: 'Serie', product_line: 'Productlijn', custom_type: 'Omschrijving',
+}
+
+// Alle waarschuwingen voor één apparaat: onmogelijke waardes + afwijkingen
+// van wat het modelnummer zegt (zie model-decoder.ts).
+export function qualityWarnings(a: { type: string; brand?: string | null; model?: string | null; specs?: ApplianceSpecs | null }): string[] {
+  const specs = a.specs ?? {}
+  return [...sanityWarnings(a.type, specs), ...decodeConflicts(a.type, specs, decodeModel(a.brand, a.model))]
 }

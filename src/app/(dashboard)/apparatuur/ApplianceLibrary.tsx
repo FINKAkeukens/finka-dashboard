@@ -18,7 +18,7 @@ import {
   formatPrice,
   getSpecSummary,
   priceRange,
-  sanityWarnings,
+  qualityWarnings,
   specEntries,
 } from '@/lib/appliance-utils'
 import {
@@ -200,7 +200,7 @@ function DetailSheet({
   if (!appliance) return null
   const history = appliance.price_history ?? []
   const specs = specEntries(appliance.type, appliance.specs ?? {})
-  const warnings = sanityWarnings(appliance.type, appliance.specs ?? {})
+  const warnings = qualityWarnings(appliance)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -226,13 +226,13 @@ function DetailSheet({
           {appliance.verified_at ? (
             <p className="flex items-center gap-1.5 text-xs text-green-700">
               <BadgeCheck size={14} />
-              Online gecontroleerd op {new Date(appliance.verified_at).toLocaleDateString('nl-NL')}
+              Gecontroleerd op {new Date(appliance.verified_at).toLocaleDateString('nl-NL')}
               {appliance.verification?.sources?.[0] && (
                 <a href={appliance.verification.sources[0]} target="_blank" rel="noreferrer" className="underline">bron</a>
               )}
             </p>
           ) : (
-            <p className="text-xs text-[#6B6560]">Nog niet online gecontroleerd — open &quot;Bewerken&quot; → Controleer online.</p>
+            <p className="text-xs text-[#6B6560]">Nog niet gecontroleerd — staat op de lijst &quot;Nog te controleren&quot;.</p>
           )}
 
           {warnings.length > 0 && (
@@ -327,6 +327,8 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   const [productLineFilter, setProductLineFilter] = useState('alle')
   // Merk — ook generiek, opties dynamisch afgeleid uit de aanwezige apparaten.
   const [brandFilter, setBrandFilter] = useState('alle')
+  // Alleen apparaten die nog niet gecontroleerd zijn of een waarschuwing hebben.
+  const [onlyToCheck, setOnlyToCheck] = useState(false)
   const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('price')
   const [sortAsc, setSortAsc] = useState(true)
@@ -340,6 +342,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
     [appliances]
   )
   const detailAppliance = appliances.find(a => a.id === detailId) ?? null
+  const toCheckCount = useMemo(() => appliances.filter(a => !a.verified_at || qualityWarnings(a).length > 0).length, [appliances])
 
   // Groep waar een type bij hoort (indien van toepassing) — oven/combi-oven/
   // magnetron vallen bijv. samen onder "Oven en magnetron".
@@ -387,6 +390,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
         if (productLineFilter === PRODUCT_LINE_FILTER_NONE ? !!a.specs?.product_line : a.specs?.product_line !== productLineFilter) return false
       }
       if (brandFilter !== 'alle' && a.brand !== brandFilter) return false
+      if (onlyToCheck && a.verified_at && qualityWarnings(a).length === 0) return false
       if (q) {
         const s = q.toLowerCase()
         const matchesType = TYPE_LABELS[a.type]?.toLowerCase().includes(s)
@@ -405,7 +409,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (specFilters.bowls && specs.bowls !== specFilters.bowls) return false
       return true
     })
-  }, [appliances, activeView, activeCategory, energyLabelFilters, productLineFilter, brandFilter, q, specFilters])
+  }, [appliances, activeView, activeCategory, energyLabelFilters, productLineFilter, brandFilter, onlyToCheck, q, specFilters])
 
   const sorted = useMemo(() => {
     const items = [...filtered]
@@ -598,6 +602,15 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
+              <button
+                onClick={() => setOnlyToCheck(v => !v)}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                  onlyToCheck ? 'border-amber-600 bg-amber-600 text-white' : 'border-[#DDD8D2] bg-white text-[#6B6560] hover:border-[#1C1B19]'
+                }`}
+              >
+                <AlertTriangle size={12} />
+                Nog te controleren ({toCheckCount})
+              </button>
               <div className="flex gap-1">
                 {['alle', 'budget', 'midden', 'premium'].map(c => (
                   <button
@@ -636,7 +649,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
           {/* Overzicht: type-kaarten, geen lange lijst — behalve tijdens het
               zoeken, dan tonen we direct de resultatenlijst hieronder,
               anders leek zoeken vanuit Overzicht niets te doen. */}
-          {activeView === 'overview' && !q ? (
+          {activeView === 'overview' && !q && !onlyToCheck ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {navEntries.map(({ key, label, count }) => {
                 const items = itemsForNavKey(key)
@@ -719,7 +732,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                           <p className="font-medium text-[#1C1B19]">{a.brand}</p>
                           <p className="flex items-center gap-1 text-xs text-[#6B6560]">
                             {a.model}
-                            {sanityWarnings(a.type, a.specs ?? {}).length > 0 && (
+                            {qualityWarnings(a).length > 0 && (
                               <AlertTriangle size={12} className="text-amber-600" aria-label="Controleer gegevens" />
                             )}
                           </p>

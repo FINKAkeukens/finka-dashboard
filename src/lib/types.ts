@@ -62,13 +62,16 @@ export interface Appliance {
   quote_date: string | null
   created_at: string
   supplier?: Supplier
-  // Laatste online controle tegen officiële specs (migratie-sectie 83) —
-  // null = nog nooit gecontroleerd. Zie src/lib/appliance-verify.ts.
+  // Wanneer type/maten/specs voor het laatst tegen officiële bronnen zijn
+  // gecontroleerd (migratie-sectie 84) — null = staat nog op de lijst
+  // "Nog te controleren". Zetten gebeurt handmatig in het bewerkscherm of
+  // via een controle-ronde in Claude Code.
   verified_at?: string | null
   verification?: ApplianceVerificationMeta | null
 }
 
 export interface ApplianceVerificationMeta {
+  method?: 'handmatig' | 'claude-code'
   confidence: 'hoog' | 'middel' | 'laag'
   official_name?: string
   description?: string

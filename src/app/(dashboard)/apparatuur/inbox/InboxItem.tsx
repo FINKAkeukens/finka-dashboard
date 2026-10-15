@@ -1,14 +1,22 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, ChevronUp, Check, X, Paperclip, RefreshCw, BadgeCheck, Loader2, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronUp, Check, X, Paperclip, RefreshCw, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AiExtracted, Appliance } from '@/lib/types'
-import { CATEGORY_COLORS, TYPE_LABELS, TYPE_ORDER, findDuplicateAppliance, getSpecSummary, sanityWarnings } from '@/lib/appliance-utils'
-import type { VerifyResult } from '@/lib/appliance-verify'
+import { CATEGORY_COLORS, TYPE_LABELS, TYPE_ORDER, findDuplicateAppliance, getSpecSummary, qualityWarnings, suggestCategory } from '@/lib/appliance-utils'
+import { applyDecoded, decodeModel } from '@/lib/model-decoder'
+
+// Wat de AI uit de offerte haalde, rechtgezet waar het modelnummer of de
+// vaste prijsklasse-regel het zeker weet (gratis, zonder internet).
+function withDecoded(a: Partial<Appliance>): Partial<Appliance> {
+  const fixed = applyDecoded({ ...a, specs: a.specs ?? {} }, decodeModel(a.brand, a.model))
+  const rule = fixed.type === 'anders' || !a.brand ? null : suggestCategory(a.brand, fixed.specs?.series as string | undefined)
+  return { ...fixed, type: fixed.type as Appliance['type'], category: rule ?? a.category }
+}
 
 type LibraryRef = { id: string; brand: string; model: string }
 
@@ -36,76 +44,19 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
       body: JSON.stringify({ id: item.id }),
     })
     const data = await res.json()
-    if (data.appliances) setAppliances(data.appliances)
+    if (data.appliances) setAppliances((data.appliances as Partial<Appliance>[]).map(withDecoded))
     setReprocessing(false)
     router.refresh()
   }
-  const [appliances, setAppliances] = useState(item.ai_extracted?.appliances ?? [])
+  const [appliances, setAppliances] = useState(() => (item.ai_extracted?.appliances ?? []).map(withDecoded))
   const router = useRouter()
   const supabase = createClient()
   const [library, setLibrary] = useState<LibraryRef[] | null>(null)
-  const [verifying, setVerifying] = useState<Set<number>>(new Set())
-  const [verifyErrors, setVerifyErrors] = useState<Record<number, string>>({})
-  const verifyStarted = useRef(false)
 
-  // Bij openklappen: elk product dat nog niet in de bibliotheek staat online
-  // controleren tegen de officiële specs (type, maten, specs). Gebeurt één
-  // keer per mail — het resultaat wordt in de wachtrij bewaard.
+  // Bibliotheek ophalen bij openklappen, om dubbele producten te kunnen tonen.
   useEffect(() => {
-    if (!expanded || readonly || verifyStarted.current) return
-    verifyStarted.current = true
-    ;(async () => {
-      const { data } = await supabase.from('finka_appliances').select('id, brand, model')
-      const lib = (data ?? []) as LibraryRef[]
-      setLibrary(lib)
-      const todo = appliances
-        .map((a, i) => ({ a, i }))
-        .filter(({ a }) => a.brand && a.model && !a.verified_at && !findDuplicateAppliance(a.brand, a.model, lib))
-      if (todo.length === 0) return
-      setVerifying(new Set(todo.map((t) => t.i)))
-      const results = await Promise.all(todo.map(async ({ a, i }) => {
-        try {
-          const res = await fetch('/api/apparatuur/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: a.type, brand: a.brand, model: a.model, specs: a.specs ?? {}, notes: a.notes ?? null }),
-          })
-          const r = await res.json() as VerifyResult & { error?: string }
-          if (!res.ok) throw new Error(r.error ?? 'Controle mislukt')
-          return { i, r }
-        } catch (e) {
-          setVerifyErrors((prev) => ({ ...prev, [i]: e instanceof Error ? e.message : String(e) }))
-          return { i, r: null }
-        } finally {
-          setVerifying((prev) => { const n = new Set(prev); n.delete(i); return n })
-        }
-      }))
-      let merged: Partial<Appliance>[] = []
-      setAppliances((prev) => {
-        merged = prev.map((a, i) => {
-          const r = results.find((x) => x.i === i)?.r
-          if (!r?.found) return a
-          return {
-            ...a,
-            type: r.type,
-            brand: r.brand,
-            model: r.model,
-            category: r.category ?? a.category,
-            specs: r.specs,
-            // Onderschrift uit de offerte blijft leidend; omschrijving alleen als aanvulling.
-            notes: a.notes || r.description,
-            verified_at: new Date().toISOString(),
-            verification: { confidence: r.confidence, official_name: r.official_name, description: r.description, sources: r.sources },
-          }
-        })
-        return merged
-      })
-      if (merged.length > 0) {
-        await supabase.from('finka_email_queue')
-          .update({ ai_extracted: { ...(item.ai_extracted ?? {}), appliances: merged } })
-          .eq('id', item.id)
-      }
-    })()
+    if (!expanded || library) return
+    supabase.from('finka_appliances').select('id, brand, model').then(({ data }) => setLibrary((data ?? []) as LibraryRef[]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded])
 
@@ -185,8 +136,6 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
         supplier_id,
         quote_date: extracted?.quote_date ?? null,
         source_email_subject: item.subject,
-        verified_at: a.verified_at ?? null,
-        verification: a.verification ?? null,
       })
       if (error) errors.push(`${a.brand} ${a.model}: ${error.message}`)
     }
@@ -251,14 +200,8 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
                   {(() => {
                     const dup = library && a.brand && a.model ? findDuplicateAppliance(a.brand, a.model, library) : undefined
                     if (dup) return <p className="text-xs text-[#6B6560]">Staat al in de bibliotheek ({dup.brand} {dup.model}) — alleen de prijs wordt bijgewerkt.</p>
-                    if (verifying.has(i)) return <p className="flex items-center gap-1.5 text-xs text-[#6B6560]"><Loader2 size={12} className="animate-spin" /> Online controleren…</p>
-                    if (verifyErrors[i]) return <p className="flex items-center gap-1.5 text-xs text-amber-700"><AlertTriangle size={12} /> Online controle mislukt: {verifyErrors[i]}</p>
-                    if (a.verified_at) return (
-                      <p className="flex items-center gap-1.5 text-xs text-green-700">
-                        <BadgeCheck size={12} /> Online gecontroleerd{a.verification?.official_name ? `: ${a.verification.official_name}` : ''}
-                        {a.verification?.confidence && a.verification.confidence !== 'hoog' ? ` (zekerheid ${a.verification.confidence})` : ''}
-                      </p>
-                    )
+                    const d = decodeModel(a.brand, a.model)
+                    if (d) return <p className="flex items-center gap-1.5 text-xs text-[#6B6560]"><Wand2 size={12} /> Uit modelnummer: {d.explanation}</p>
                     return null
                   })()}
                   <div className="grid grid-cols-4 gap-2 items-center">
@@ -317,7 +260,7 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
                   {a.type && (
                     <p className="text-xs text-[#6B6560]">
                       {getSpecSummary(a as Appliance)}
-                      {sanityWarnings(a.type, a.specs ?? {}).map((w) => (
+                      {qualityWarnings({ type: a.type, brand: a.brand, model: a.model, specs: a.specs }).map((w) => (
                         <span key={w} className="ml-2 text-amber-700">⚠ {w}</span>
                       ))}
                     </p>
@@ -379,7 +322,7 @@ export default function InboxItem({ item, readonly = false }: { item: EmailQueue
           {/* Acties */}
           {!readonly && (
             <div className="flex gap-2 pt-1 flex-wrap">
-              <Button size="sm" onClick={handleApprove} disabled={saving || appliances.length === 0 || verifying.size > 0}>
+              <Button size="sm" onClick={handleApprove} disabled={saving || appliances.length === 0}>
                 <Check size={13} className="mr-1.5" />
                 {saving ? 'Opslaan...' : `${appliances.length} product${appliances.length !== 1 ? 'en' : ''} toevoegen`}
               </Button>

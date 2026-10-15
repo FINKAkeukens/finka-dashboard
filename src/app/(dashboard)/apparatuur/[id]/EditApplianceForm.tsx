@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS, PRODUCT_LINES, sanityWarnings } from '@/lib/appliance-utils'
-import { AlertTriangle, Trash2 } from 'lucide-react'
-import ApplianceVerifyPanel from '@/components/ApplianceVerifyPanel'
-import type { VerifyResult } from '@/lib/appliance-verify'
+import { ENERGY_LABELS, PRODUCT_LINES, qualityWarnings, suggestCategory } from '@/lib/appliance-utils'
+import { applyDecoded, decodeModel } from '@/lib/model-decoder'
+import { AlertTriangle, Trash2, Wand2 } from 'lucide-react'
 
 // Nominale nismaten zoals leveranciers ze noemen, per soort apparaat.
 const NICHE_HEIGHT_OPTIONS: Record<string, number[]> = {
@@ -78,17 +77,18 @@ export default function EditApplianceForm({
   const [quoteDate, setQuoteDate] = useState((appliance.quote_date as string) ?? '')
   const [notes, setNotes] = useState((appliance.notes as string) ?? '')
   const [specs, setSpecs] = useState<Record<string, unknown>>((appliance.specs as Record<string, unknown>) ?? {})
-  const [verification, setVerification] = useState<VerifyResult | null>(null)
-  const warnings = sanityWarnings(type, specs)
+  const wasVerified = !!appliance.verified_at
+  const [verified, setVerified] = useState(wasVerified)
+  const warnings = qualityWarnings({ type, brand, model, specs })
+  const decoded = decodeModel(brand, model)
+  const decodedNext = decoded ? applyDecoded({ type, specs }, decoded) : null
+  const decodeChanges = decodedNext && (decodedNext.type !== type || JSON.stringify(decodedNext.specs) !== JSON.stringify(specs))
+  const ruleCategory = type === 'anders' ? null : suggestCategory(brand, specs.series as string | undefined)
 
-  function applyVerification(next: { type: string; brand: string; model: string; category: string; specs: Record<string, unknown>; notes: string }, result: VerifyResult) {
-    setType(next.type as ApplianceType)
-    setBrand(next.brand)
-    setModel(next.model)
-    setCategory(next.category)
-    setSpecs(next.specs)
-    setNotes(next.notes)
-    setVerification(result)
+  function applyFromModel() {
+    if (!decodedNext) return
+    setType(decodedNext.type as ApplianceType)
+    setSpecs(decodedNext.specs as Record<string, unknown>)
   }
 
   function updateSpec(key: string, value: unknown) {
@@ -106,9 +106,10 @@ export default function EditApplianceForm({
       quote_date: quoteDate || null,
       notes: notes || null,
       specs,
-      ...(verification ? {
-        verified_at: new Date().toISOString(),
-        verification: { confidence: verification.confidence, official_name: verification.official_name, description: verification.description, sources: verification.sources },
+      // Alleen bij een wijziging van het vinkje — een bestaande controle-datum blijft anders staan.
+      ...(verified !== wasVerified ? {
+        verified_at: verified ? new Date().toISOString() : null,
+        verification: verified ? { method: 'handmatig', confidence: 'hoog', sources: [] } : null,
       } : {}),
     }).eq('id', appliance.id as string)
 
@@ -187,10 +188,21 @@ export default function EditApplianceForm({
         </Field>
       </div>
 
-      <ApplianceVerifyPanel
-        current={{ type, brand, model, category, specs, notes }}
-        onApply={applyVerification}
-      />
+      {decoded && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#DDD8D2] bg-[#FAF9F7] px-3 py-2 text-sm">
+          <p className="flex items-center gap-1.5 text-[#6B6560]"><Wand2 size={13} /> Uit modelnummer: {decoded.explanation}</p>
+          {decodeChanges && (
+            <Button type="button" size="sm" variant="outline" onClick={applyFromModel}>Overnemen</Button>
+          )}
+        </div>
+      )}
+
+      {ruleCategory && ruleCategory !== category && (
+        <p className="text-sm text-[#6B6560]">
+          Volgens de vaste regel hoort dit bij <span className="font-medium capitalize">{ruleCategory}</span>.{' '}
+          <button type="button" className="underline" onClick={() => setCategory(ruleCategory)}>Overnemen</button>
+        </p>
+      )}
 
       {warnings.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -347,6 +359,16 @@ export default function EditApplianceForm({
           </Field>
         )}
       </div>
+
+      <label className="flex items-start gap-2 rounded-lg border border-[#DDD8D2] px-3 py-2 text-sm">
+        <input type="checkbox" className="mt-0.5" checked={verified} onChange={e => setVerified(e.target.checked)} />
+        <span>
+          <span className="font-medium text-[#1C1B19]">Gecontroleerd</span>
+          <span className="block text-xs text-[#6B6560]">
+            Type, maten en specs kloppen met de fabrikant/leverancier. Niet aangevinkt = staat op de lijst &quot;Nog te controleren&quot;.
+          </span>
+        </span>
+      </label>
 
       <Field label="Notities">
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}

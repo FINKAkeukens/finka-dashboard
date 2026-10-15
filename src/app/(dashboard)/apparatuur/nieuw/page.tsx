@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Globe, Loader2 } from 'lucide-react'
+import { ArrowLeft, Wand2 } from 'lucide-react'
 import Link from 'next/link'
 import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS, PRODUCT_LINES, findDuplicateAppliance } from '@/lib/appliance-utils'
-import type { VerifyResult } from '@/lib/appliance-verify'
+import { ENERGY_LABELS, PRODUCT_LINES, findDuplicateAppliance, suggestCategory } from '@/lib/appliance-utils'
+import { applyDecoded, decodeModel } from '@/lib/model-decoder'
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
   { value: 'kookplaat', label: 'Kookplaat' },
@@ -35,60 +35,14 @@ export default function NieuweApparatuurPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [type, setType] = useState<ApplianceType>('kookplaat')
-  const [lookupBrand, setLookupBrand] = useState('')
-  const [lookupModel, setLookupModel] = useState('')
-  const [lookupPrice, setLookupPrice] = useState('')
-  const [lookupBusy, setLookupBusy] = useState(false)
-  const [lookupError, setLookupError] = useState('')
+  const [brandInput, setBrandInput] = useState('')
+  const [modelInput, setModelInput] = useState('')
+  const decoded = decodeModel(brandInput, modelInput)
 
   // Bestaat dit apparaat al (ook met iets andere schrijfwijze van het model)?
   async function existingDuplicate(brand: string, model: string) {
     const { data } = await supabase.from('finka_appliances').select('id, brand, model').ilike('brand', brand.trim())
     return findDuplicateAppliance(brand, model, data ?? [])
-  }
-
-  // Snelle route: merk + model → online opzoeken → direct opslaan met de
-  // gevonden specs → door naar het bewerkscherm om te controleren.
-  async function handleLookup() {
-    if (!lookupBrand.trim() || !lookupModel.trim()) { setLookupError('Vul merk en model in'); return }
-    setLookupBusy(true)
-    setLookupError('')
-    const dup = await existingDuplicate(lookupBrand, lookupModel)
-    if (dup) {
-      setLookupBusy(false)
-      setLookupError(`Staat al in de bibliotheek als ${dup.brand} ${dup.model}`)
-      return
-    }
-    try {
-      const res = await fetch('/api/apparatuur/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: lookupBrand.trim(), model: lookupModel.trim() }),
-      })
-      const r = await res.json() as VerifyResult & { error?: string }
-      if (!res.ok) throw new Error(r.error ?? 'Opzoeken mislukt')
-      if (!r.found) throw new Error('Niet gevonden online — controleer het modelnummer of vul hieronder handmatig in')
-      const dup2 = await existingDuplicate(r.brand, r.model)
-      if (dup2) throw new Error(`Staat al in de bibliotheek als ${dup2.brand} ${dup2.model}`)
-      const price = lookupPrice ? Number(lookupPrice) : null
-      const { data, error } = await supabase.from('finka_appliances').insert({
-        type: r.type,
-        brand: r.brand,
-        model: r.model,
-        price,
-        category: r.category,
-        specs: r.specs,
-        notes: r.description || null,
-        price_history: price ? [{ price, date: new Date().toISOString().slice(0, 10), supplier_name: null, email_subject: null }] : [],
-        verified_at: new Date().toISOString(),
-        verification: { confidence: r.confidence, official_name: r.official_name, description: r.description, sources: r.sources },
-      }).select('id').single()
-      if (error) throw new Error(error.message)
-      router.push(`/apparatuur/${data.id}`)
-    } catch (e) {
-      setLookupError(e instanceof Error ? e.message : String(e))
-      setLookupBusy(false)
-    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -173,13 +127,17 @@ export default function NieuweApparatuurPage() {
       }
     }
 
+    // Modelnummer-lezer vult ontbrekende velden aan en zet nismaat/type recht.
+    const fixed = applyDecoded({ type, specs }, decodeModel(form.get('brand') as string, form.get('model') as string))
+    const ruleCategory = fixed.type === 'anders' ? null : suggestCategory(form.get('brand') as string, fixed.specs.series as string | undefined)
+
     const { error } = await supabase.from('finka_appliances').insert({
-      type,
+      type: fixed.type,
       brand: form.get('brand') as string,
       model: form.get('model') as string,
       price: form.get('price') ? Number(form.get('price')) : null,
-      category: form.get('category') as string || null,
-      specs,
+      category: form.get('category') as string || ruleCategory,
+      specs: fixed.specs,
       notes: form.get('notes') as string || null,
       supplier_id,
       quote_date: form.get('quote_date') as string || null,
@@ -197,25 +155,6 @@ export default function NieuweApparatuurPage() {
       </Link>
       <h1 className="text-2xl font-semibold text-[#1C1B19] mb-6">Apparatuur toevoegen</h1>
 
-      <div className="mb-6 rounded-xl border border-[#DDD8D2] bg-white p-6 space-y-4">
-        <div>
-          <p className="font-medium text-[#1C1B19]">Snel toevoegen via opzoeken</p>
-          <p className="text-sm text-[#6B6560]">Vul merk en modelnummer in — type, maten en specificaties worden online opgezocht.</p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5"><Label>Merk</Label><Input value={lookupBrand} onChange={e => setLookupBrand(e.target.value)} placeholder="bijv. Siemens" /></div>
-          <div className="space-y-1.5"><Label>Model</Label><Input value={lookupModel} onChange={e => setLookupModel(e.target.value)} placeholder="bijv. KI86NSFE0" /></div>
-          <div className="space-y-1.5"><Label>Prijs (€ excl. BTW)</Label><Input type="number" step="0.01" value={lookupPrice} onChange={e => setLookupPrice(e.target.value)} /></div>
-        </div>
-        {lookupError && <p className="text-sm text-red-600">{lookupError}</p>}
-        <Button type="button" onClick={handleLookup} disabled={lookupBusy}>
-          {lookupBusy ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Globe size={13} className="mr-1.5" />}
-          {lookupBusy ? 'Bezig met opzoeken (±30 s)…' : 'Opzoeken en toevoegen'}
-        </Button>
-      </div>
-
-      <p className="mb-3 text-sm text-[#6B6560]">Of handmatig invullen:</p>
-
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-[#DDD8D2] p-6 space-y-5">
         {/* Basisinfo */}
         <div className="space-y-1.5">
@@ -229,13 +168,22 @@ export default function NieuweApparatuurPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Merk *</Label>
-            <Input name="brand" required placeholder="bijv. Siemens" />
+            <Input name="brand" required placeholder="bijv. Siemens" value={brandInput} onChange={e => setBrandInput(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label>Model *</Label>
-            <Input name="model" required placeholder="bijv. EX645FXB1E" />
+            <Input name="model" required placeholder="bijv. EX645FXB1E" value={modelInput} onChange={e => setModelInput(e.target.value)} />
           </div>
         </div>
+
+        {decoded && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#DDD8D2] bg-[#FAF9F7] px-3 py-2 text-sm">
+            <p className="flex items-center gap-1.5 text-[#6B6560]"><Wand2 size={13} /> Herkend: {decoded.explanation} — wordt bij opslaan automatisch ingevuld.</p>
+            {decoded.type && decoded.type !== type && (
+              <Button type="button" size="sm" variant="outline" onClick={() => setType(decoded.type!)}>Type overnemen</Button>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
