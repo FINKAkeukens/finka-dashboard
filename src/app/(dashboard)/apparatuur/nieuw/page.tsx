@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Globe, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS, PRODUCT_LINES } from '@/lib/appliance-utils'
+import { ENERGY_LABELS, PRODUCT_LINES, findDuplicateAppliance } from '@/lib/appliance-utils'
+import type { VerifyResult } from '@/lib/appliance-verify'
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
   { value: 'kookplaat', label: 'Kookplaat' },
@@ -34,12 +35,72 @@ export default function NieuweApparatuurPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [type, setType] = useState<ApplianceType>('kookplaat')
+  const [lookupBrand, setLookupBrand] = useState('')
+  const [lookupModel, setLookupModel] = useState('')
+  const [lookupPrice, setLookupPrice] = useState('')
+  const [lookupBusy, setLookupBusy] = useState(false)
+  const [lookupError, setLookupError] = useState('')
+
+  // Bestaat dit apparaat al (ook met iets andere schrijfwijze van het model)?
+  async function existingDuplicate(brand: string, model: string) {
+    const { data } = await supabase.from('finka_appliances').select('id, brand, model').ilike('brand', brand.trim())
+    return findDuplicateAppliance(brand, model, data ?? [])
+  }
+
+  // Snelle route: merk + model → online opzoeken → direct opslaan met de
+  // gevonden specs → door naar het bewerkscherm om te controleren.
+  async function handleLookup() {
+    if (!lookupBrand.trim() || !lookupModel.trim()) { setLookupError('Vul merk en model in'); return }
+    setLookupBusy(true)
+    setLookupError('')
+    const dup = await existingDuplicate(lookupBrand, lookupModel)
+    if (dup) {
+      setLookupBusy(false)
+      setLookupError(`Staat al in de bibliotheek als ${dup.brand} ${dup.model}`)
+      return
+    }
+    try {
+      const res = await fetch('/api/apparatuur/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand: lookupBrand.trim(), model: lookupModel.trim() }),
+      })
+      const r = await res.json() as VerifyResult & { error?: string }
+      if (!res.ok) throw new Error(r.error ?? 'Opzoeken mislukt')
+      if (!r.found) throw new Error('Niet gevonden online — controleer het modelnummer of vul hieronder handmatig in')
+      const dup2 = await existingDuplicate(r.brand, r.model)
+      if (dup2) throw new Error(`Staat al in de bibliotheek als ${dup2.brand} ${dup2.model}`)
+      const price = lookupPrice ? Number(lookupPrice) : null
+      const { data, error } = await supabase.from('finka_appliances').insert({
+        type: r.type,
+        brand: r.brand,
+        model: r.model,
+        price,
+        category: r.category,
+        specs: r.specs,
+        notes: r.description || null,
+        price_history: price ? [{ price, date: new Date().toISOString().slice(0, 10), supplier_name: null, email_subject: null }] : [],
+        verified_at: new Date().toISOString(),
+        verification: { confidence: r.confidence, official_name: r.official_name, description: r.description, sources: r.sources },
+      }).select('id').single()
+      if (error) throw new Error(error.message)
+      router.push(`/apparatuur/${data.id}`)
+    } catch (e) {
+      setLookupError(e instanceof Error ? e.message : String(e))
+      setLookupBusy(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
     setError('')
     const form = new FormData(e.currentTarget)
+    const dup = await existingDuplicate(form.get('brand') as string, form.get('model') as string)
+    if (dup && !confirm(`${dup.brand} ${dup.model} staat al in de bibliotheek. Toch een nieuw product aanmaken?`)) {
+      setLoading(false)
+      return
+    }
 
     const specs: Record<string, unknown> = {}
     if (form.get('energy_label')) specs.energy_label = form.get('energy_label')
@@ -53,7 +114,7 @@ export default function NieuweApparatuurPage() {
     }
     if (type === 'oven' || type === 'combi-oven' || type === 'magnetron') {
       if (form.get('oven_subtype')) specs.oven_subtype = form.get('oven_subtype')
-      if (form.get('width_cm')) specs.width_cm = Number(form.get('width_cm'))
+      if (form.get('niche_height_cm')) specs.niche_height_cm = Number(form.get('niche_height_cm'))
       specs.pyrolysis = form.get('pyrolysis') === 'ja'
       specs.steam = form.get('steam') === 'ja'
       if (form.get('capacity_liters')) specs.capacity_liters = Number(form.get('capacity_liters'))
@@ -70,6 +131,8 @@ export default function NieuweApparatuurPage() {
     }
     if (type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') {
       if (form.get('fridge_liters')) specs.fridge_liters = Number(form.get('fridge_liters'))
+      if (form.get('niche_height_cm')) specs.niche_height_cm = Number(form.get('niche_height_cm'))
+      specs.freezer = type === 'koelvries' || type === 'vriezer'
     }
     if (type === 'kokendwaterkraan') {
       if (form.get('functions_count')) specs.functions_count = Number(form.get('functions_count'))
@@ -133,6 +196,25 @@ export default function NieuweApparatuurPage() {
         Terug naar apparatuur
       </Link>
       <h1 className="text-2xl font-semibold text-[#1C1B19] mb-6">Apparatuur toevoegen</h1>
+
+      <div className="mb-6 rounded-xl border border-[#DDD8D2] bg-white p-6 space-y-4">
+        <div>
+          <p className="font-medium text-[#1C1B19]">Snel toevoegen via opzoeken</p>
+          <p className="text-sm text-[#6B6560]">Vul merk en modelnummer in — type, maten en specificaties worden online opgezocht.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5"><Label>Merk</Label><Input value={lookupBrand} onChange={e => setLookupBrand(e.target.value)} placeholder="bijv. Siemens" /></div>
+          <div className="space-y-1.5"><Label>Model</Label><Input value={lookupModel} onChange={e => setLookupModel(e.target.value)} placeholder="bijv. KI86NSFE0" /></div>
+          <div className="space-y-1.5"><Label>Prijs (€ excl. BTW)</Label><Input type="number" step="0.01" value={lookupPrice} onChange={e => setLookupPrice(e.target.value)} /></div>
+        </div>
+        {lookupError && <p className="text-sm text-red-600">{lookupError}</p>}
+        <Button type="button" onClick={handleLookup} disabled={lookupBusy}>
+          {lookupBusy ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Globe size={13} className="mr-1.5" />}
+          {lookupBusy ? 'Bezig met opzoeken (±30 s)…' : 'Opzoeken en toevoegen'}
+        </Button>
+      </div>
+
+      <p className="mb-3 text-sm text-[#6B6560]">Of handmatig invullen:</p>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-[#DDD8D2] p-6 space-y-5">
         {/* Basisinfo */}
@@ -229,8 +311,8 @@ export default function NieuweApparatuurPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>Nis-breedte</Label>
-                <select name="width_cm" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
+                <Label>Nishoogte</Label>
+                <select name="niche_height_cm" className="w-full px-3 py-2 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]">
                   <option value="">—</option>
                   <option value="45">45 cm</option>
                   <option value="60">60 cm</option>
@@ -287,7 +369,8 @@ export default function NieuweApparatuurPage() {
 
           {(type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label>Inhoud (L)</Label><Input name="fridge_liters" type="number" /></div>
+              <div className="space-y-1.5"><Label>Nishoogte (cm)</Label><Input name="niche_height_cm" type="number" step="0.1" placeholder="bijv. 178" /></div>
+              <div className="space-y-1.5"><Label>Koelinhoud (L)</Label><Input name="fridge_liters" type="number" /></div>
             </div>
           )}
 

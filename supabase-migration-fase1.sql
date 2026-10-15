@@ -2161,3 +2161,18 @@ ALTER TABLE finka_standard_documents
 ALTER TABLE finka_euroline_rates
   ADD COLUMN IF NOT EXISTS werkblad_extra_verpakking NUMERIC NOT NULL DEFAULT 75,
   ADD COLUMN IF NOT EXISTS brandstoftoeslag_over_installatie BOOLEAN NOT NULL DEFAULT false;
+
+-- =========================================================
+-- 84. Controle-status van apparatuur in de bibliotheek.
+--
+--    verified_at  = wanneer type/maten/specs voor het laatst tegen de
+--                   fabrikant/leverancier zijn gecontroleerd (vinkje
+--                   "Gecontroleerd" in het bewerkscherm, of een controle-
+--                   ronde via Claude Code); NULL = staat op de lijst
+--                   "Nog te controleren".
+--    verification = { method, confidence, official_name, description, sources[] }.
+--    Bestaande tabel → geen nieuwe GRANT nodig.
+-- =========================================================
+ALTER TABLE finka_appliances
+  ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS verification JSONB;

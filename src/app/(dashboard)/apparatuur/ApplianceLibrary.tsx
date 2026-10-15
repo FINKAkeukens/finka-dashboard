@@ -18,6 +18,7 @@ import {
   formatPrice,
   getSpecSummary,
   priceRange,
+  sanityWarnings,
   specEntries,
 } from '@/lib/appliance-utils'
 import {
@@ -27,7 +28,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Search, X, ShoppingCart, Trash2, ChevronRight, ChevronDown, ExternalLink, Package } from 'lucide-react'
+import { Search, X, ShoppingCart, Trash2, ChevronRight, ChevronDown, ExternalLink, Package, AlertTriangle, BadgeCheck } from 'lucide-react'
 
 const PRODUCT_LINE_FILTER_NONE = '__geen_lijn__'
 
@@ -199,6 +200,7 @@ function DetailSheet({
   if (!appliance) return null
   const history = appliance.price_history ?? []
   const specs = specEntries(appliance.type, appliance.specs ?? {})
+  const warnings = sanityWarnings(appliance.type, appliance.specs ?? {})
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -220,6 +222,24 @@ function DetailSheet({
               </span>
             )}
           </div>
+
+          {appliance.verified_at ? (
+            <p className="flex items-center gap-1.5 text-xs text-green-700">
+              <BadgeCheck size={14} />
+              Online gecontroleerd op {new Date(appliance.verified_at).toLocaleDateString('nl-NL')}
+              {appliance.verification?.sources?.[0] && (
+                <a href={appliance.verification.sources[0]} target="_blank" rel="noreferrer" className="underline">bron</a>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-[#6B6560]">Nog niet online gecontroleerd — open &quot;Bewerken&quot; → Controleer online.</p>
+          )}
+
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {warnings.map((w) => <p key={w} className="flex items-center gap-1.5"><AlertTriangle size={13} /> {w}</p>)}
+            </div>
+          )}
 
           {specs.length > 0 && (
             <div>
@@ -464,17 +484,24 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
               { v: 'combi-magnetron', l: OVEN_SUBTYPE_LABELS['combi-magnetron'] },
               { v: 'stoom', l: OVEN_SUBTYPE_LABELS.stoom },
             ])}
-            {chip('Nis', 'width_cm', [{ v: '45', l: '45 cm' }, { v: '60', l: '60 cm' }])}
+            {chip('Nishoogte', 'niche_height_cm', [{ v: '45', l: '45 cm' }, { v: '60', l: '60 cm' }])}
             {chip('Pyrolyse', 'pyrolysis', [{ v: 'true', l: 'Ja' }, { v: 'false', l: 'Nee' }])}
             {chip('Stoomfunctie', 'steam', [{ v: 'true', l: 'Ja' }, { v: 'false', l: 'Nee' }])}
           </>
         )}
-        {activeView === COOLING_GROUP.key && chip('Soort', 'cooling_type', [
-          { v: 'koelvries', l: 'Koel/vries combinatie' },
-          { v: 'vriezer', l: 'Vriezer' },
-          { v: 'koelkast', l: 'Koelkast' },
-          { v: 'wijnklimaatkast', l: 'Wijnklimaatkast' },
-        ])}
+        {activeView === COOLING_GROUP.key && (
+          <>
+            {chip('Soort', 'cooling_type', [
+              { v: 'koelvries', l: 'Koel/vries combinatie' },
+              { v: 'vriezer', l: 'Vriezer' },
+              { v: 'koelkast', l: 'Koelkast' },
+              { v: 'wijnklimaatkast', l: 'Wijnklimaatkast' },
+            ])}
+            {chip('Nishoogte', 'niche_height_cm', [
+              { v: '88', l: '88' }, { v: '122', l: '122' }, { v: '140', l: '140' }, { v: '158', l: '158' }, { v: '178', l: '178' },
+            ])}
+          </>
+        )}
         {activeView === 'vaatwasser' && (
           <>
             {chip('Integratie', 'integration', [
@@ -486,10 +513,10 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
           </>
         )}
         {activeView === 'afzuigkap' && chip('Type', 'afzuig_type', [
-          { v: 'wand', l: 'Wand' }, { v: 'eiland', l: 'Eiland' }, { v: 'inbouw', l: 'Inbouw' }, { v: 'plafond', l: 'Plafond' },
+          { v: 'wand', l: 'Wand' }, { v: 'eiland', l: 'Eiland' }, { v: 'inbouw', l: 'Inbouw' }, { v: 'onderbouw', l: 'Onderbouw' }, { v: 'plafond', l: 'Plafond' },
         ])}
         {activeView === 'spoelbak' && chip('Bakken', 'bowls', [
-          { v: 'enkel', l: 'Enkel' }, { v: 'dubbel', l: 'Dubbel' },
+          { v: 'enkel', l: 'Enkel' }, { v: 'anderhalf', l: 'Anderhalf' }, { v: 'dubbel', l: 'Dubbel' },
         ])}
       </div>
     )
@@ -690,7 +717,12 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
                         </td>
                         <td className="px-3 py-2.5">
                           <p className="font-medium text-[#1C1B19]">{a.brand}</p>
-                          <p className="text-xs text-[#6B6560]">{a.model}</p>
+                          <p className="flex items-center gap-1 text-xs text-[#6B6560]">
+                            {a.model}
+                            {sanityWarnings(a.type, a.specs ?? {}).length > 0 && (
+                              <AlertTriangle size={12} className="text-amber-600" aria-label="Controleer gegevens" />
+                            )}
+                          </p>
                         </td>
                         <td className="hidden px-3 py-2.5 text-xs text-[#6B6560] xl:table-cell">
                           {a.notes || '—'}

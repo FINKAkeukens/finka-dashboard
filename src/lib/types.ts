@@ -62,6 +62,17 @@ export interface Appliance {
   quote_date: string | null
   created_at: string
   supplier?: Supplier
+  // Laatste online controle tegen officiële specs (migratie-sectie 83) —
+  // null = nog nooit gecontroleerd. Zie src/lib/appliance-verify.ts.
+  verified_at?: string | null
+  verification?: ApplianceVerificationMeta | null
+}
+
+export interface ApplianceVerificationMeta {
+  confidence: 'hoog' | 'middel' | 'laag'
+  official_name?: string
+  description?: string
+  sources: string[]
 }
 
 export interface ApplianceSpecs {
@@ -75,27 +86,46 @@ export interface ApplianceSpecs {
   capacity_liters?: number
   oven_subtype?: OvenSubtype
   // Vaatwasser
-  integration?: 'volledig' | 'half'
+  integration?: 'volledig' | 'half' | 'vrijstaand'
   db_sound?: number
   capacity_sets?: number
-  niche_height_cm?: number
+  hinge?: 'standaard' | 'vario'
+  // Kookplaat met afzuiging
+  integrated_hood?: boolean
+  hood_mode?: 'afvoer' | 'recirculatie'
   // Afzuigkap
   capacity_m3h?: number
-  afzuig_type?: 'wand' | 'eiland' | 'inbouw' | 'plafond'
-  // Koelkast
+  afzuig_type?: 'wand' | 'eiland' | 'inbouw' | 'plafond' | 'onderbouw' | 'werkblad'
+  // Koelkast / koelvries / vriezer / wijnklimaatkast
   fridge_liters?: number
   freezer?: boolean
+  freezer_liters?: number
+  bottles?: number
+  installation?: 'inbouw' | 'onderbouw' | 'vrijstaand'
+  door_mounting?: 'sleepdeur' | 'deur-op-deur'
   // Kokendwaterkraan (Quooker e.a.)
   functions_count?: number  // 2-in-1, 3-in-1, 4-in-1, 5-in-1
   has_sparkling?: boolean
   tank_liters?: number
   finish?: string
+  tap_model?: string
+  component?: 'kraan' | 'reservoir' | 'set'
   // Spoelbak
   material?: string
-  bowls?: 'enkel' | 'dubbel'
-  // Algemeen
-  color?: string
+  bowls?: 'enkel' | 'anderhalf' | 'dubbel'
+  bowl_width_mm?: number
+  bowl_length_mm?: number
+  mounting?: 'onderbouw' | 'vlakinbouw' | 'opbouw'
+  // Algemeen — maten. niche_* = inbouwnis (zoals leveranciers het noemen:
+  // koelkast "nis 178", oven "nis 45/60", vaatwasser "nis 81,5/86,5");
+  // width/height/depth_cm = het apparaat zelf. Altijd in cm.
+  niche_height_cm?: number
+  niche_width_cm?: number
+  niche_depth_cm?: number
   width_cm?: number
+  height_cm?: number
+  depth_cm?: number
+  color?: string
   energy_label?: EnergyLabel
   product_line?: ProductLine
   // Merk-specifieke productserie, vrije tekst (bv. "iQ300", "iQ700", "Serie 8", "Mastery").

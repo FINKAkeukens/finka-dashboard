@@ -7,8 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS, PRODUCT_LINES } from '@/lib/appliance-utils'
-import { Trash2 } from 'lucide-react'
+import { ENERGY_LABELS, PRODUCT_LINES, sanityWarnings } from '@/lib/appliance-utils'
+import { AlertTriangle, Trash2 } from 'lucide-react'
+import ApplianceVerifyPanel from '@/components/ApplianceVerifyPanel'
+import type { VerifyResult } from '@/lib/appliance-verify'
+
+// Nominale nismaten zoals leveranciers ze noemen, per soort apparaat.
+const NICHE_HEIGHT_OPTIONS: Record<string, number[]> = {
+  oven: [45, 60], 'combi-oven': [45, 60], magnetron: [38, 45],
+  vaatwasser: [81.5, 86.5],
+  koelkast: [72, 82, 88, 102, 122, 140, 158, 178, 194], koelvries: [158, 178, 194], vriezer: [72, 82, 88, 122, 140, 178], wijnklimaatkast: [45, 82, 88, 122, 178],
+}
 
 const typeOptions: { value: ApplianceType; label: string }[] = [
   { value: 'kookplaat', label: 'Kookplaat' },
@@ -69,6 +78,18 @@ export default function EditApplianceForm({
   const [quoteDate, setQuoteDate] = useState((appliance.quote_date as string) ?? '')
   const [notes, setNotes] = useState((appliance.notes as string) ?? '')
   const [specs, setSpecs] = useState<Record<string, unknown>>((appliance.specs as Record<string, unknown>) ?? {})
+  const [verification, setVerification] = useState<VerifyResult | null>(null)
+  const warnings = sanityWarnings(type, specs)
+
+  function applyVerification(next: { type: string; brand: string; model: string; category: string; specs: Record<string, unknown>; notes: string }, result: VerifyResult) {
+    setType(next.type as ApplianceType)
+    setBrand(next.brand)
+    setModel(next.model)
+    setCategory(next.category)
+    setSpecs(next.specs)
+    setNotes(next.notes)
+    setVerification(result)
+  }
 
   function updateSpec(key: string, value: unknown) {
     setSpecs(prev => ({ ...prev, [key]: value }))
@@ -85,6 +106,10 @@ export default function EditApplianceForm({
       quote_date: quoteDate || null,
       notes: notes || null,
       specs,
+      ...(verification ? {
+        verified_at: new Date().toISOString(),
+        verification: { confidence: verification.confidence, official_name: verification.official_name, description: verification.description, sources: verification.sources },
+      } : {}),
     }).eq('id', appliance.id as string)
 
     if (error) { setError(error.message); setLoading(false) }
@@ -162,6 +187,37 @@ export default function EditApplianceForm({
         </Field>
       </div>
 
+      <ApplianceVerifyPanel
+        current={{ type, brand, model, category, specs, notes }}
+        onApply={applyVerification}
+      />
+
+      {warnings.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {warnings.map((w) => <p key={w} className="flex items-center gap-1.5"><AlertTriangle size={13} /> {w}</p>)}
+        </div>
+      )}
+
+      {/* Maten — voor elk type */}
+      <div className="border-t border-[#F0EDE9] pt-4 space-y-3">
+        <p className="text-xs font-medium text-[#6B6560] uppercase tracking-wider">Maten (cm)</p>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="Nishoogte">
+            {NICHE_HEIGHT_OPTIONS[type] ? (
+              <Select value={String(specs.niche_height_cm ?? '')} onChange={v => updateSpec('niche_height_cm', v ? Number(v) : undefined)}
+                options={[{ value: '', label: '—' }, ...Array.from(new Set([...NICHE_HEIGHT_OPTIONS[type], ...(typeof specs.niche_height_cm === 'number' ? [specs.niche_height_cm] : [])])).sort((a, b) => a - b).map(h => ({ value: String(h), label: `${String(h).replace('.', ',')} cm` }))]} />
+            ) : (
+              <Input type="number" step="0.1" value={String(specs.niche_height_cm ?? '')} onChange={e => updateSpec('niche_height_cm', e.target.value ? Number(e.target.value) : undefined)} />
+            )}
+          </Field>
+          <Field label="Nisbreedte"><Input type="number" step="0.1" value={String(specs.niche_width_cm ?? '')} onChange={e => updateSpec('niche_width_cm', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+          <Field label="Nisdiepte"><Input type="number" step="0.1" value={String(specs.niche_depth_cm ?? '')} onChange={e => updateSpec('niche_depth_cm', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+          <Field label="Hoogte apparaat"><Input type="number" step="0.1" value={String(specs.height_cm ?? '')} onChange={e => updateSpec('height_cm', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+          <Field label="Breedte apparaat"><Input type="number" step="0.1" value={String(specs.width_cm ?? '')} onChange={e => updateSpec('width_cm', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+          <Field label="Diepte apparaat"><Input type="number" step="0.1" value={String(specs.depth_cm ?? '')} onChange={e => updateSpec('depth_cm', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+        </div>
+      </div>
+
       {/* Specs */}
       <div className="border-t border-[#F0EDE9] pt-4 space-y-3">
         <p className="text-xs font-medium text-[#6B6560] uppercase tracking-wider">Specificaties</p>
@@ -174,7 +230,6 @@ export default function EditApplianceForm({
             </Field>
             <Field label="Zones"><Input type="number" value={String(specs.zones ?? '')} onChange={e => updateSpec('zones', Number(e.target.value))} /></Field>
             <Field label="Vermogen (W)"><Input type="number" value={String(specs.watt ?? '')} onChange={e => updateSpec('watt', Number(e.target.value))} /></Field>
-            <Field label="Breedte (cm)"><Input type="number" value={String(specs.width_cm ?? '')} onChange={e => updateSpec('width_cm', Number(e.target.value))} /></Field>
           </div>
         </>}
 
@@ -183,10 +238,6 @@ export default function EditApplianceForm({
             <Field label="Ovensoort">
               <Select value={String(specs.oven_subtype ?? '')} onChange={v => updateSpec('oven_subtype', v || undefined)}
                 options={[{value:'',label:'—'},{value:'solo',label:'Solo-oven'},{value:'combi-magnetron',label:'Combi magnetron/oven'},{value:'stoom',label:'Stoomoven'}]} />
-            </Field>
-            <Field label="Nis-breedte">
-              <Select value={String(specs.width_cm ?? '')} onChange={v => updateSpec('width_cm', v ? Number(v) : undefined)}
-                options={[{value:'',label:'—'},{value:'45',label:'45 cm'},{value:'60',label:'60 cm'}]} />
             </Field>
             <Field label="Pyrolyse">
               <Select value={specs.pyrolysis === true ? 'ja' : specs.pyrolysis === false ? 'nee' : ''} onChange={v => updateSpec('pyrolysis', v === 'ja')}
@@ -206,9 +257,9 @@ export default function EditApplianceForm({
               <Select value={String(specs.integration ?? '')} onChange={v => updateSpec('integration', v)}
                 options={[{value:'',label:'—'},{value:'volledig',label:'Volledig'},{value:'half',label:'Half'}]} />
             </Field>
-            <Field label="Nishoogte">
-              <Select value={String(specs.niche_height_cm ?? '')} onChange={v => updateSpec('niche_height_cm', v ? Number(v) : undefined)}
-                options={[{value:'',label:'—'},{value:'81.5',label:'81,5 cm'},{value:'86.5',label:'86,5 cm'}]} />
+            <Field label="Scharnier">
+              <Select value={String(specs.hinge ?? '')} onChange={v => updateSpec('hinge', v || undefined)}
+                options={[{value:'',label:'—'},{value:'standaard',label:'Standaard'},{value:'vario',label:'Vario (sleepdeur)'}]} />
             </Field>
             <Field label="Geluid (dB)"><Input type="number" step="0.1" value={String(specs.db_sound ?? '')} onChange={e => updateSpec('db_sound', Number(e.target.value))} /></Field>
             <Field label="Couverts"><Input type="number" value={String(specs.capacity_sets ?? '')} onChange={e => updateSpec('capacity_sets', Number(e.target.value))} /></Field>
@@ -219,7 +270,7 @@ export default function EditApplianceForm({
           <div className="grid grid-cols-2 gap-4">
             <Field label="Type">
               <Select value={String(specs.afzuig_type ?? '')} onChange={v => updateSpec('afzuig_type', v)}
-                options={[{value:'',label:'—'},{value:'wand',label:'Wand'},{value:'eiland',label:'Eiland'},{value:'inbouw',label:'Inbouw'},{value:'plafond',label:'Plafond'}]} />
+                options={[{value:'',label:'—'},{value:'wand',label:'Wand'},{value:'eiland',label:'Eiland'},{value:'inbouw',label:'Inbouw'},{value:'onderbouw',label:'Onderbouw'},{value:'plafond',label:'Plafond'},{value:'werkblad',label:'Werkblad'}]} />
             </Field>
             <Field label="Capaciteit (m³/h)"><Input type="number" value={String(specs.capacity_m3h ?? '')} onChange={e => updateSpec('capacity_m3h', Number(e.target.value))} /></Field>
             <Field label="Geluid (dB)"><Input type="number" step="0.1" value={String(specs.db_sound ?? '')} onChange={e => updateSpec('db_sound', Number(e.target.value))} /></Field>
@@ -228,14 +279,32 @@ export default function EditApplianceForm({
 
         {(type === 'koelkast' || type === 'koelvries' || type === 'vriezer' || type === 'wijnklimaatkast') && <>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Inhoud (L)"><Input type="number" value={String(specs.fridge_liters ?? '')} onChange={e => updateSpec('fridge_liters', Number(e.target.value))} /></Field>
+            <Field label="Koelinhoud (L)"><Input type="number" value={String(specs.fridge_liters ?? '')} onChange={e => updateSpec('fridge_liters', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+            <Field label="Vriesinhoud (L)"><Input type="number" value={String(specs.freezer_liters ?? '')} onChange={e => updateSpec('freezer_liters', e.target.value ? Number(e.target.value) : undefined)} /></Field>
+            <Field label="Vriesgedeelte">
+              <Select value={specs.freezer === true ? 'ja' : specs.freezer === false ? 'nee' : ''} onChange={v => updateSpec('freezer', v ? v === 'ja' : undefined)}
+                options={[{value:'',label:'—'},{value:'ja',label:'Ja'},{value:'nee',label:'Nee'}]} />
+            </Field>
+            <Field label="Montage">
+              <Select value={String(specs.installation ?? '')} onChange={v => updateSpec('installation', v || undefined)}
+                options={[{value:'',label:'—'},{value:'inbouw',label:'Inbouw'},{value:'onderbouw',label:'Onderbouw'},{value:'vrijstaand',label:'Vrijstaand'}]} />
+            </Field>
+            <Field label="Deurmontage">
+              <Select value={String(specs.door_mounting ?? '')} onChange={v => updateSpec('door_mounting', v || undefined)}
+                options={[{value:'',label:'—'},{value:'deur-op-deur',label:'Deur-op-deur'},{value:'sleepdeur',label:'Sleepdeur'}]} />
+            </Field>
             <Field label="Geluid (dB)"><Input type="number" step="0.1" value={String(specs.db_sound ?? '')} onChange={e => updateSpec('db_sound', Number(e.target.value))} /></Field>
           </div>
         </>}
 
         {type === 'kokendwaterkraan' && <>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Functies (X-in-1)"><Input type="number" value={String(specs.functions_count ?? '')} onChange={e => updateSpec('functions_count', Number(e.target.value))} placeholder="bijv. 3" /></Field>
+            <Field label="Onderdeel">
+              <Select value={String(specs.component ?? '')} onChange={v => updateSpec('component', v || undefined)}
+                options={[{value:'',label:'—'},{value:'set',label:'Kraan + reservoir'},{value:'kraan',label:'Alleen kraan'},{value:'reservoir',label:'Alleen reservoir'}]} />
+            </Field>
+            <Field label="Kraanmodel"><Input value={String(specs.tap_model ?? '')} onChange={e => updateSpec('tap_model', e.target.value || undefined)} placeholder="bijv. Fusion Square" /></Field>
+            <Field label="Functies (X-in-1)"><Input type="number" value={String(specs.functions_count ?? '')} onChange={e => updateSpec('functions_count', e.target.value ? Number(e.target.value) : undefined)} placeholder="1 = alleen kokend, 3 = koud/warm/kokend" /></Field>
             <Field label="Bruisend water">
               <Select value={specs.has_sparkling === true ? 'ja' : 'nee'} onChange={v => updateSpec('has_sparkling', v === 'ja')}
                 options={[{value:'nee',label:'Nee'},{value:'ja',label:'Ja'}]} />
@@ -256,9 +325,12 @@ export default function EditApplianceForm({
             <Field label="Materiaal"><Input value={String(specs.material ?? '')} onChange={e => updateSpec('material', e.target.value)} placeholder="rvs, composiet, keramiek..." /></Field>
             <Field label="Aantal bakken">
               <Select value={String(specs.bowls ?? '')} onChange={v => updateSpec('bowls', v)}
-                options={[{value:'',label:'—'},{value:'enkel',label:'Enkel'},{value:'dubbel',label:'Dubbel'}]} />
+                options={[{value:'',label:'—'},{value:'enkel',label:'Enkel'},{value:'anderhalf',label:'Anderhalf'},{value:'dubbel',label:'Dubbel'}]} />
             </Field>
-            <Field label="Breedte (cm)"><Input type="number" value={String(specs.width_cm ?? '')} onChange={e => updateSpec('width_cm', Number(e.target.value))} /></Field>
+            <Field label="Montage">
+              <Select value={String(specs.mounting ?? '')} onChange={v => updateSpec('mounting', v || undefined)}
+                options={[{value:'',label:'—'},{value:'onderbouw',label:'Onderbouw'},{value:'vlakinbouw',label:'Vlakinbouw'},{value:'opbouw',label:'Opbouw'}]} />
+            </Field>
           </div>
         </>}
 

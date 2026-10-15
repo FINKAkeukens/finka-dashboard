@@ -5,8 +5,10 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const SYSTEM_PROMPT = `Je bent een assistent voor een Nederlandse keukenontwerper. Analyseer offerte-documenten en extraheer alle keukenapparatuur.
 
 Extraheer alle keukenapparatuur die vermeld wordt. Voor elk product, geef:
-- type: één van: kookplaat, oven, combi-oven, vaatwasser, afzuigkap, koelkast, koelvries, kokendwaterkraan, anders
-  (gebruik koelvries voor koel-vriescombinaties, koelkast voor alleen koelkast, kokendwaterkraan voor Quooker e.a.)
+- type: één van: kookplaat, oven, combi-oven, magnetron, vaatwasser, afzuigkap, koelkast, koelvries, vriezer, wijnklimaatkast, kokendwaterkraan, kraan, spoelbak, anders
+  (combi-oven = oven met magnetron- of stoomfunctie; magnetron = solo-magnetron; koelvries voor koel-vriescombinaties,
+  koelkast voor alleen koelkast, vriezer voor alleen vriezen; kokendwaterkraan voor Quooker e.a.; anders = accessoires zoals filters/sifons)
+- model: ALLEEN het modelnummer (bv. "KI86NSFE0"), geen omschrijving of opmerkingen erbij
 - brand: merk
 - model: modelnummer of -naam
 - price: prijs in euro's (alleen het getal, geen €-teken)
@@ -25,12 +27,14 @@ Extraheer alle keukenapparatuur die vermeld wordt. Voor elk product, geef:
   Bij twijfel: hogere series (700, 800, 900, Pro, Mastery) = premium. Midden series (300, 500, 600) = midden. Lage series (100, 200) = budget.
 
 - specs: object met relevante specs:
-  kookplaat: energy_type (inductie/gas/keramisch), zones, watt, db_sound
-  oven/combi-oven: pyrolysis (true/false), steam (true/false), capacity_liters, db_sound
+  Maten altijd in cm onder deze sleutels: niche_height_cm (nishoogte — bv. koelkast "nis 178" → 178, oven "nis 45" → 45,
+  vaatwasser 81.5/86.5), width_cm. Zet een nismaat NOOIT bij een inhoud/liters-veld.
+  kookplaat: energy_type (inductie/gas/keramisch), zones, watt, db_sound, integrated_hood (true bij kookplaat met afzuiging)
+  oven/combi-oven/magnetron: pyrolysis (true/false), steam (true/false), capacity_liters, db_sound
   vaatwasser: integration (volledig/half), db_sound, capacity_sets
   afzuigkap: afzuig_type (wand/eiland/inbouw/plafond), capacity_m3h, db_sound
-  koelkast: fridge_liters, freezer (true/false), db_sound
-  kokendwaterkraan: functions_count (getal uit X-in-1), has_sparkling (true/false), tank_liters, finish
+  koelkast/koelvries/vriezer: fridge_liters, freezer (true/false — true bij elke koel-vriescombinatie), freezer_liters, db_sound
+  kokendwaterkraan: functions_count (1 = alleen kokend water, 3 = koud/warm/kokend), has_sparkling (alleen true bij CUBE), tank_liters, finish
   Voeg altijd db_sound toe als het vermeld staat.
 - notes: het originele beschrijvingsregel/onderschrift van DIT specifieke product zoals het in het brondocument staat (bv. kleur, uitvoering, materiaal, bijzondere kenmerken). Overtypen/parafraseren mag, weglaten niet als er tekst bij staat — dit helpt om te bepalen wat voor apparaat het precies is. Leeg laten als er niets vermeldenswaardigs bij dit product staat.
 
