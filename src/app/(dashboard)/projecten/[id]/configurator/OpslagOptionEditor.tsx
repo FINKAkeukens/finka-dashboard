@@ -108,7 +108,7 @@ export default function OpslagOptionEditor({
                 checked={inputs.levering_verhuislift}
                 onCheckedChange={(v) => updateInput({ levering_verhuislift: v === true })}
               />
-              Verhuislift (+€{rates.levering_verhuislift.toFixed(2)})
+              Verhuislift / buitenlift (+€{rates.levering_verhuislift.toFixed(2)})
             </label>
             <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
               <Checkbox
@@ -122,7 +122,7 @@ export default function OpslagOptionEditor({
                 checked={inputs.brandstoftoeslag}
                 onCheckedChange={(v) => updateInput({ brandstoftoeslag: v === true })}
               />
-              Brandstoftoeslag (+{rates.brandstoftoeslag_percentage}% over de levering)
+              Brandstoftoeslag (+{rates.brandstoftoeslag_percentage}%)
             </label>
             <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
               Extra lostijd (halve uren)
@@ -144,11 +144,19 @@ export default function OpslagOptionEditor({
                 <option value="composiet">Composiet/keramiek/hardsteen (+€{rates.werkblad_composiet.toFixed(2)})</option>
               </select>
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+              <Checkbox
+                checked={inputs.werkblad_extra_verpakt}
+                onCheckedChange={(v) => updateInput({ werkblad_extra_verpakt: v === true })}
+              />
+              Werkblad extra verpakt (+€{rates.werkblad_extra_verpakking.toFixed(2)})
+            </label>
             <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(totals.levering)}</span>
           </div>
           <p className="text-[10px] text-[#9A948D]">
             Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)
-            {inputs.brandstoftoeslag && ` · brandstoftoeslag ${formatPrice(totals.brandstoftoeslag)}`}
+            {inputs.brandstoftoeslag && rates.brandstoftoeslag_percentage > 0 &&
+              ` · incl. brandstoftoeslag ${rates.brandstoftoeslag_percentage}% over ${formatPrice(totals.brandstoftoeslag_grondslag)} = ${formatPrice(totals.brandstoftoeslag)}`}
           </p>
         </div>
 

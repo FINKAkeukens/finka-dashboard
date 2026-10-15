@@ -326,6 +326,9 @@ export interface EurolineInputs {
   levering_buiten_werkgebied: boolean
   levering_extra_lostijd_halfuren: number
   werkblad_levering: EurolineWerkbladLevering
+  // Extra verpakking van het werkblad (vast bedrag). Ontbreekt bij oudere
+  // opties — behandel dat als false (zie DEFAULT_EUROLINE_INPUTS).
+  werkblad_extra_verpakt: boolean
   service_uren: number
   // Inmeten is geen Euroline-post maar een eigen vaste kostenrij; hij hoort
   // hier omdat hij in dezelfde Configurator-optie (Opslag, levering en
@@ -358,9 +361,13 @@ export interface EurolineRates {
   service_tarief_per_uur: number
   service_minimum: number
   inmeten_tarief: number
-  // Percentage (bv. 8 = 8%) over het leveringsbedrag — geen euro's, anders
-  // dan alle tarieven hierboven. Zie computeEurolineTotals.
+  werkblad_extra_verpakking: number
+  // Percentage (bv. 8 = 8%) — geen euro's, anders dan alle tarieven
+  // hierboven. Grondslag: zie computeEurolineTotals.
   brandstoftoeslag_percentage: number
+  // Rekent Euroline de brandstoftoeslag ook over montage? Op de factuur van
+  // 10-10-2026 stond geen montage, dus nog onbekend — standaard uit.
+  brandstoftoeslag_over_installatie: boolean
   updated_at: string
 }
 

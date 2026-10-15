@@ -2148,3 +2148,16 @@ UPDATE finka_standard_documents SET series_id = id WHERE series_id IS NULL;
 ALTER TABLE finka_standard_documents
   ALTER COLUMN series_id SET DEFAULT gen_random_uuid(),
   ALTER COLUMN series_id SET NOT NULL;
+
+-- =========================================================
+-- 83. Brandstoftoeslag zoals Euroline hem echt rekent (nagerekend op
+--    factuur F2026-10676): over basislevering + basisopslag, de
+--    leveringstoeslagen en de werkblad-levering — niet over extra lostijd,
+--    extra opslag en extra verpakking (grondslag zit in de code, zie
+--    computeEurolineTotals). Montage nog onbekend → los aan te vinken,
+--    standaard uit. Plus nieuwe vaste post "werkblad extra verpakt".
+-- =========================================================
+
+ALTER TABLE finka_euroline_rates
+  ADD COLUMN IF NOT EXISTS werkblad_extra_verpakking NUMERIC NOT NULL DEFAULT 75,
+  ADD COLUMN IF NOT EXISTS brandstoftoeslag_over_installatie BOOLEAN NOT NULL DEFAULT false;
