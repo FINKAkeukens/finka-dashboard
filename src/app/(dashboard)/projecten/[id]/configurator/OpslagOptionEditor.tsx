@@ -117,13 +117,6 @@ export default function OpslagOptionEditor({
               />
               Buiten werkgebied Euroline (+€{rates.levering_buiten_werkgebied.toFixed(2)})
             </label>
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.brandstoftoeslag}
-                onCheckedChange={(v) => updateInput({ brandstoftoeslag: v === true })}
-              />
-              Brandstoftoeslag (+{rates.brandstoftoeslag_percentage}%)
-            </label>
             <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
               Extra lostijd (halve uren)
               <NumberInput
@@ -151,13 +144,11 @@ export default function OpslagOptionEditor({
               />
               Werkblad extra verpakt (+€{rates.werkblad_extra_verpakking.toFixed(2)})
             </label>
-            <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(totals.levering)}</span>
+            {/* Zonder brandstoftoeslag — die staat onderaan als los blok, ook
+               al telt hij in de kostprijs-opbouw mee bij Levering. */}
+            <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(totals.levering - totals.brandstoftoeslag)}</span>
           </div>
-          <p className="text-[10px] text-[#9A948D]">
-            Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)
-            {inputs.brandstoftoeslag && rates.brandstoftoeslag_percentage > 0 &&
-              ` · incl. brandstoftoeslag ${rates.brandstoftoeslag_percentage}% over ${formatPrice(totals.brandstoftoeslag_grondslag)} = ${formatPrice(totals.brandstoftoeslag)}`}
-          </p>
+          <p className="text-[10px] text-[#9A948D]">Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)</p>
         </div>
 
         <div className="space-y-1.5 col-span-2">
@@ -186,6 +177,29 @@ export default function OpslagOptionEditor({
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.inmeten)}</span>
           </div>
           <p className="text-[10px] text-[#9A948D]">Vult de kostenrij &quot;Inmeten&quot; in de offerte — uitgevinkt blijft die op €0.</p>
+        </div>
+
+        <div className="space-y-1.5 col-span-2">
+          <Label className="text-xs">Brandstoftoeslag Euroline</Label>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+              <Checkbox
+                checked={inputs.brandstoftoeslag}
+                onCheckedChange={(v) => updateInput({ brandstoftoeslag: v === true })}
+              />
+              Brandstoftoeslag meerekenen ({rates.brandstoftoeslag_percentage}%)
+            </label>
+            <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.brandstoftoeslag)}</span>
+          </div>
+          {inputs.brandstoftoeslag && (
+            <p className="text-[10px] text-[#9A948D]">
+              {rates.brandstoftoeslag_percentage}% over {formatPrice(totals.brandstoftoeslag_grondslag)}: levering
+              {' '}{formatPrice(totals.brandstoftoeslag_grondslag - rates.opslag_base - (rates.brandstoftoeslag_over_installatie ? totals.installatie : 0))}
+              {' '}+ basisopslag {formatPrice(rates.opslag_base)}
+              {rates.brandstoftoeslag_over_installatie && ` + montage ${formatPrice(totals.installatie)}`}
+              {' '}(zonder extra lostijd, extra opslag en extra verpakking). Telt in de offerte mee bij de kostenrij Levering.
+            </p>
+          )}
         </div>
       </div>
 
