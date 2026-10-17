@@ -97,6 +97,7 @@ export default function ChecklistTemplateForm({
     const rows = Array.from(maxSortByProject.entries()).map(([projectId, maxSort]) => ({
       project_id: projectId,
       item_key: null,
+      template_id: newTemplateItem.id,
       category: categoryLabelText,
       label: newTemplateItem.label,
       visible_to_customer: newTemplateItem.visible_to_customer,

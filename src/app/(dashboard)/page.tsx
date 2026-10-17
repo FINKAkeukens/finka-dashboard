@@ -80,7 +80,7 @@ export default async function DashboardPage() {
     ? await Promise.all([
         supabase
           .from('finka_checklist_items')
-          .select('project_id, category, checked')
+          .select('project_id, category, checked, nvt')
           .in('project_id', projectIds),
         supabase
           .from('finka_quotes')
@@ -101,10 +101,11 @@ export default async function DashboardPage() {
       ])
     : [{ data: null }, { data: null }, { data: null }, { data: null }]
 
+  // "n.v.t." telt als afgerond — er hoeft niets meer voor te gebeuren.
   const checklistItemsByProject = new Map<string, { category: string; checked: boolean }[]>()
   for (const item of checklistItems ?? []) {
     const list = checklistItemsByProject.get(item.project_id) ?? []
-    list.push({ category: item.category, checked: item.checked })
+    list.push({ category: item.category, checked: item.checked || item.nvt })
     checklistItemsByProject.set(item.project_id, list)
   }
 

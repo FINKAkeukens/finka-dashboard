@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
-import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem } from '@/lib/types'
+import { ChecklistItem } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
+import { createProjectSteps } from '@/lib/draaiboek'
 
 // Elk vinkje/label slaat meteen op (geen aparte "Opslaan"-knop) — zelfde
 // aanpak als NotesPanel: bij een checklist voelt direct blijven staan
@@ -29,7 +30,8 @@ export default function ChecklistTab({
   const [creating, setCreating] = useState(false)
 
   const total = items.length
-  const doneCount = items.filter((i) => i.checked).length
+  // "n.v.t." (gezet op de Planning-tab) telt als afgerond.
+  const doneCount = items.filter((i) => i.checked || i.nvt).length
 
   // Groeperen op het weergegeven label (categoryLabel), niet op de losse
   // category-tekst zelf — zo vallen bv. oude items met category='verkoop'
@@ -56,48 +58,26 @@ export default function ChecklistTab({
   }
 
   // Een project heeft initieel geen checklist — pas op deze knop kopiëren we
-  // de instellingen (finka_checklist_categories/finka_checklist_templates,
-  // beheerd via /instellingen/checklist) naar dit project. Latere
-  // wijzigingen aan die instellingen raken deze kopie niet meer aan.
+  // het draaiboek (Instellingen > Checklist) naar dit project, inclusief de
+  // koppeling naar de sjabloonstap zodat de Planning-tab stappen pas toont
+  // als hun voorgangers klaar zijn. Latere wijzigingen aan de instellingen
+  // raken deze kopie niet meer aan.
   async function createChecklist() {
     setCreating(true)
     setError('')
-    const [{ data: categories, error: catError }, { data: template, error: tplError }] = await Promise.all([
-      supabase.from('finka_checklist_categories').select('*').order('sort_order', { ascending: true }),
-      supabase.from('finka_checklist_templates').select('*').order('sort_order', { ascending: true }),
-    ])
-    if (catError || tplError) {
-      setError((catError ?? tplError)!.message)
+    const createError = await createProjectSteps(supabase, projectId)
+    if (createError) {
+      setError(createError)
       setCreating(false)
       return
     }
-    const categoryItems = (categories ?? []) as ChecklistCategoryItem[]
-    const templateItems = (template ?? []) as ChecklistTemplateItem[]
-    if (categoryItems.length === 0 || templateItems.length === 0) {
-      setError('Geen standaardlijst gevonden — stel deze eerst in via Instellingen > Checklist-items.')
-      setCreating(false)
-      return
-    }
-    const categoryOrder = new Map(categoryItems.map((c, index) => [c.id, index]))
-    const categoryLabels = new Map(categoryItems.map((c) => [c.id, c.label]))
-    const sortedTemplate = [...templateItems].sort((a, b) => {
-      const catDiff = (categoryOrder.get(a.category_id) ?? 0) - (categoryOrder.get(b.category_id) ?? 0)
-      return catDiff !== 0 ? catDiff : a.sort_order - b.sort_order
-    })
-    const rows = sortedTemplate.map((t, index) => ({
-      project_id: projectId,
-      item_key: null,
-      category: categoryLabels.get(t.category_id) ?? 'Overig',
-      label: t.label,
-      visible_to_customer: t.visible_to_customer,
-      sort_order: index,
-    }))
-    const { data, error: insError } = await supabase.from('finka_checklist_items').insert(rows).select()
+    const { data, error: loadError } = await supabase
+      .from('finka_checklist_items')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('sort_order')
     setCreating(false)
-    if (insError) {
-      setError(insError.message)
-      return
-    }
+    if (loadError) setError(loadError.message)
     setItems((data ?? []) as ChecklistItem[])
   }
 
@@ -213,6 +193,9 @@ export default function ChecklistTab({
                     onBlur={() => saveLabel(item)}
                     className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${item.checked ? 'line-through text-[#9A948D]' : 'text-[#1C1B19]'}`}
                   />
+                  {item.nvt && (
+                    <span className="text-[11px] text-[#6B6560] bg-[#F0EDE9] rounded px-1.5 py-0.5 shrink-0">n.v.t.</span>
+                  )}
                   {item.checked && item.checked_at && (
                     <span className="text-xs text-[#9A948D] shrink-0" title="Afgevinkt op">
                       {format(new Date(item.checked_at), 'd MMM yyyy', { locale: nl })}

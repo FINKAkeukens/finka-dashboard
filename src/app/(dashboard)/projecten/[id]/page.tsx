@@ -13,6 +13,7 @@ import QuoteEditor from './offerte/QuoteEditor'
 import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
 import ChecklistTab from './ChecklistTab'
+import ProjectTijdlijn from './ProjectTijdlijn'
 import VragenlijstTab from './VragenlijstTab'
 import MaatformulierTab from './MaatformulierTab'
 import FinancieelTab from './FinancieelTab'
@@ -20,7 +21,7 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
+import { Appliance, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
 import { leadTimeDays } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 import { DEFAULT_TEXTS } from '@/lib/default-texts'
@@ -104,17 +105,25 @@ export default async function ProjectDetailPage({
     historyEntries = data ?? []
   }
 
+  // Planning-tab = tijdlijn van checklist + afspraken samen, dus daar ook
+  // de checklist-punten en het draaiboek (sjabloon + kopjes) bij.
   let milestones: ProjectMilestone[] = []
+  let checklistItems: ChecklistItem[] = []
+  let checklistTemplates: ChecklistTemplateItem[] = []
+  let checklistCategories: ChecklistCategoryItem[] = []
   if (tab === 'planning') {
-    const { data } = await supabase
-      .from('finka_project_milestones')
-      .select('*')
-      .eq('project_id', id)
-      .order('sort_order')
-    milestones = (data ?? []) as ProjectMilestone[]
+    const [{ data: msData }, { data: itemsData }, { data: tplData }, { data: catData }] = await Promise.all([
+      supabase.from('finka_project_milestones').select('*').eq('project_id', id).order('sort_order'),
+      supabase.from('finka_checklist_items').select('*').eq('project_id', id).order('sort_order'),
+      supabase.from('finka_checklist_templates').select('*').order('sort_order'),
+      supabase.from('finka_checklist_categories').select('*').order('sort_order'),
+    ])
+    milestones = (msData ?? []) as ProjectMilestone[]
+    checklistItems = (itemsData ?? []) as ChecklistItem[]
+    checklistTemplates = (tplData ?? []) as ChecklistTemplateItem[]
+    checklistCategories = (catData ?? []) as ChecklistCategoryItem[]
   }
 
-  let checklistItems: ChecklistItem[] = []
   if (tab === 'checklist') {
     const { data } = await supabase
       .from('finka_checklist_items')
@@ -395,7 +404,30 @@ export default async function ProjectDetailPage({
           afrondingDate={dates.afronding.date}
         />
       ) : tab === 'planning' ? (
-        <PlanningTab projectId={id} milestones={milestones} />
+        <div className="space-y-6">
+          <ProjectTijdlijn
+            projectId={id}
+            currentPhaseLabel={projectRow.status?.label ?? null}
+            items={checklistItems}
+            templates={checklistTemplates}
+            categories={checklistCategories}
+            milestones={milestones}
+          />
+          {/* Volledige afspraken-editor (eigen afspraken toevoegen, notities)
+              — ingeklapt, de tijdlijn hierboven dekt het dagelijkse werk. De
+              key laat 'm opnieuw opstarten zodra de tijdlijn een mijlpaal
+              wijzigt (router.refresh), anders toont hij verouderde datums. */}
+          <details>
+            <summary className="cursor-pointer select-none text-sm font-medium text-[#6B6560] hover:text-[#1C1B19] mb-3">
+              Alle afspraken bewerken
+            </summary>
+            <PlanningTab
+              key={milestones.map((m) => `${m.id}:${m.updated_at}:${m.date}:${m.status}`).join('|')}
+              projectId={id}
+              milestones={milestones}
+            />
+          </details>
+        </div>
       ) : tab === 'checklist' ? (
         <ChecklistTab projectId={id} items={checklistItems} />
       ) : tab === 'vragenlijst' ? (

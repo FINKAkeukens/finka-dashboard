@@ -68,8 +68,9 @@ export default async function PortalProjectPage({
   ])
   // Alleen punten die staff expliciet zichtbaar heeft gezet voor de klant —
   // zie de oog-knop bij Checklist (project) en Instellingen > Checklist-
-  // items. Interne stappen tellen hier bewust niet mee in de voortgang.
-  const items = ((itemsData ?? []) as ChecklistItem[]).filter((i) => i.visible_to_customer)
+  // items. Interne stappen tellen hier bewust niet mee in de voortgang, en
+  // punten die staff op "n.v.t." heeft gezet ook niet.
+  const items = ((itemsData ?? []) as ChecklistItem[]).filter((i) => i.visible_to_customer && !i.nvt)
   const questionnaireCategories = (questionnaireCategoriesData ?? []) as QuestionnaireCategoryItem[]
   const responses = (responsesData ?? []) as QuestionnaireResponse[]
   const hiddenQuestionIds = new Set(responses.filter((r) => r.hidden).map((r) => r.question_id))

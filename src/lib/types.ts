@@ -944,6 +944,19 @@ export interface ChecklistItem {
   // het moment van "Checklist aanmaken", los aan/uit te zetten per project.
   visible_to_customer: boolean
   sort_order: number
+  // Draaiboek (migratie-sectie 81, zie src/lib/draaiboek.ts): de sjabloonstap
+  // waar dit punt van afstamt (NULL bij oude of vrij toegevoegde punten —
+  // die hebben geen voorgangers en zijn dus altijd zichtbaar).
+  template_id: string | null
+  // "Niet van toepassing" — telt als afgerond, maar zonder afvinkdatum.
+  nvt: boolean
+  status: string | null
+  assigned_to: MilestoneAssignee | null
+  // Deadline (datum zonder tijd, yyyy-MM-dd).
+  due_date: string | null
+  notes: string | null
+  // Wanneer de stap voor het eerst zichtbaar werd (alle voorgangers klaar).
+  unlocked_at: string | null
   created_at: string
   updated_at: string
 }
@@ -971,6 +984,13 @@ export interface ChecklistTemplateItem {
   // Startwaarde voor ChecklistItem.visible_to_customer — zie daar.
   visible_to_customer: boolean
   sort_order: number
+  // Draaiboek: sjabloonstappen die eerst klaar/n.v.t. moeten zijn voordat
+  // deze stap verschijnt, de termijn in dagen vanaf dat moment, de
+  // standaardpersoon en een eventuele gekoppelde vaste mijlpaal.
+  depends_on: string[]
+  due_days: number | null
+  default_assignee: MilestoneAssignee | null
+  milestone_key: Exclude<MilestoneKey, 'custom'> | null
   created_at: string
   updated_at: string
 }
