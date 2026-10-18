@@ -2202,3 +2202,84 @@ DROP POLICY IF EXISTS "Staff only" ON finka_quote_text_snippets;
 CREATE POLICY "Staff only" ON finka_quote_text_snippets FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
 
 GRANT ALL ON TABLE finka_quote_text_snippets TO anon, authenticated, service_role;
+-- 86. Planning: draaiboek vastgelegd, prio, eigen lijst personen/partijen,
+--    fase ↔ projectstatus.
+--
+--    a. De draaiboek-kolommen (sjabloon: depends_on/due_days/
+--       default_assignee/milestone_key; projectstap: template_id/nvt/
+--       status/assigned_to/due_date/notes/unlocked_at) stonden al live maar
+--       nog niet in dit bestand — hier idempotent vastgelegd.
+--    b. priority op projectstappen en mijlpalen/algemene taken: staat
+--       bovenaan /planning en bovenaan z'n fase.
+--    c. finka_assignees: de keuzelijst voor "toegewezen aan" (was hard
+--       gecodeerd Kieke/Merel/Leverancier/FINKA). assigned_to blijft tekst
+--       (de naam) — de CHECK-constraints gaan eraf zodat nieuwe namen
+--       werken. hidden i.p.v. verwijderen: oude toewijzingen blijven kloppen.
+--    d. status_id op een fase (checklist-kopje): welke projectstatus erbij
+--       hoort. Zo mag een fase een andere naam krijgen dan de status (de
+--       code rekent op vaste statusnamen zoals 'Akkoord'). Gevuld op
+--       gelijke naam, plus Afronding → Opgeleverd.
+-- =========================================================
+
+ALTER TABLE finka_checklist_templates
+  ADD COLUMN IF NOT EXISTS depends_on UUID[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS due_days INTEGER,
+  ADD COLUMN IF NOT EXISTS default_assignee TEXT,
+  ADD COLUMN IF NOT EXISTS milestone_key TEXT;
+
+ALTER TABLE finka_checklist_items
+  ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES finka_checklist_templates(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS nvt BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS status TEXT,
+  ADD COLUMN IF NOT EXISTS assigned_to TEXT,
+  ADD COLUMN IF NOT EXISTS due_date DATE,
+  ADD COLUMN IF NOT EXISTS notes TEXT,
+  ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS priority BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE finka_project_milestones
+  ADD COLUMN IF NOT EXISTS priority BOOLEAN NOT NULL DEFAULT false;
+
+-- Alle CHECK-constraints op de toewijs-kolommen weg (namen verschillen per
+-- tabel/historie, dus opzoeken i.p.v. raden).
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT conrelid::regclass AS tbl, conname
+    FROM pg_constraint
+    WHERE contype = 'c'
+      AND conrelid IN ('finka_project_milestones'::regclass, 'finka_checklist_items'::regclass, 'finka_checklist_templates'::regclass)
+      AND (pg_get_constraintdef(oid) ILIKE '%assigned_to%' OR pg_get_constraintdef(oid) ILIKE '%default_assignee%')
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.tbl, r.conname);
+  END LOOP;
+END $$;
+
+CREATE TABLE IF NOT EXISTS finka_assignees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'partij' CHECK (kind IN ('persoon', 'bedrijf', 'partij')),
+  hidden BOOLEAN NOT NULL DEFAULT false,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_assignees ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_assignees;
+CREATE POLICY "Staff only" ON finka_assignees FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_assignees TO anon, authenticated, service_role;
+
+INSERT INTO finka_assignees (name, kind, sort_order) VALUES
+  ('Merel', 'persoon', 0),
+  ('Kieke', 'persoon', 1),
+  ('FINKA', 'bedrijf', 2),
+  ('Leverancier', 'partij', 3)
+ON CONFLICT (name) DO NOTHING;
+
+ALTER TABLE finka_checklist_categories
+  ADD COLUMN IF NOT EXISTS status_id UUID REFERENCES finka_project_statuses(id) ON DELETE SET NULL;
+
+UPDATE finka_checklist_categories c SET status_id = s.id
+FROM finka_project_statuses s
+WHERE c.status_id IS NULL
+  AND (s.label = c.label OR (c.label = 'Afronding' AND s.label = 'Opgeleverd'));

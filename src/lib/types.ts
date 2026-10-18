@@ -888,7 +888,21 @@ export type MilestoneKey =
   | 'oplevering'
   | 'custom'
 export type MilestoneStatus = 'nog_doen' | 'gepland' | 'bevestigd' | 'bezig' | 'klaar'
-export type MilestoneAssignee = 'Kieke' | 'Merel' | 'Leverancier' | 'FINKA'
+// Naam uit finka_assignees (beheerd via Instellingen > Draaiboek) — vrije
+// tekst, geen vaste set meer: er kunnen personen/partijen bij komen.
+export type MilestoneAssignee = string
+
+export type AssigneeKind = 'persoon' | 'bedrijf' | 'partij'
+
+export interface Assignee {
+  id: string
+  name: string
+  kind: AssigneeKind
+  // Verborgen = niet meer te kiezen, bestaande toewijzingen blijven staan.
+  hidden: boolean
+  sort_order: number
+  created_at: string
+}
 
 // Planning-mijlpalen — elk project krijgt automatisch 5 vaste (zie
 // migratie-trigger create_default_milestones), zodat de projecttab en de
@@ -905,6 +919,8 @@ export interface ProjectMilestone {
   label: string | null
   notes: string | null
   assigned_to: MilestoneAssignee | null
+  // Prio: bovenaan /planning, ongeacht de datum.
+  priority: boolean
   created_at: string
   updated_at: string
 }
@@ -944,7 +960,7 @@ export interface ChecklistItem {
   // het moment van "Checklist aanmaken", los aan/uit te zetten per project.
   visible_to_customer: boolean
   sort_order: number
-  // Draaiboek (migratie-sectie 81, zie src/lib/draaiboek.ts): de sjabloonstap
+  // Draaiboek (migratie-sectie 86, zie src/lib/draaiboek.ts): de sjabloonstap
   // waar dit punt van afstamt (NULL bij oude of vrij toegevoegde punten —
   // die hebben geen voorgangers en zijn dus altijd zichtbaar).
   template_id: string | null
@@ -955,8 +971,11 @@ export interface ChecklistItem {
   // Deadline (datum zonder tijd, yyyy-MM-dd).
   due_date: string | null
   notes: string | null
-  // Wanneer de stap voor het eerst zichtbaar werd (alle voorgangers klaar).
+  // Wanneer de stap voor het eerst zichtbaar werd (alle voorgangers klaar,
+  // of handmatig vrijgegeven via "Vrijgeven").
   unlocked_at: string | null
+  // Prio: bovenaan /planning en bovenaan z'n fase.
+  priority: boolean
   created_at: string
   updated_at: string
 }
@@ -968,6 +987,9 @@ export interface ChecklistItem {
 export interface ChecklistCategoryItem {
   id: string
   label: string
+  // De projectstatus die bij deze fase hoort (migratie 86) — los van de
+  // naam, zodat een fase hernoemd kan worden zonder de status te raken.
+  status_id: string | null
   sort_order: number
   created_at: string
   updated_at: string

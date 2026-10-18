@@ -91,10 +91,71 @@ export function milestonePhases(
   return result
 }
 
+// Welke fase hoort bij de projectstatus: via de vaste koppeling
+// (status_id), met de naam als terugval voor fases zonder koppeling.
+export function phaseLabelForStatus(
+  categories: ChecklistCategoryItem[],
+  statusId: string | null,
+  statusLabel: string | null
+): string | null {
+  const linked = statusId ? categories.find((c) => c.status_id === statusId) : undefined
+  return linked?.label ?? statusLabel
+}
+
+// Fase hernoemen. Projectstappen dragen de fasenaam als tekst mee (zie
+// ChecklistItem.category), dus die gaan in alle projecten mee.
+export async function renamePhase(
+  supabase: SupabaseClient,
+  category: ChecklistCategoryItem,
+  oldLabel: string,
+  newLabel: string
+): Promise<string | null> {
+  const nowIso = new Date().toISOString()
+  const { error } = await supabase
+    .from('finka_checklist_categories')
+    .update({ label: newLabel, updated_at: nowIso })
+    .eq('id', category.id)
+  if (error) return error.message
+  if (oldLabel === newLabel) return null
+  const { error: itemsError } = await supabase
+    .from('finka_checklist_items')
+    .update({ category: newLabel })
+    .eq('category', oldLabel)
+  return itemsError?.message ?? null
+}
+
 // Datum van een stap: bij een mijlpaal-stap de afspraakdatum van de
 // mijlpaal, anders de eigen deadline.
 export function stepDate(step: DraaiboekStep): string | null {
   return step.milestone ? step.milestone.date : step.item.due_date
+}
+
+// Wat er verandert als een stap vrijkomt: unlocked_at, de automatische
+// datum (vandaag + termijn) en de standaardpersoon. Automatische datum
+// alleen voor open stappen zonder eigen mijlpaal-datum, en nooit over een
+// al ingevulde datum heen.
+function unlockPatch(s: DraaiboekStep, now: Date): Partial<ChecklistItem> {
+  const patch: Partial<ChecklistItem> = { unlocked_at: now.toISOString() }
+  if (!s.done && !s.milestone && !s.item.due_date && s.template?.due_days != null) {
+    patch.due_date = format(addDays(now, s.template.due_days), 'yyyy-MM-dd')
+  }
+  if (!s.item.assigned_to && s.template?.default_assignee) patch.assigned_to = s.template.default_assignee
+  return patch
+}
+
+// Een toekomstige stap eerder vrijgeven dan het draaiboek zegt (vooruit
+// werken). Zelfde effect als vanzelf vrijkomen; unlocked_at houdt 'm daarna
+// zichtbaar, ook als er later iets terug opengezet wordt.
+export async function releaseStep(
+  supabase: SupabaseClient,
+  step: DraaiboekStep
+): Promise<{ patch: Partial<ChecklistItem>; error: string | null }> {
+  const patch = unlockPatch(step, new Date())
+  const { error } = await supabase
+    .from('finka_checklist_items')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', step.item.id)
+  return { patch, error: error?.message ?? null }
 }
 
 // Zet unlocked_at (+ automatische datum en standaardpersoon) voor elke stap
@@ -117,16 +178,7 @@ export async function refreshUnlocks(
   const now = new Date()
   const updates = steps
     .filter((s) => s.visible && !s.item.unlocked_at)
-    .map((s) => {
-      const patch: Partial<ChecklistItem> = { unlocked_at: now.toISOString() }
-      // Automatische datum alleen voor open stappen zonder eigen mijlpaal-
-      // datum, en nooit over een al ingevulde datum heen.
-      if (!s.done && !s.milestone && !s.item.due_date && s.template?.due_days != null) {
-        patch.due_date = format(addDays(now, s.template.due_days), 'yyyy-MM-dd')
-      }
-      if (!s.item.assigned_to && s.template?.default_assignee) patch.assigned_to = s.template.default_assignee
-      return { id: s.item.id, patch }
-    })
+    .map((s) => ({ id: s.item.id, patch: unlockPatch(s, now) }))
 
   let error: string | null = null
   for (const u of updates) {

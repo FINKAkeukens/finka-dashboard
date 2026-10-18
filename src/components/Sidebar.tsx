@@ -89,7 +89,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/instellingen/euroline', label: 'Euroline-tarieven', icon: Settings },
       { href: '/instellingen/werkblad', label: 'Werkblad-prijzen', icon: Settings },
-      { href: '/instellingen/checklist', label: 'Checklist-items', icon: ListChecks },
+      { href: '/instellingen/draaiboek', label: 'Draaiboek', icon: ListChecks },
       { href: '/instellingen/vragenlijst', label: 'Vragenlijst', icon: HelpCircle },
       { href: '/instellingen/maatformulier', label: 'Ruimte gereed', icon: Ruler },
       { href: '/instellingen/teksten', label: 'Standaardteksten', icon: FileText },

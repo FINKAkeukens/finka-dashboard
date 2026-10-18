@@ -5,25 +5,26 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { differenceInCalendarDays, format } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { Check, Plus, Trash2, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Plus, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  Assignee,
   ChecklistCategoryItem,
   ChecklistItem,
   ChecklistTemplateItem,
-  MilestoneAssignee,
   MilestoneStatus,
   ProjectMilestone,
 } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
-import { ASSIGNEE_OPTIONS, MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, milestoneLabel } from '@/lib/planning'
+import { MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, assigneeNames, milestoneLabel } from '@/lib/planning'
 import {
   DraaiboekStep,
   buildSteps,
   createProjectSteps,
   milestonePhases,
   refreshUnlocks,
+  releaseStep,
   setStepDone,
   setStepNvt,
   stepDate,
@@ -35,7 +36,7 @@ import {
 // (mijlpalen) als labeltjes bij de fase waar ze bij horen. Bewust verticaal
 // — de horizontale Gantt is eerder afgewezen (zie /planning).
 //
-// Alles slaat direct op (zelfde aanpak als ChecklistTab); na afvinken
+// Alles slaat direct op (zelfde aanpak als de instellingen); na afvinken
 // spelen we via refreshUnlocks de stappen vrij die daarop wachtten.
 
 type Phase = {
@@ -46,8 +47,10 @@ type Phase = {
 
 const STEP_SORT_FALLBACK = '9999-12-31'
 
-function sortByDate(steps: DraaiboekStep[]): DraaiboekStep[] {
+// Prio bovenaan, daarna op datum.
+function sortOpen(steps: DraaiboekStep[]): DraaiboekStep[] {
   return [...steps].sort((a, b) => {
+    if (a.item.priority !== b.item.priority) return a.item.priority ? -1 : 1
     const da = stepDate(a) ?? STEP_SORT_FALLBACK
     const db = stepDate(b) ?? STEP_SORT_FALLBACK
     return da !== db ? da.localeCompare(db) : a.item.sort_order - b.item.sort_order
@@ -65,6 +68,7 @@ export default function ProjectTijdlijn({
   templates,
   categories,
   milestones: initialMilestones,
+  assignees,
 }: {
   projectId: string
   currentPhaseLabel: string | null
@@ -72,6 +76,7 @@ export default function ProjectTijdlijn({
   templates: ChecklistTemplateItem[]
   categories: ChecklistCategoryItem[]
   milestones: ProjectMilestone[]
+  assignees: Assignee[]
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -93,6 +98,9 @@ export default function ProjectTijdlijn({
   const [adding, setAdding] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newDate, setNewDate] = useState('')
+  const [newPhase, setNewPhase] = useState('')
+  const [newAssignee, setNewAssignee] = useState('')
+  const [newPriority, setNewPriority] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
@@ -219,6 +227,19 @@ export default function ProjectTijdlijn({
     await afterStatusChange(before)
   }
 
+  // Vooruit werken: een toekomstige stap nu al vrijgeven.
+  async function release(step: DraaiboekStep) {
+    setError('')
+    const { patch, error: relError } = await releaseStep(supabase, step)
+    if (relError) {
+      setError(relError)
+      return
+    }
+    setItems((prev) => prev.map((i) => (i.id === step.item.id ? { ...i, ...patch } : i)))
+    setNotice(`Vrijgegeven: ${stepLabel(step.item)}`)
+    setTimeout(() => setNotice(''), 8000)
+  }
+
   async function saveItem(id: string, patch: Partial<ChecklistItem>) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
     const { error: updError } = await supabase
@@ -257,8 +278,18 @@ export default function ProjectTijdlijn({
     if (delError) setError(delError.message)
   }
 
+  function resetNewTask() {
+    setNewLabel('')
+    setNewDate('')
+    setNewPhase('')
+    setNewAssignee('')
+    setNewPriority(false)
+    setAdding(false)
+  }
+
   async function addTask() {
-    if (!newLabel.trim() || !currentLabel) {
+    const phaseLabel = newPhase || currentLabel
+    if (!newLabel.trim() || !phaseLabel) {
       setAdding(false)
       return
     }
@@ -268,9 +299,11 @@ export default function ProjectTijdlijn({
       .insert({
         project_id: projectId,
         item_key: null,
-        category: currentLabel,
+        category: phaseLabel,
         label: newLabel.trim(),
         due_date: newDate || null,
+        assigned_to: newAssignee || null,
+        priority: newPriority,
         unlocked_at: new Date().toISOString(),
         sort_order: maxOrder + 1,
       })
@@ -281,9 +314,9 @@ export default function ProjectTijdlijn({
       return
     }
     setItems((prev) => [...prev, data as ChecklistItem])
-    setNewLabel('')
-    setNewDate('')
-    setAdding(false)
+    // Taak in een andere fase: die fase openklappen zodat 'ie te zien is.
+    if (phaseLabel !== currentLabel) setExpanded(new Set([...expandedSet, phaseLabel]))
+    resetNewTask()
   }
 
   async function createChecklist() {
@@ -361,6 +394,22 @@ export default function ProjectTijdlijn({
           >
             {step.done && !item.nvt && <Check size={14} className="text-white" />}
           </button>
+          {!step.done && !opts.locked && (
+            <button
+              type="button"
+              onClick={() => saveItem(item.id, { priority: !item.priority })}
+              aria-label={item.priority ? 'Prio uitzetten' : 'Prio'}
+              aria-pressed={item.priority}
+              title="Prio"
+              className={`w-[22px] h-[22px] rounded-md border text-[13px] font-bold leading-none shrink-0 transition-colors ${
+                item.priority
+                  ? 'bg-red-600 border-red-600 text-white'
+                  : 'bg-white border-[#DDD8D2] text-[#C7C2BB] hover:text-red-600 hover:border-red-300'
+              }`}
+            >
+              !
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setOpenStepId(isOpen ? null : item.id)}
@@ -384,6 +433,11 @@ export default function ProjectTijdlijn({
             )}
           </button>
           <span className="hidden sm:block w-20 text-right text-xs text-[#6B6560] mt-0.5 truncate">{item.assigned_to ?? ''}</span>
+          {opts.locked ? (
+            <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => release(step)}>
+              Vrijgeven
+            </Button>
+          ) : (
           <span className="w-24 text-right text-[13px] mt-0.5 shrink-0">
             {step.done && item.checked_at && !date ? (
               <span className="text-[#9A948D]">{format(new Date(item.checked_at), 'd MMM', { locale: nl })}</span>
@@ -391,9 +445,20 @@ export default function ProjectTijdlijn({
               renderDate(step)
             )}
           </span>
+          )}
         </div>
         {isOpen && (
           <div className="flex flex-wrap items-center gap-2 px-4 pb-3 sm:pl-[50px]">
+            <Input
+              key={`label-${item.id}`}
+              aria-label="Naam taak"
+              className="h-8 basis-full"
+              defaultValue={stepLabel(item)}
+              onBlur={(e) => {
+                const label = e.target.value.trim()
+                if (label && label !== stepLabel(item)) saveItem(item.id, { label })
+              }}
+            />
             <Input
               type="date"
               aria-label="Datum"
@@ -404,11 +469,11 @@ export default function ProjectTijdlijn({
             <select
               aria-label="Wie"
               value={item.assigned_to ?? ''}
-              onChange={(e) => saveItem(item.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })}
+              onChange={(e) => saveItem(item.id, { assigned_to: e.target.value || null })}
               className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
             >
               <option value="">— Niemand —</option>
-              {ASSIGNEE_OPTIONS.map((a) => (
+              {assigneeNames(assignees, item.assigned_to).map((a) => (
                 <option key={a} value={a}>{a}</option>
               ))}
             </select>
@@ -428,7 +493,15 @@ export default function ProjectTijdlijn({
                 {item.nvt ? 'Wel van toepassing' : 'N.v.t.'}
               </Button>
             )}
-            <button type="button" onClick={() => removeStep(step)} title="Punt verwijderen" aria-label="Punt verwijderen" className="p-1.5">
+            <button
+              type="button"
+              onClick={() => saveItem(item.id, { visible_to_customer: !item.visible_to_customer })}
+              className="inline-flex items-center gap-1.5 h-8 px-2 text-xs text-[#6B6560] hover:text-[#1C1B19]"
+            >
+              {item.visible_to_customer ? <Eye size={14} /> : <EyeOff size={14} className="text-[#C9A96E]" />}
+              {item.visible_to_customer ? 'Zichtbaar voor klant' : 'Verborgen voor klant'}
+            </button>
+            <button type="button" onClick={() => removeStep(step)} title="Taak verwijderen" aria-label="Taak verwijderen" className="p-1.5">
               <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
             </button>
           </div>
@@ -532,21 +605,51 @@ export default function ProjectTijdlijn({
 
       {adding && (
         <div className="bg-white rounded-xl border border-[#DDD8D2] p-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-[#6B6560] mr-1">Nieuwe taak in {currentLabel}:</span>
           <Input
             autoFocus
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') addTask()
-              if (e.key === 'Escape') { setAdding(false); setNewLabel('') }
+              if (e.key === 'Escape') resetNewTask()
             }}
-            placeholder="Wat moet er gebeuren?"
+            placeholder="Nieuwe taak"
+            aria-label="Nieuwe taak"
             className="h-8 flex-1 min-w-[200px]"
           />
+          <select
+            aria-label="Fase"
+            value={newPhase || currentLabel || ''}
+            onChange={(e) => setNewPhase(e.target.value)}
+            className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+          >
+            {phases.map((p) => (
+              <option key={p.label} value={p.label}>{p.label}</option>
+            ))}
+          </select>
           <Input type="date" aria-label="Datum" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-8 w-40" />
+          <select
+            aria-label="Toegewezen aan"
+            value={newAssignee}
+            onChange={(e) => setNewAssignee(e.target.value)}
+            className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+          >
+            <option value="">— Niemand —</option>
+            {assigneeNames(assignees).map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+          <label className="flex items-center gap-1.5 text-sm text-[#1C1B19] px-1">
+            <input
+              type="checkbox"
+              checked={newPriority}
+              onChange={(e) => setNewPriority(e.target.checked)}
+              className="w-4 h-4 accent-red-600"
+            />
+            Prio
+          </label>
           <Button size="sm" onClick={addTask}>Toevoegen</Button>
-          <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewLabel('') }}>Annuleren</Button>
+          <Button size="sm" variant="outline" onClick={resetNewTask}>Annuleren</Button>
         </div>
       )}
 
@@ -562,7 +665,7 @@ export default function ProjectTijdlijn({
           const isExpanded = expandedSet.has(phase.label)
 
           const done = phase.steps.filter((s) => s.done)
-          const open = sortByDate(phase.steps.filter((s) => !s.done && s.visible))
+          const open = sortOpen(phase.steps.filter((s) => !s.done && s.visible))
           const later = phase.steps.filter((s) => !s.done && !s.visible)
           const allDone = phase.steps.length > 0 && done.length === phase.steps.length
           const lastChecked = done

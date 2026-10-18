@@ -8,7 +8,7 @@ import { Trash2 } from 'lucide-react'
 import { formatPrice } from '@/lib/appliance-utils'
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from '@/lib/operating-expenses'
 import { ASSET_CATEGORIES, assetCategoryLabel } from '@/lib/assets'
-import { ASSIGNEE_OPTIONS } from '@/lib/planning'
+import { PAYER_OPTIONS } from '@/lib/planning'
 import { selectOnFocus } from '@/lib/utils'
 import { Asset, OperatingExpense } from '@/lib/types'
 
@@ -309,7 +309,7 @@ function RegisterSection<T extends RowItem>({
                               className="w-full text-xs bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-1.5 py-1 focus:outline-none focus:border-[#1C1B19]"
                             >
                               <option value="">—</option>
-                              {ASSIGNEE_OPTIONS.map((a) => (
+                              {[...PAYER_OPTIONS, ...(item.betaald_door && !PAYER_OPTIONS.includes(item.betaald_door) ? [item.betaald_door] : [])].map((a) => (
                                 <option key={a} value={a}>{a}</option>
                               ))}
                             </select>
