@@ -417,6 +417,20 @@ export interface DefaultTexts {
   updated_at: string
 }
 
+// Bibliotheek met kant-en-klare teksten per invulveld van de offerte
+// (§ Instellingen → Standaardteksten) — anders dan DefaultTexts hierboven
+// geen automatisch vertrekpunt, maar keuzes die staff via het knopje
+// "Standaardtekst" bij een veld in QuoteEditor.tsx zelf invoegt. Velden:
+// QUOTE_TEXT_FIELDS in src/lib/quote-text-snippets.ts.
+export interface QuoteTextSnippet {
+  id: string
+  field_key: string
+  title: string
+  body: string
+  sort_order: number
+  created_at: string
+}
+
 export interface WerkbladMaterial {
   id: string
   name: string

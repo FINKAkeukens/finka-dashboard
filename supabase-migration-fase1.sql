@@ -2176,3 +2176,29 @@ ALTER TABLE finka_euroline_rates
 ALTER TABLE finka_appliances
   ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS verification JSONB;
+
+-- =========================================================
+-- 85. Standaardteksten per offerteveld — een lijst kant-en-klare teksten
+--    per invulveld van de offerte (field_key, zie QUOTE_TEXT_FIELDS in
+--    src/lib/quote-text-snippets.ts), te beheren onder Instellingen →
+--    Standaardteksten en in de offerte in te voegen via het knopje
+--    "Standaardtekst" bij elk veld. Los van finka_default_texts (dat blijft
+--    het automatische vertrekpunt voor een nieuwe offerte).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_quote_text_snippets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  field_key TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS finka_quote_text_snippets_field_idx ON finka_quote_text_snippets (field_key, sort_order);
+
+ALTER TABLE finka_quote_text_snippets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_quote_text_snippets;
+CREATE POLICY "Staff only" ON finka_quote_text_snippets FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+
+GRANT ALL ON TABLE finka_quote_text_snippets TO anon, authenticated, service_role;
