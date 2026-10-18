@@ -55,7 +55,7 @@ function sortByDate(steps: DraaiboekStep[]): DraaiboekStep[] {
 }
 
 function stepLabel(item: ChecklistItem): string {
-  return item.item_key ? checklistItemLabel(item) : item.label?.trim() || 'Punt zonder naam'
+  return item.item_key ? checklistItemLabel(item) : item.label?.trim() || 'Naamloze taak'
 }
 
 export default function ProjectTijdlijn({
@@ -175,7 +175,7 @@ export default function ProjectTijdlijn({
       (s) => s.visible && !s.done && !visibleBefore.has(s.item.id)
     )
     if (fresh.length) {
-      setNotice(`Nieuw erbij: ${fresh.map((s) => stepLabel(s.item)).join(', ')}`)
+      setNotice(`Vrijgegeven: ${fresh.map((s) => stepLabel(s.item)).join(', ')}`)
       setTimeout(() => setNotice(''), 8000)
     }
   }
@@ -350,7 +350,7 @@ export default function ProjectTijdlijn({
           <button
             type="button"
             onClick={() => toggleDone(step)}
-            aria-label={step.done ? 'Weer openzetten' : 'Afvinken'}
+            aria-label={step.done ? 'Heropenen' : 'Afvinken'}
             className={`mt-0.5 w-[22px] h-[22px] rounded-md border-[1.5px] flex items-center justify-center shrink-0 transition-colors ${
               step.done && !item.nvt
                 ? 'bg-[#1C1B19] border-[#1C1B19]'
@@ -379,7 +379,7 @@ export default function ProjectTijdlijn({
             {(item.notes || waitingFor || item.assigned_to) && (
               <span className="block text-xs text-[#6B6560] mt-0.5">
                 {item.assigned_to && <span className="sm:hidden">{item.assigned_to}{item.notes || waitingFor ? ' · ' : ''}</span>}
-                {waitingFor ? `na: ${waitingFor}` : item.notes}
+                {waitingFor ? `Wacht op: ${waitingFor}` : item.notes}
               </span>
             )}
           </button>
@@ -425,7 +425,7 @@ export default function ProjectTijdlijn({
             />
             {!item.checked && (
               <Button variant="outline" size="sm" onClick={() => toggleNvt(step)}>
-                {item.nvt ? 'Toch van toepassing' : 'N.v.t.'}
+                {item.nvt ? 'Wel van toepassing' : 'N.v.t.'}
               </Button>
             )}
             <button type="button" onClick={() => removeStep(step)} title="Punt verwijderen" aria-label="Punt verwijderen" className="p-1.5">
@@ -521,7 +521,7 @@ export default function ProjectTijdlijn({
             size="sm"
             onClick={() => setExpanded(allExpanded ? defaultExpanded : new Set(visiblePhases.map((p) => p.label)))}
           >
-            {allExpanded ? 'Fases inklappen' : 'Alle fases uitklappen'}
+            {allExpanded ? 'Alles inklappen' : 'Alles uitklappen'}
           </Button>
           <Button size="sm" onClick={() => setAdding(true)}>
             <Plus size={13} />
@@ -607,16 +607,16 @@ export default function ProjectTijdlijn({
                     }`}
                   >
                     {phase.label}
-                    {isCurrent && ' · nu'}
+                    {isCurrent && ' · huidig'}
                   </span>
                   <span className="text-[13px] text-[#6B6560]">
                     {summary}
                     {isPast && !allDone && open.length > 0 && (
-                      <span className="text-red-600 font-medium"> · {open.length} nog open</span>
+                      <span className="text-red-600 font-medium"> · {open.length} open</span>
                     )}
                     {ready.length > 0 && (
                       <span className={readyOverdue ? 'text-red-600 font-medium' : 'text-[#8A6A2E] font-medium'}>
-                        {' '}· {ready.length} nu te doen{readyOverdue ? `, ${readyOverdue} te laat` : ''}
+                        {' '}· {ready.length} actief{readyOverdue ? `, ${readyOverdue} te laat` : ''}
                       </span>
                     )}
                   </span>
@@ -629,7 +629,7 @@ export default function ProjectTijdlijn({
                     {open.map((s) => renderStep(s))}
                     {open.length === 0 && (
                       <p className="px-4 py-3 text-sm text-[#6B6560]">
-                        {allDone ? 'Alles in deze fase is afgerond.' : 'Nu even niets te doen — de rest wacht op eerdere stappen.'}
+                        {allDone ? 'Fase afgerond.' : 'Geen open taken. Overige stappen wachten op eerdere stappen.'}
                       </p>
                     )}
 
@@ -648,7 +648,7 @@ export default function ProjectTijdlijn({
                       <div className="flex flex-wrap gap-x-5 gap-y-1 px-4 py-2.5 bg-[#FAF8F5] border-t border-[#EFEBE4] text-[13px] text-[#6B6560]">
                         {later.length > 0 && (
                           <button type="button" onClick={() => setShowLater(toggleIn(showLater, phase.label))} className="hover:text-[#1C1B19]">
-                            {showLater.has(phase.label) ? '▾' : '▸'} Komt later ({later.length})
+                            {showLater.has(phase.label) ? '▾' : '▸'} Toekomstig ({later.length})
                           </button>
                         )}
                         {done.length > 0 && (
