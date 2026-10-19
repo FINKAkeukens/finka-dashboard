@@ -275,7 +275,7 @@ export default async function DashboardPage() {
                     bucket === 'laat' ? 'text-red-600 font-medium' : bucket === 'vandaag' ? 'text-[#8A6A2E] font-medium' : 'text-[#6B6560]'
                   }`}
                 >
-                  {e.date ? format(new Date(e.date), 'EEE d MMM', { locale: nl }) : 'Geen datum'}
+                  {e.date ? format(new Date(e.date), 'EEEEEE d MMM', { locale: nl }) : 'Geen datum'}
                 </span>
               </Link>
             ))}

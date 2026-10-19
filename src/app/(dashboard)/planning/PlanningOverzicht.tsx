@@ -272,7 +272,7 @@ export default function PlanningOverzicht({
   function dateText(date: string | null): { text: string; className: string } {
     if (!date) return { text: 'Geen datum', className: 'text-[#9A948D]' }
     const days = differenceInCalendarDays(new Date(date), today)
-    const short = format(new Date(date), 'EEE d MMM', { locale: nl })
+    const short = format(new Date(date), 'EEEEEE d MMM', { locale: nl })
     if (days < 0) return { text: format(new Date(date), 'd MMM', { locale: nl }), className: 'text-red-600 font-medium' }
     if (days === 0) return { text: 'Vandaag', className: 'text-[#8A6A2E] font-medium' }
     if (days === 1) return { text: 'Morgen', className: 'text-[#8A6A2E] font-medium' }

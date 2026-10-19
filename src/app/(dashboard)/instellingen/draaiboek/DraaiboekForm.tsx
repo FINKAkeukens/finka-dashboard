@@ -26,7 +26,8 @@ type FixedMilestoneKey = Exclude<MilestoneKey, 'custom'>
 
 const KIND_LABELS: Record<AssigneeKind, string> = { persoon: 'Persoon', bedrijf: 'Bedrijf', partij: 'Partij' }
 
-const GRID = 'grid grid-cols-[64px_minmax(0,1fr)_250px_92px_150px_150px_48px_36px] gap-2.5 items-center'
+// Naam en "Na stap" delen één kolom (onder elkaar), zodat de naam leesbaar blijft.
+const GRID = 'grid grid-cols-[64px_minmax(0,1fr)_100px_150px_170px_48px_36px] gap-2.5 items-start'
 
 export default function DraaiboekForm({
   initialCategories,
@@ -454,11 +455,10 @@ export default function DraaiboekForm({
 
             {isOpen && (
               <div className="overflow-x-auto border-t border-[#EFEBE6]">
-                <div className="min-w-[1000px] px-4 pb-3">
+                <div className="min-w-[860px] px-4 pb-3">
                   <div className={`${GRID} py-2 text-[11px] font-semibold uppercase tracking-wide text-[#6B6560]`}>
                     <span>Volgorde</span>
-                    <span>Stap</span>
-                    <span>Na stap</span>
+                    <span>Stap · na stap</span>
                     <span>Termijn</span>
                     <span>Standaard</span>
                     <span>Afspraak</span>
@@ -467,7 +467,7 @@ export default function DraaiboekForm({
                   </div>
                   {steps.map((step, index) => (
                     <div key={step.id} className={`${GRID} py-2 border-t border-[#F3F0EC]`}>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 mt-1">
                         <button type="button" onClick={() => moveStep(category.id, step.id, -1)} disabled={index === 0} aria-label="Omhoog" className="w-7 h-7 rounded-md border border-[#DDD8D2] text-[#6B6560] disabled:opacity-30">
                           <ChevronUp size={13} className="mx-auto" />
                         </button>
@@ -475,15 +475,17 @@ export default function DraaiboekForm({
                           <ChevronDown size={13} className="mx-auto" />
                         </button>
                       </div>
+                      <div className="min-w-0 space-y-1.5">
                       <input
                         aria-label="Stap"
                         value={step.label}
                         onFocus={() => setLabelBefore((prev) => ({ ...prev, [step.id]: prev[step.id] ?? step.label }))}
                         onChange={(e) => updateLocal(step.id, { label: e.target.value })}
                         onBlur={() => saveStepLabel(step)}
-                        className={inputClass}
+                        className={`${inputClass} w-full`}
                       />
                       <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-xs text-[#6B6560] mr-0.5">Na:</span>
                         {step.depends_on.map((depId) => {
                           const dep = templateById.get(depId)
                           if (!dep) return null
@@ -521,6 +523,7 @@ export default function DraaiboekForm({
                             +
                           </button>
                         )}
+                      </div>
                       </div>
                       <label className="flex items-center gap-1.5 text-xs text-[#6B6560]">
                         <input
@@ -561,9 +564,9 @@ export default function DraaiboekForm({
                         aria-label="Zichtbaar voor klant"
                         checked={step.visible_to_customer}
                         onChange={() => saveStep(step.id, { visible_to_customer: !step.visible_to_customer })}
-                        className="w-4 h-4 mx-auto accent-[#1C1B19]"
+                        className="w-4 h-4 mx-auto mt-2.5 accent-[#1C1B19]"
                       />
-                      <button type="button" onClick={() => removeStep(step)} aria-label="Stap verwijderen" className="p-1.5">
+                      <button type="button" onClick={() => removeStep(step)} aria-label="Stap verwijderen" className="p-1.5 mt-0.5">
                         <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
                       </button>
                     </div>

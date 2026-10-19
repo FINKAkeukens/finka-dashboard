@@ -536,7 +536,7 @@ export default function ProjectTijdlijn({
                 <span className="w-2 h-2 rounded-full bg-[#C9A96E]" />
                 {m.date ? (
                   <>
-                    {label} · {format(new Date(m.date), 'EEE d MMM', { locale: nl })}
+                    {label} · {format(new Date(m.date), 'EEEEEE d MMM', { locale: nl })}
                   </>
                 ) : (
                   <>+ datum {label.toLowerCase()}</>
