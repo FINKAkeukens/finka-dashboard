@@ -383,7 +383,7 @@ export default function ProjectTijdlijn({
     const date = stepDate(step)
     const overdue = !step.done && !!date && differenceInCalendarDays(new Date(date), new Date()) < 0
     const isOpen = openStepId === item.id
-    const waitingFor = opts.locked
+    const afterSteps = opts.locked
       ? (step.template?.depends_on ?? []).map((id) => templateLabels.get(id)).filter(Boolean).join(', ')
       : ''
     return (
@@ -434,10 +434,10 @@ export default function ProjectTijdlijn({
             </span>
             {step.milestone && <span className="ml-2 text-[11px] text-[#8A6A2E]">afspraak</span>}
             {item.nvt && <span className="ml-2 text-[11px] text-[#6B6560] bg-[#F0EDE9] rounded px-1.5 py-0.5">n.v.t.</span>}
-            {(item.notes || waitingFor || item.assigned_to) && (
+            {(item.notes || afterSteps || item.assigned_to) && (
               <span className="block text-xs text-[#6B6560] mt-0.5">
-                {item.assigned_to && <span className="sm:hidden">{item.assigned_to}{item.notes || waitingFor ? ' · ' : ''}</span>}
-                {waitingFor ? `Wacht op: ${waitingFor}` : item.notes}
+                {item.assigned_to && <span className="sm:hidden">{item.assigned_to}{item.notes || afterSteps ? ' · ' : ''}</span>}
+                {afterSteps ? `Na: ${afterSteps}` : item.notes}
               </span>
             )}
           </button>
@@ -476,14 +476,14 @@ export default function ProjectTijdlijn({
               onChange={(e) => saveDate(step, e.target.value || null)}
             />
             <select
-              aria-label="Wie"
+              aria-label="Wacht op"
               value={item.assigned_to ?? ''}
               onChange={(e) => saveItem(item.id, { assigned_to: e.target.value || null })}
               className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
             >
-              <option value="">— Niemand —</option>
+              <option value="">Wacht op: niemand</option>
               {assigneeNames(assignees, item.assigned_to).map((a) => (
-                <option key={a} value={a}>{a}</option>
+                <option key={a} value={a}>Wacht op: {a}</option>
               ))}
             </select>
             <Input
@@ -642,14 +642,14 @@ export default function ProjectTijdlijn({
           </select>
           <Input type="date" aria-label="Datum" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-8 w-40" />
           <select
-            aria-label="Toegewezen aan"
+            aria-label="Wacht op"
             value={newAssignee}
             onChange={(e) => setNewAssignee(e.target.value)}
             className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
           >
-            <option value="">— Niemand —</option>
+            <option value="">Wacht op: niemand</option>
             {assigneeNames(assignees).map((a) => (
-              <option key={a} value={a}>{a}</option>
+              <option key={a} value={a}>Wacht op: {a}</option>
             ))}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-[#1C1B19] px-1">

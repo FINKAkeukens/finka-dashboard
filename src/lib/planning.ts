@@ -6,7 +6,7 @@ import { Assignee, MilestoneKey, MilestoneStatus, ProjectMilestone } from './typ
 // montagepartij schiet geen kosten voor.
 export const PAYER_OPTIONS = ['Kieke', 'Merel', 'FINKA']
 
-// Keuzelijst voor "toegewezen aan" — uit finka_assignees, verborgen namen
+// Keuzelijst voor "Wacht op" (kolom assigned_to) — uit finka_assignees, verborgen namen
 // eruit. Staat er al een (inmiddels verborgen of onbekende) naam ingevuld,
 // dan blijft die zichtbaar zodat de select 'm niet stilletjes leeg toont.
 export function assigneeNames(assignees: Assignee[], current?: string | null): string[] {

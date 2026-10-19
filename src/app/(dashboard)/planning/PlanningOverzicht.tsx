@@ -381,7 +381,7 @@ export default function PlanningOverzicht({
           {!compact && (
           <>
           <select
-            aria-label="Toegewezen aan"
+            aria-label="Wacht op"
             value={e.assignee ?? ''}
             onChange={(ev) => setAssignee(e, ev.target.value || null)}
             className="h-8 max-w-40 px-2 text-[13px] bg-[#FAF8F5] border border-[#DDD8D2] rounded-full focus:outline-none focus:border-[#1C1B19]"
@@ -415,7 +415,7 @@ export default function PlanningOverzicht({
             />
             {compact && (
               <select
-                aria-label="Toegewezen aan"
+                aria-label="Wacht op"
                 value={e.assignee ?? ''}
                 onChange={(ev) => setAssignee(e, ev.target.value || null)}
                 className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
@@ -481,7 +481,7 @@ export default function PlanningOverzicht({
   return (
     <div className="max-w-7xl space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[#6B6560] mr-1">Toegewezen aan</span>
+        <span className="text-xs text-[#6B6560] mr-1">Wacht op</span>
         <button type="button" className={chip(person === PERSON_ALL)} onClick={() => setPerson(PERSON_ALL)}>Iedereen</button>
         {names.map((n) => (
           <button key={n} type="button" className={chip(person === n)} onClick={() => setPerson(n)}>{n}</button>
@@ -541,7 +541,7 @@ export default function PlanningOverzicht({
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-9" />
           </label>
           <label className="flex-[1_1_150px] flex flex-col gap-1 text-xs text-[#6B6560]">
-            Toegewezen aan
+            Wacht op
             <select
               value={newAssignee}
               onChange={(e) => setNewAssignee(e.target.value)}
