@@ -2283,3 +2283,55 @@ UPDATE finka_checklist_categories c SET status_id = s.id
 FROM finka_project_statuses s
 WHERE c.status_id IS NULL
   AND (s.label = c.label OR (c.label = 'Afronding' AND s.label = 'Opgeleverd'));
+
+-- =========================================================
+-- 87. FINKA intern: aantekeningen en inspiratie (niet projectgebonden).
+--
+--    De to do's op die pagina zijn de bestaande algemene taken
+--    (finka_project_milestones met project_id NULL) — geen nieuwe tabel.
+--    Inspiratie-bestanden staan in de afgeschermde bucket 'intern': alleen
+--    staff, openen via /api/bestand (zie src/lib/storage-url.ts).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_internal_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  pinned BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_internal_notes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_internal_notes;
+CREATE POLICY "Staff only" ON finka_internal_notes FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_internal_notes TO anon, authenticated, service_role;
+
+-- kind: 'afbeelding' / 'bestand' (file_url + storage_path) of 'link' (url).
+CREATE TABLE IF NOT EXISTS finka_internal_inspiration (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('afbeelding', 'bestand', 'link')),
+  title TEXT NOT NULL DEFAULT '',
+  note TEXT,
+  url TEXT,
+  file_url TEXT,
+  storage_path TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_internal_inspiration ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_internal_inspiration;
+CREATE POLICY "Staff only" ON finka_internal_inspiration FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_internal_inspiration TO anon, authenticated, service_role;
+
+-- Afgeschermde bucket, max 20 MB per bestand.
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('intern', 'intern', false, 20971520)
+ON CONFLICT (id) DO UPDATE SET public = false;
+
+DROP POLICY IF EXISTS "Staff kan intern lezen" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan intern uploaden" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan intern bijwerken" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan intern verwijderen" ON storage.objects;
+CREATE POLICY "Staff kan intern lezen" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'intern' AND is_staff());
+CREATE POLICY "Staff kan intern uploaden" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'intern' AND is_staff());
+CREATE POLICY "Staff kan intern bijwerken" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'intern' AND is_staff());
+CREATE POLICY "Staff kan intern verwijderen" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'intern' AND is_staff());

@@ -262,7 +262,7 @@ export default async function DashboardPage() {
             {topPlanning.map(({ e, bucket }) => (
               <Link
                 key={e.key}
-                href={e.project ? `/projecten/${e.project.id}?tab=planning` : '/planning'}
+                href={e.project ? `/projecten/${e.project.id}?tab=planning` : '/intern'}
                 className="flex items-center gap-3 px-5 py-2.5 hover:bg-[#FAF8F5]"
               >
                 {e.priority ? (
@@ -273,7 +273,7 @@ export default async function DashboardPage() {
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm text-[#1C1B19] truncate">{e.label}</span>
                   <span className="block text-xs text-[#6B6560] truncate">
-                    {e.project ? `${e.project.referenceNumber} · ${e.project.customerName}` : 'Algemeen'}
+                    {e.project ? `${e.project.referenceNumber} · ${e.project.customerName}` : 'FINKA intern'}
                     {e.assignee ? ` · ${e.assignee}` : ''}
                   </span>
                 </span>

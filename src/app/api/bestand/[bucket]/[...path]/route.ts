@@ -53,6 +53,8 @@ async function customerMayOpen(
   bucket: ProtectedBucket,
   path: string
 ): Promise<boolean> {
+  // FINKA intern is nooit voor klanten.
+  if (bucket === 'intern') return false
   // Standaarddocumenten (algemene voorwaarden e.d.): elke klant voor wiens
   // klanttype het document actief is.
   if (bucket === 'project-documenten' && path.startsWith('standaard/')) {

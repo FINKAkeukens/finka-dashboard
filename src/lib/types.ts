@@ -1314,3 +1314,32 @@ export interface DeliveryTime {
   source_email_date: string | null
   updated_at: string
 }
+
+// ---------------------------------------------------------------------------
+// FINKA intern (/intern) — niet projectgebonden: aantekeningen en
+// inspiratie. De to do's daar zijn de algemene taken (ProjectMilestone met
+// project_id NULL). Zie migratie-sectie 87.
+// ---------------------------------------------------------------------------
+export interface InternalNote {
+  id: string
+  title: string
+  body: string
+  pinned: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type InspirationKind = 'afbeelding' | 'bestand' | 'link'
+
+export interface InternalInspiration {
+  id: string
+  kind: InspirationKind
+  title: string
+  note: string | null
+  // Bij 'link' de webadres; bij een upload file_url (publieke-URL-vorm, open
+  // via fileHref) + storage_path in de bucket 'intern'.
+  url: string | null
+  file_url: string | null
+  storage_path: string | null
+  created_at: string
+}

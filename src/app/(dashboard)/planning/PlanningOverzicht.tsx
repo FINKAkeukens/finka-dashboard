@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Assignee, ChecklistItem, ChecklistTemplateItem, MilestoneStatus, ProjectMilestone } from '@/lib/types'
 import { MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, RETIRED_MILESTONE_KEY, assigneeNames } from '@/lib/planning'
 import { refreshUnlocks } from '@/lib/draaiboek'
+import { INTERN_BORDER, INTERN_TEXT, INTERN_TINT } from '@/lib/intern'
 import {
   BUCKET_ORDER,
   BUCKET_TITLES,
@@ -80,14 +81,16 @@ export default function PlanningOverzicht({
   const names = assigneeNames(assignees)
   const sortedProjects = [...projects].sort((a, b) => a.referenceNumber.localeCompare(b.referenceNumber))
 
-  const entries = allEntries.filter((e) => {
-    if (onlyPrio && !e.priority) return false
-    if (person === PERSON_NONE && e.assignee) return false
-    if (person !== PERSON_ALL && person !== PERSON_NONE && e.assignee !== person) return false
-    if (projectFilter === GENERAL && e.project) return false
-    if (projectFilter && projectFilter !== GENERAL && e.project?.id !== projectFilter) return false
-    return true
-  })
+  // Persoon- en prio-filter gelden voor allebei; het projectfilter alleen
+  // voor de projecttaken. Algemene taken (bedrijf, dashboard) staan apart.
+  const matchesPerson = (e: PlanningEntry) =>
+    (!onlyPrio || e.priority) &&
+    (person === PERSON_ALL || (person === PERSON_NONE ? !e.assignee : e.assignee === person))
+  const entries = allEntries.filter((e) => e.project && matchesPerson(e) && (!projectFilter || e.project.id === projectFilter))
+  // Prio bovenaan, dan op datum (zonder datum achteraan).
+  const generalEntries = allEntries
+    .filter((e) => !e.project && matchesPerson(e))
+    .sort((a, b) => (a.priority !== b.priority ? (a.priority ? -1 : 1) : compareEntries(a, b)))
   const byBucket = new Map<PlanningBucket, PlanningEntry[]>()
   for (const e of entries) {
     const b = entryBucket(e, today)
@@ -354,7 +357,7 @@ export default function PlanningOverzicht({
                   {e.phase && <> · {e.phase}</>}
                 </>
               ) : (
-                'Algemeen'
+                'FINKA intern'
               )}
               {e.notes && <> · {e.notes}</>}
             </p>
@@ -436,14 +439,14 @@ export default function PlanningOverzicht({
   const undated = byBucket.get('geen') ?? []
   const undatedGroups = new Map<string, { title: string; entries: PlanningEntry[] }>()
   for (const e of undated) {
-    const key = e.project?.id ?? GENERAL
-    const group = undatedGroups.get(key) ?? { title: e.project ? projectName(e.project) : 'Algemeen', entries: [] }
+    const key = e.project!.id
+    const group = undatedGroups.get(key) ?? { title: projectName(e.project!), entries: [] }
     group.entries.push(e)
     undatedGroups.set(key, group)
   }
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="max-w-7xl space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-[#6B6560] mr-1">Toegewezen aan</span>
         <button type="button" className={chip(person === PERSON_ALL)} onClick={() => setPerson(PERSON_ALL)}>Iedereen</button>
@@ -459,7 +462,6 @@ export default function PlanningOverzicht({
           className="h-8 max-w-64 px-2 text-[13px] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
         >
           <option value="">Alle projecten</option>
-          <option value={GENERAL}>Algemeen</option>
           {sortedProjects.map((p) => (
             <option key={p.id} value={p.id}>{projectName(p)}</option>
           ))}
@@ -495,7 +497,7 @@ export default function PlanningOverzicht({
               className="h-9 px-2 text-sm text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
               <option value="">— Kies —</option>
-              <option value={GENERAL}>Algemeen</option>
+              <option value={GENERAL}>FINKA intern</option>
               {sortedProjects.map((p) => (
                 <option key={p.id} value={p.id}>{projectName(p)}</option>
               ))}
@@ -544,9 +546,13 @@ export default function PlanningOverzicht({
         </p>
       )}
 
+      {/* Op de computer projecttaken links en algemene taken rechts; op de
+          telefoon onder elkaar. */}
+      <div className="flex flex-col xl:flex-row gap-6 items-start">
+      <div className="w-full flex-1 min-w-0 space-y-5">
       {entries.length === 0 && (
         <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-14 text-center">
-          <p className="text-sm text-[#6B6560]">Geen taken voor dit filter.</p>
+          <p className="text-sm text-[#6B6560]">Geen projecttaken voor dit filter.</p>
         </div>
       )}
 
@@ -595,6 +601,34 @@ export default function PlanningOverzicht({
           </div>
         </section>
       )}
+      </div>
+
+      {/* To do's van FINKA intern: los van de projectplanning, in de
+          eigen accentkleur van die pagina. */}
+      <aside className={`w-full xl:w-[380px] shrink-0 rounded-2xl border ${INTERN_BORDER} bg-white overflow-hidden`}>
+        <div className={`flex items-center justify-between gap-2 px-4 py-3 ${INTERN_TINT} border-b ${INTERN_BORDER}`}>
+          <h2 className={`text-xs font-semibold uppercase tracking-wider ${INTERN_TEXT}`}>
+            FINKA intern <span className="font-normal text-[#6B6560]">({generalEntries.length})</span>
+          </h2>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { setNewTarget(GENERAL); setAdding(true) }}
+              className={`inline-flex items-center gap-1 text-[13px] ${INTERN_TEXT} hover:text-[#1C1B19]`}
+            >
+              <Plus size={13} />
+              To do
+            </button>
+            <Link href="/intern" className="text-[13px] text-[#6B6560] hover:text-[#1C1B19]">Openen</Link>
+          </div>
+        </div>
+        {generalEntries.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-[#6B6560]">Geen to do&apos;s voor dit filter.</p>
+        ) : (
+          <div>{generalEntries.map(renderRow)}</div>
+        )}
+      </aside>
+      </div>
     </div>
   )
 }

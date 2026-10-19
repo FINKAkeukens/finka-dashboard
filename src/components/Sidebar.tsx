@@ -23,6 +23,7 @@ import {
   FileText,
   Truck,
   FolderOpen,
+  NotebookPen,
   Menu,
   X,
 } from 'lucide-react'
@@ -45,7 +46,10 @@ interface NavGroup {
 const groups: NavGroup[] = [
   {
     label: 'Overzicht',
-    items: [{ href: '/', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/intern', label: 'FINKA intern', icon: NotebookPen },
+    ],
   },
   {
     label: 'Klanten',
