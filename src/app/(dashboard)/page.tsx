@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
-import { BUCKET_ORDER, buildPlanningEntries, compareEntries, entryBucket, PlanningProjectInfo } from '@/lib/planning-overzicht'
+import { BUCKET_ORDER, buildPlanningEntries, compareEntries, entryBucket, PLANNING_ITEM_COLUMNS, PlanningProjectInfo } from '@/lib/planning-overzicht'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { averageDays, CANCELLED_STATUS_LABEL, isCancelled, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
         // Volledige rijen: ook nodig voor het Planning-blokje. Meer dan
         // 1000, dus in pagina's.
         fetchAll<ChecklistItem>((from, to) =>
-          supabase.from('finka_checklist_items').select('*').in('project_id', projectIds).order('id').range(from, to)
+          supabase.from('finka_checklist_items').select(PLANNING_ITEM_COLUMNS).in('project_id', projectIds).order('id').range(from, to)
         ),
         supabase
           .from('finka_quotes')

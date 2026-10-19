@@ -6,13 +6,15 @@
 const PAGE_SIZE = 1000
 
 export async function fetchAll<T>(
-  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+  // Bewust losjes getypeerd: een select met een kolomlijst levert een eigen
+  // rijtype op; de aanroeper zegt met T wat het is.
+  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
 ): Promise<{ data: T[]; error: string | null }> {
   const rows: T[] = []
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await page(from, from + PAGE_SIZE - 1)
     if (error) return { data: rows, error: error.message }
-    rows.push(...(data ?? []))
+    rows.push(...((data ?? []) as T[]))
     if (!data || data.length < PAGE_SIZE) return { data: rows, error: null }
   }
 }

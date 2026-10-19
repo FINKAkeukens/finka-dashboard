@@ -129,7 +129,7 @@ export function buildPlanningEntries({
   return entries.sort(compareEntries)
 }
 
-function milestoneEntry(m: ProjectMilestone, project: PlanningProjectInfo | null): PlanningEntry {
+export function milestoneEntry(m: ProjectMilestone, project: PlanningProjectInfo | null): PlanningEntry {
   return {
     key: `ms:${m.id}`,
     itemId: null,
@@ -145,3 +145,8 @@ function milestoneEntry(m: ProjectMilestone, project: PlanningProjectInfo | null
     milestoneStatus: m.status,
   }
 }
+
+// Alleen de kolommen die de planning gebruikt — scheelt bij 1000+ taken flink
+// in wat er uit de database komt.
+export const PLANNING_ITEM_COLUMNS =
+  'id, project_id, template_id, item_key, label, category, checked, checked_at, nvt, unlocked_at, due_date, assigned_to, priority, notes, sort_order'

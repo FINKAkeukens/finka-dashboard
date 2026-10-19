@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, Project, ProjectMilestone } from '@/lib/types'
 import { isCancelled } from '@/lib/project-dates'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
-import { PlanningProjectInfo } from '@/lib/planning-overzicht'
+import { PLANNING_ITEM_COLUMNS, PlanningProjectInfo, buildPlanningEntries } from '@/lib/planning-overzicht'
 import { fetchAll } from '@/lib/supabase/fetch-all'
 import PlanningOverzicht from './PlanningOverzicht'
 
@@ -36,13 +36,15 @@ export default async function PlanningOverviewPage() {
   const projects = ((projectsData ?? []) as Project[]).filter((p) => !isCancelled(p))
   const projectIds = projects.map((p) => p.id)
   const categories = (categoriesData ?? []) as ChecklistCategoryItem[]
+  const templates = (templatesData ?? []) as ChecklistTemplateItem[]
+  const generalTasks = (generalData ?? []) as ProjectMilestone[]
 
   let items: ChecklistItem[] = []
   let milestones: ProjectMilestone[] = []
   if (projectIds.length) {
     const [{ data: itemsData }, { data: msData }] = await Promise.all([
       fetchAll<ChecklistItem>((from, to) =>
-        supabase.from('finka_checklist_items').select('*').in('project_id', projectIds).order('id').range(from, to)
+        supabase.from('finka_checklist_items').select(PLANNING_ITEM_COLUMNS).in('project_id', projectIds).order('id').range(from, to)
       ),
       fetchAll<ProjectMilestone>((from, to) =>
         supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).order('id').range(from, to)
@@ -66,12 +68,12 @@ export default async function PlanningOverviewPage() {
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Planning</h1>
         <p className="text-sm text-[#6B6560] mt-1">Taken en afspraken van alle lopende projecten.</p>
       </div>
+      {/* De lijst wordt hier op de server samengesteld: de browser krijgt
+          alleen de open taken, niet alle 1000+ projecttaken. */}
       <PlanningOverzicht
         projects={planningProjects}
-        items={items}
-        templates={(templatesData ?? []) as ChecklistTemplateItem[]}
-        milestones={milestones}
-        generalTasks={(generalData ?? []) as ProjectMilestone[]}
+        initialEntries={buildPlanningEntries({ projects: planningProjects, items, templates, milestones, generalTasks })}
+        templates={templates}
         assignees={(assigneesData ?? []) as Assignee[]}
       />
     </div>

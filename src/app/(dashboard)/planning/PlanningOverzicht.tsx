@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Assignee, ChecklistItem, ChecklistTemplateItem, MilestoneStatus, ProjectMilestone } from '@/lib/types'
 import { MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, assigneeNames } from '@/lib/planning'
-import { buildSteps, refreshUnlocks, setStepDone } from '@/lib/draaiboek'
+import { refreshUnlocks } from '@/lib/draaiboek'
 import {
   BUCKET_ORDER,
   BUCKET_TITLES,
@@ -18,7 +18,9 @@ import {
   PlanningEntry,
   PlanningProjectInfo,
   buildPlanningEntries,
+  compareEntries,
   entryBucket,
+  milestoneEntry,
 } from '@/lib/planning-overzicht'
 
 // /planning — één lijst over alle lopende projecten: prio bovenaan, dan op
@@ -44,24 +46,20 @@ function projectName(p: PlanningProjectInfo): string {
 
 export default function PlanningOverzicht({
   projects,
-  items: initialItems,
+  initialEntries,
   templates,
-  milestones: initialMilestones,
-  generalTasks: initialGeneralTasks,
   assignees,
 }: {
   projects: PlanningProjectInfo[]
-  items: ChecklistItem[]
+  // Al op de server samengesteld (zie page.tsx) — na een wijziging laden we
+  // alleen dat ene project opnieuw.
+  initialEntries: PlanningEntry[]
   templates: ChecklistTemplateItem[]
-  milestones: ProjectMilestone[]
-  generalTasks: ProjectMilestone[]
   assignees: Assignee[]
 }) {
   const supabase = createClient()
   const today = startOfDay(new Date())
-  const [items, setItems] = useState(initialItems)
-  const [milestones, setMilestones] = useState(initialMilestones)
-  const [generalTasks, setGeneralTasks] = useState(initialGeneralTasks)
+  const [allEntries, setAllEntries] = useState(initialEntries)
   const [person, setPerson] = useState(PERSON_ALL)
   const [projectFilter, setProjectFilter] = useState('')
   const [onlyPrio, setOnlyPrio] = useState(false)
@@ -82,7 +80,6 @@ export default function PlanningOverzicht({
   const names = assigneeNames(assignees)
   const sortedProjects = [...projects].sort((a, b) => a.referenceNumber.localeCompare(b.referenceNumber))
 
-  const allEntries = buildPlanningEntries({ projects, items, templates, milestones, generalTasks })
   const entries = allEntries.filter((e) => {
     if (onlyPrio && !e.priority) return false
     if (person === PERSON_NONE && e.assignee) return false
@@ -102,47 +99,71 @@ export default function PlanningOverzicht({
     setTimeout(() => setNotice(''), 8000)
   }
 
-  // --- Opslaan --------------------------------------------------------------
-
-  async function updateItem(id: string, patch: Partial<ChecklistItem>) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
-    const { error: updError } = await supabase
-      .from('finka_checklist_items')
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq('id', id)
-    if (updError) setError(`Opslaan mislukt: ${updError.message}`)
+  function patchEntry(key: string, patch: Partial<PlanningEntry>) {
+    setAllEntries((prev) => prev.map((e) => (e.key === key ? { ...e, ...patch } : e)))
   }
 
-  async function updateMilestone(id: string, patch: Partial<ProjectMilestone>) {
-    const apply = (list: ProjectMilestone[]) => list.map((m) => (m.id === id ? { ...m, ...patch } : m))
-    setMilestones(apply)
-    setGeneralTasks(apply)
-    const { error: updError } = await supabase
+  // Eén project opnieuw opbouwen uit de database (na afvinken of een nieuwe
+  // taak). Geeft de stappen terug die er nieuw bij kwamen.
+  async function reloadProject(project: PlanningProjectInfo): Promise<PlanningEntry[]> {
+    const { items, error: unlockError } = await refreshUnlocks(supabase, project.id)
+    if (unlockError) setError(unlockError)
+    const { data: msData, error: msError } = await supabase
       .from('finka_project_milestones')
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq('id', id)
+      .select('*')
+      .eq('project_id', project.id)
+    if (msError) setError(msError.message)
+    const fresh = buildPlanningEntries({
+      projects: [project],
+      items,
+      templates,
+      milestones: (msData ?? []) as ProjectMilestone[],
+      generalTasks: [],
+    })
+    let added: PlanningEntry[] = []
+    setAllEntries((prev) => {
+      const before = new Set(prev.filter((e) => e.project?.id === project.id).map((e) => e.key))
+      added = fresh.filter((e) => !before.has(e.key))
+      return [...prev.filter((e) => e.project?.id !== project.id), ...fresh].sort(compareEntries)
+    })
+    return added
+  }
+
+  // --- Opslaan --------------------------------------------------------------
+
+  async function save(e: PlanningEntry, itemPatch: Partial<ChecklistItem> | null, msPatch: Partial<ProjectMilestone> | null, entryPatch: Partial<PlanningEntry>) {
+    patchEntry(e.key, entryPatch)
+    const nowIso = new Date().toISOString()
+    const { error: updError } =
+      itemPatch && e.itemId
+        ? await supabase.from('finka_checklist_items').update({ ...itemPatch, updated_at: nowIso }).eq('id', e.itemId)
+        : msPatch && e.milestoneId
+          ? await supabase.from('finka_project_milestones').update({ ...msPatch, updated_at: nowIso }).eq('id', e.milestoneId)
+          : { error: null }
     if (updError) setError(`Opslaan mislukt: ${updError.message}`)
   }
 
   function togglePriority(e: PlanningEntry) {
-    if (e.itemId) updateItem(e.itemId, { priority: !e.priority })
-    else if (e.milestoneId) updateMilestone(e.milestoneId, { priority: !e.priority })
+    const priority = !e.priority
+    save(e, e.itemId ? { priority } : null, e.itemId ? null : { priority }, { priority })
   }
 
   function setAssignee(e: PlanningEntry, name: string | null) {
-    if (e.itemId) updateItem(e.itemId, { assigned_to: name })
-    else if (e.milestoneId) updateMilestone(e.milestoneId, { assigned_to: name })
+    save(e, e.itemId ? { assigned_to: name } : null, e.itemId ? null : { assigned_to: name }, { assignee: name })
   }
 
   // Bij een stap met afspraak is de datum die van de afspraak.
   function setDate(e: PlanningEntry, date: string | null) {
-    if (e.milestoneId) updateMilestone(e.milestoneId, { date })
-    else if (e.itemId) updateItem(e.itemId, { due_date: date })
+    if (e.milestoneId) save(e, null, { date }, { date })
+    else save(e, { due_date: date }, null, { date })
   }
 
   function setNotes(e: PlanningEntry, notes: string | null) {
-    if (e.itemId) updateItem(e.itemId, { notes })
-    else if (e.milestoneId) updateMilestone(e.milestoneId, { notes })
+    save(e, e.itemId ? { notes } : null, e.itemId ? null : { notes }, { notes })
+  }
+
+  function setStatus(e: PlanningEntry, status: MilestoneStatus) {
+    save(e, null, { status }, { milestoneStatus: status })
   }
 
   // Afvinken. Bij een draaiboekstap gaat de gekoppelde afspraak mee en
@@ -150,52 +171,47 @@ export default function PlanningOverzicht({
   async function setDone(e: PlanningEntry, done: boolean) {
     setError('')
     setLastDone(done ? e : null)
-    if (e.itemId && e.project) {
-      const projectId = e.project.id
-      const projectItems = items.filter((i) => i.project_id === projectId)
-      const projectMilestones = milestones.filter((m) => m.project_id === projectId)
-      const before = buildSteps(projectItems, templates, projectMilestones)
-      const step = before.find((s) => s.item.id === e.itemId)
-      if (!step) return
-      const nowIso = new Date().toISOString()
-      setItems((prev) =>
-        prev.map((i) => (i.id === e.itemId ? { ...i, checked: done, checked_at: done ? nowIso : null, nvt: false } : i))
-      )
-      const nextMilestones = step.milestone
-        ? milestones.map((m) =>
-            m.id === step.milestone!.id
-              ? { ...m, status: (done ? 'klaar' : m.status === 'klaar' ? 'gepland' : m.status) as MilestoneStatus }
-              : m
-          )
-        : milestones
-      setMilestones(nextMilestones)
-      const updError = await setStepDone(supabase, step, done)
+    if (done) setAllEntries((prev) => prev.filter((x) => x.key !== e.key))
+    const nowIso = new Date().toISOString()
+    if (e.itemId) {
+      const { error: updError } = await supabase
+        .from('finka_checklist_items')
+        .update({ checked: done, checked_at: done ? nowIso : null, nvt: false, updated_at: nowIso })
+        .eq('id', e.itemId)
       if (updError) {
-        setError(`Opslaan mislukt: ${updError}`)
+        setError(`Opslaan mislukt: ${updError.message}`)
         return
       }
-      const { items: fresh, error: unlockError } = await refreshUnlocks(supabase, projectId)
-      if (unlockError) setError(unlockError)
-      if (!fresh.length) return
-      setItems((prev) => [...prev.filter((i) => i.project_id !== projectId), ...fresh])
-      const visibleBefore = new Set(before.filter((s) => s.visible && !s.done).map((s) => s.item.id))
-      const released = buildSteps(fresh, templates, nextMilestones.filter((m) => m.project_id === projectId)).filter(
-        (s) => s.visible && !s.done && !visibleBefore.has(s.item.id)
-      )
-      if (released.length) flash(`Vrijgegeven bij ${e.project.customerName}: ${released.map((s) => s.item.label).join(', ')}`)
-    } else if (e.milestoneId) {
-      await updateMilestone(e.milestoneId, { status: done ? 'klaar' : e.milestoneStatus === 'klaar' ? 'gepland' : e.milestoneStatus ?? 'gepland' })
+    }
+    if (e.milestoneId) {
+      // Zelfde regel als setStepDone: klaar, of bij heropenen terug naar
+      // gepland.
+      const status: MilestoneStatus = done ? 'klaar' : e.milestoneStatus === 'klaar' || !e.milestoneStatus ? 'gepland' : e.milestoneStatus
+      const { error: msError } = await supabase
+        .from('finka_project_milestones')
+        .update({ status, updated_at: nowIso })
+        .eq('id', e.milestoneId)
+      if (msError) {
+        setError(`Opslaan mislukt: ${msError.message}`)
+        return
+      }
+    }
+    if (e.project) {
+      const released = (await reloadProject(e.project)).filter((x) => x.key !== e.key)
+      if (released.length) flash(`Vrijgegeven bij ${e.project.customerName}: ${released.map((x) => x.label).join(', ')}`)
+    } else if (!done) {
+      setAllEntries((prev) => [...prev, { ...e, milestoneStatus: 'gepland' as MilestoneStatus }].sort(compareEntries))
     }
   }
 
   async function renameGeneral(e: PlanningEntry, label: string) {
     if (!e.milestoneId || !label.trim() || label.trim() === e.label) return
-    updateMilestone(e.milestoneId, { label: label.trim() })
+    save(e, null, { label: label.trim() }, { label: label.trim() })
   }
 
   async function deleteGeneral(e: PlanningEntry) {
     if (!e.milestoneId || !confirm(`"${e.label}" verwijderen?`)) return
-    setGeneralTasks((prev) => prev.filter((m) => m.id !== e.milestoneId))
+    setAllEntries((prev) => prev.filter((x) => x.key !== e.key))
     setEditingKey(null)
     const { error: delError } = await supabase.from('finka_project_milestones').delete().eq('id', e.milestoneId)
     if (delError) setError(`Verwijderen mislukt: ${delError.message}`)
@@ -218,7 +234,12 @@ export default function PlanningOverzicht({
     setCreating(true)
     setError('')
     if (newTarget === GENERAL) {
-      const maxSort = generalTasks.reduce((max, m) => Math.max(max, m.sort_order), -1)
+      const { data: lastGeneral } = await supabase
+        .from('finka_project_milestones')
+        .select('sort_order')
+        .is('project_id', null)
+        .order('sort_order', { ascending: false })
+        .limit(1)
       const { data, error: insError } = await supabase
         .from('finka_project_milestones')
         .insert({
@@ -229,7 +250,7 @@ export default function PlanningOverzicht({
           status: 'nog_doen',
           assigned_to: newAssignee || null,
           priority: newPriority,
-          sort_order: maxSort + 1,
+          sort_order: (lastGeneral?.[0]?.sort_order ?? -1) + 1,
         })
         .select()
         .single()
@@ -238,31 +259,33 @@ export default function PlanningOverzicht({
         setError(`Aanmaken mislukt: ${insError.message}`)
         return
       }
-      setGeneralTasks((prev) => [...prev, data as ProjectMilestone])
+      setAllEntries((prev) => [...prev, milestoneEntry(data as ProjectMilestone, null)].sort(compareEntries))
     } else {
       const project = projects.find((p) => p.id === newTarget)
-      const maxSort = items.filter((i) => i.project_id === newTarget).reduce((max, i) => Math.max(max, i.sort_order), -1)
-      const { data, error: insError } = await supabase
+      if (!project) return
+      const { data: last } = await supabase
         .from('finka_checklist_items')
-        .insert({
-          project_id: newTarget,
-          item_key: null,
-          category: project?.phaseLabel ?? 'Overig',
-          label: newLabel.trim(),
-          due_date: newDate || null,
-          assigned_to: newAssignee || null,
-          priority: newPriority,
-          unlocked_at: new Date().toISOString(),
-          sort_order: maxSort + 1,
-        })
-        .select()
-        .single()
+        .select('sort_order')
+        .eq('project_id', newTarget)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+      const { error: insError } = await supabase.from('finka_checklist_items').insert({
+        project_id: newTarget,
+        item_key: null,
+        category: project.phaseLabel ?? 'Overig',
+        label: newLabel.trim(),
+        due_date: newDate || null,
+        assigned_to: newAssignee || null,
+        priority: newPriority,
+        unlocked_at: new Date().toISOString(),
+        sort_order: (last?.[0]?.sort_order ?? -1) + 1,
+      })
       setCreating(false)
       if (insError) {
         setError(`Aanmaken mislukt: ${insError.message}`)
         return
       }
-      setItems((prev) => [...prev, data as ChecklistItem])
+      await reloadProject(project)
     }
     resetNewTask()
   }
@@ -370,7 +393,7 @@ export default function PlanningOverzicht({
               <select
                 aria-label="Status"
                 value={e.milestoneStatus ?? 'gepland'}
-                onChange={(ev) => updateMilestone(e.milestoneId!, { status: ev.target.value as MilestoneStatus })}
+                onChange={(ev) => setStatus(e, ev.target.value as MilestoneStatus)}
                 className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
               >
                 {MILESTONE_STATUS_ORDER.map((s) => (
