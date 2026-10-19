@@ -6,6 +6,7 @@ import { isCancelled } from '@/lib/project-dates'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
 import { PLANNING_ITEM_COLUMNS, PlanningProjectInfo, buildPlanningEntries } from '@/lib/planning-overzicht'
 import { fetchAll } from '@/lib/supabase/fetch-all'
+import { RETIRED_MILESTONE_KEY } from '@/lib/planning'
 import PlanningOverzicht from './PlanningOverzicht'
 
 export default async function PlanningOverviewPage() {
@@ -47,7 +48,7 @@ export default async function PlanningOverviewPage() {
         supabase.from('finka_checklist_items').select(PLANNING_ITEM_COLUMNS).in('project_id', projectIds).order('id').range(from, to)
       ),
       fetchAll<ProjectMilestone>((from, to) =>
-        supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).order('id').range(from, to)
+        supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).neq('milestone_key', RETIRED_MILESTONE_KEY).order('id').range(from, to)
       ),
     ])
     items = itemsData.sort((a, b) => a.sort_order - b.sort_order)

@@ -140,6 +140,7 @@ export default function ProjectTijdlijn({
   if (currentIdx < 0) currentIdx = Math.max(phases.length - 1, 0)
   const currentLabel = phases[currentIdx]?.label ?? null
 
+  const linkedMilestoneIds = new Set(steps.filter((s) => s.milestone).map((s) => s.milestone!.id))
   const phaseByMilestone = milestonePhases(templates, categories)
   for (const m of milestones) {
     const label = (m.milestone_key !== 'custom' && phaseByMilestone.get(m.milestone_key)) || currentLabel
@@ -513,13 +514,17 @@ export default function ProjectTijdlijn({
   function renderMilestoneChips(phase: Phase, isPast: boolean) {
     // Alleen afspraken waar nog iets mee moet — afgeronde staan in "Alle
     // afspraken bewerken". In een fase die al achter ons ligt alleen nog
-    // gedateerde (een lege "+ datum kennismaking" is daar ruis).
-    const shown = phase.milestones.filter((m) => m.status !== 'klaar' && (!isPast || !!m.date))
+    // gedateerde (een lege "Datum invullen" is daar ruis). Een afspraak die
+    // al als taak in de lijst staat (bv. "Levering bij klant") niet dubbel.
+    const shown = phase.milestones.filter(
+      (m) => m.status !== 'klaar' && (!isPast || !!m.date) && !linkedMilestoneIds.has(m.id)
+    )
     if (!shown.length) return null
     const editing = shown.find((m) => m.id === editingMilestoneId)
     return (
       <div className="mt-2.5 space-y-2">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-[#6B6560] mr-0.5">Afspraken:</span>
           {shown.map((m) => {
             const label = milestoneLabel(m)
             return (
@@ -539,7 +544,7 @@ export default function ProjectTijdlijn({
                     {label} · {format(new Date(m.date), 'EEEEEE d MMM', { locale: nl })}
                   </>
                 ) : (
-                  <>+ datum {label.toLowerCase()}</>
+                  <>{label} · Datum invullen</>
                 )}
               </button>
             )

@@ -22,7 +22,7 @@ import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
 import { Appliance, Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
-import { leadTimeDays } from '@/lib/planning'
+import { leadTimeDays, RETIRED_MILESTONE_KEY } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 import { DEFAULT_TEXTS } from '@/lib/default-texts'
 import { standardDocumentsFor, termsReferenceDate } from '@/lib/standard-documents'
@@ -117,7 +117,7 @@ export default async function ProjectDetailPage({
   let assignees: Assignee[] = []
   if (tab === 'planning') {
     const [{ data: msData }, { data: itemsData }, { data: tplData }, { data: catData }, { data: assigneeData }] = await Promise.all([
-      supabase.from('finka_project_milestones').select('*').eq('project_id', id).order('sort_order'),
+      supabase.from('finka_project_milestones').select('*').eq('project_id', id).neq('milestone_key', RETIRED_MILESTONE_KEY).order('sort_order'),
       supabase.from('finka_checklist_items').select('*').eq('project_id', id).order('sort_order'),
       supabase.from('finka_checklist_templates').select('*').order('sort_order'),
       supabase.from('finka_checklist_categories').select('*').order('sort_order'),

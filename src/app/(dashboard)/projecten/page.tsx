@@ -6,7 +6,7 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { ArrowRight, Plus } from 'lucide-react'
 import { Project, ProjectMilestone, ProjectStatus } from '@/lib/types'
-import { leadTimeDays, milestoneLabel, urgencyClass } from '@/lib/planning'
+import { leadTimeDays, milestoneLabel, RETIRED_MILESTONE_KEY, urgencyClass } from '@/lib/planning'
 import { CANCELLED_STATUS_LABEL, isCancelled } from '@/lib/project-dates'
 import ProjectsTable, { type ProjectRow } from './ProjectsTable'
 
@@ -76,7 +76,8 @@ export default async function ProjectenPage({
         supabase
           .from('finka_project_milestones')
           .select('*')
-          .in('project_id', projects.map((p) => p.id)),
+          .in('project_id', projects.map((p) => p.id))
+          .neq('milestone_key', RETIRED_MILESTONE_KEY),
         // Voor "Laatst bewerkt": aan de offerte wordt het meest gewerkt,
         // terwijl het project zelf dan niet wijzigt.
         supabase

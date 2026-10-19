@@ -18,12 +18,18 @@ export function assigneeNames(assignees: Assignee[], current?: string | null): s
   return names
 }
 
-// Vaste volgorde van de 5 standaardmijlpalen — 'custom'-items staan hier
+// Vaste volgorde van de standaardmijlpalen — 'custom'-items staan hier
 // bewust niet in, die worden los toegevoegd/verwijderd per project.
+// 'bestelling' is sinds 2026-10-19 geen afspraak meer (het is een taak:
+// "Kasten bestellen bij keukenleverancier"); de rijen bestaan nog wel in de
+// database (de trigger maakt ze aan), maar worden nergens meer getoond — zie
+// RETIRED_MILESTONE_KEY.
 export const MILESTONE_ORDER: Exclude<MilestoneKey, 'custom'>[] = [
   'kennismaking', 'meting', 'bespreken_eerste_offerte', 'bespreken_finale_offerte',
-  'bestelling', 'levering', 'montage_start', 'oplevering',
+  'levering', 'montage_start', 'oplevering',
 ]
+
+export const RETIRED_MILESTONE_KEY = 'bestelling'
 
 export const MILESTONE_LABELS: Record<Exclude<MilestoneKey, 'custom'>, string> = {
   kennismaking: 'Kennismaking',

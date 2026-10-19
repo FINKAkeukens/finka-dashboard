@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
+import { RETIRED_MILESTONE_KEY } from '@/lib/planning'
 import { BUCKET_ORDER, buildPlanningEntries, compareEntries, entryBucket, PLANNING_ITEM_COLUMNS, PlanningProjectInfo } from '@/lib/planning-overzicht'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -102,7 +103,7 @@ export default async function DashboardPage() {
           .not('akkoord_at', 'is', null)
           .order('akkoord_at', { ascending: true }),
         fetchAll<ProjectMilestone>((from, to) =>
-          supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).order('id').range(from, to)
+          supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).neq('milestone_key', RETIRED_MILESTONE_KEY).order('id').range(from, to)
         ),
         supabase
           .from('finka_portal_activity')

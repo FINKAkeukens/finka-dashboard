@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Assignee, ChecklistItem, ChecklistTemplateItem, MilestoneStatus, ProjectMilestone } from '@/lib/types'
-import { MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, assigneeNames } from '@/lib/planning'
+import { MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, RETIRED_MILESTONE_KEY, assigneeNames } from '@/lib/planning'
 import { refreshUnlocks } from '@/lib/draaiboek'
 import {
   BUCKET_ORDER,
@@ -112,6 +112,7 @@ export default function PlanningOverzicht({
       .from('finka_project_milestones')
       .select('*')
       .eq('project_id', project.id)
+      .neq('milestone_key', RETIRED_MILESTONE_KEY)
     if (msError) setError(msError.message)
     const fresh = buildPlanningEntries({
       projects: [project],
