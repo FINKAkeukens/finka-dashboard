@@ -306,7 +306,9 @@ export default function PlanningOverzicht({
     return { text: short, className: 'text-[#6B6560]' }
   }
 
-  function renderRow(e: PlanningEntry) {
+  // compact = het smalle FINKA intern-vak: persoon en datum als één regel
+  // onder de naam; persoon kiezen kan in het uitklapdeel.
+  function renderRow(e: PlanningEntry, compact = false) {
     const isEditing = editingKey === e.key
     const isGeneral = !e.project
     const date = dateText(e.date)
@@ -348,6 +350,19 @@ export default function PlanningOverzicht({
                 </span>
               )}
             </button>
+            {compact ? (
+              (e.assignee || e.date || e.notes) && (
+                <p className="text-[13px] text-[#6B6560] truncate">
+                  {[e.assignee, e.notes].filter(Boolean).join(' · ')}
+                  {e.date && (
+                    <span className={date.className}>
+                      {e.assignee || e.notes ? ' · ' : ''}
+                      {date.text}
+                    </span>
+                  )}
+                </p>
+              )
+            ) : (
             <p className="text-[13px] text-[#6B6560] truncate">
               {e.project ? (
                 <>
@@ -361,7 +376,10 @@ export default function PlanningOverzicht({
               )}
               {e.notes && <> · {e.notes}</>}
             </p>
+            )}
           </div>
+          {!compact && (
+          <>
           <select
             aria-label="Toegewezen aan"
             value={e.assignee ?? ''}
@@ -374,9 +392,11 @@ export default function PlanningOverzicht({
             ))}
           </select>
           <span className={`w-24 text-right text-[13px] shrink-0 ${date.className}`}>{date.text}</span>
+          </>
+          )}
         </div>
         {isEditing && (
-          <div className="flex flex-wrap items-center gap-2 px-4 pb-3 sm:pl-[88px]">
+          <div className={`flex flex-wrap items-center gap-2 px-4 pb-3 ${compact ? '' : 'sm:pl-[88px]'}`}>
             {isGeneral && (
               <Input
                 key={`label-${e.key}`}
@@ -393,6 +413,19 @@ export default function PlanningOverzicht({
               onChange={(ev) => setDate(e, ev.target.value || null)}
               className="h-8 w-40"
             />
+            {compact && (
+              <select
+                aria-label="Toegewezen aan"
+                value={e.assignee ?? ''}
+                onChange={(ev) => setAssignee(e, ev.target.value || null)}
+                className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
+              >
+                <option value="">Niemand</option>
+                {assigneeNames(assignees, e.assignee).map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            )}
             {e.milestoneId && !e.itemId && (
               <select
                 aria-label="Status"
@@ -564,7 +597,7 @@ export default function PlanningOverzicht({
             <h2 className={`text-xs font-semibold uppercase tracking-wider ${BUCKET_COLORS[bucket]}`}>
               {BUCKET_TITLES[bucket]} <span className="font-normal text-[#6B6560]">({list.length})</span>
             </h2>
-            <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">{list.map(renderRow)}</div>
+            <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">{list.map((e) => renderRow(e))}</div>
           </section>
         )
       })}
@@ -594,7 +627,7 @@ export default function PlanningOverzicht({
                     <span className="flex-1 text-sm text-[#1C1B19]">{group.title}</span>
                     <span className="text-[13px] text-[#6B6560]">{group.entries.length} taken</span>
                   </button>
-                  {isOpen && <div className="bg-[#FCFBF9] border-t border-[#EFEBE6]">{group.entries.map(renderRow)}</div>}
+                  {isOpen && <div className="bg-[#FCFBF9] border-t border-[#EFEBE6]">{group.entries.map((e) => renderRow(e))}</div>}
                 </div>
               )
             })}
@@ -625,7 +658,7 @@ export default function PlanningOverzicht({
         {generalEntries.length === 0 ? (
           <p className="px-4 py-6 text-sm text-[#6B6560]">Geen to do&apos;s voor dit filter.</p>
         ) : (
-          <div>{generalEntries.map(renderRow)}</div>
+          <div>{generalEntries.map((e) => renderRow(e, true))}</div>
         )}
       </aside>
       </div>

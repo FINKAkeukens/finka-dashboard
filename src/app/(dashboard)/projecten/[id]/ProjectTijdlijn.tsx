@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { differenceInCalendarDays, format } from 'date-fns'
@@ -101,6 +101,8 @@ export default function ProjectTijdlijn({
   const [newPhase, setNewPhase] = useState('')
   const [newAssignee, setNewAssignee] = useState('')
   const [newPriority, setNewPriority] = useState(false)
+  const savingTask = useRef(false)
+  const [savingTaskState, setSavingTaskState] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
@@ -294,6 +296,10 @@ export default function ProjectTijdlijn({
       setAdding(false)
       return
     }
+    // Enter + klik (of twee keer klikken) mag geen dubbele taak opleveren.
+    if (savingTask.current) return
+    savingTask.current = true
+    setSavingTaskState(true)
     const maxOrder = items.reduce((max, i) => Math.max(max, i.sort_order), -1)
     const { data, error: insError } = await supabase
       .from('finka_checklist_items')
@@ -310,6 +316,8 @@ export default function ProjectTijdlijn({
       })
       .select()
       .single()
+    savingTask.current = false
+    setSavingTaskState(false)
     if (insError) {
       setError(insError.message)
       return
@@ -653,7 +661,7 @@ export default function ProjectTijdlijn({
             />
             Prio
           </label>
-          <Button size="sm" onClick={addTask}>Toevoegen</Button>
+          <Button size="sm" onClick={addTask} disabled={savingTaskState}>{savingTaskState ? 'Bezig...' : 'Toevoegen'}</Button>
           <Button size="sm" variant="outline" onClick={resetNewTask}>Annuleren</Button>
         </div>
       )}

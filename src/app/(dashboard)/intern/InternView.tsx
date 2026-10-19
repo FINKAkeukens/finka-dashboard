@@ -79,6 +79,7 @@ export default function InternView({
   const [linkTitle, setLinkTitle] = useState('')
   const [uploading, setUploading] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
+  const savingTodo = useRef(false)
 
   const names = assigneeNames(assignees)
   const openTodos = sortTodos(todos.filter((t) => t.status !== 'klaar'))
@@ -104,7 +105,9 @@ export default function InternView({
   async function addTodo(e: React.FormEvent) {
     e.preventDefault()
     const label = newTodo.trim()
-    if (!label) return
+    // Enter + klik mag geen dubbele to do opleveren.
+    if (!label || savingTodo.current) return
+    savingTodo.current = true
     const maxSort = todos.reduce((max, t) => Math.max(max, t.sort_order), -1)
     const { data, error: insError } = await supabase
       .from('finka_project_milestones')
@@ -119,6 +122,7 @@ export default function InternView({
       })
       .select()
       .single()
+    savingTodo.current = false
     if (insError) {
       fail(`Toevoegen mislukt: ${insError.message}`)
       return
@@ -393,7 +397,9 @@ export default function InternView({
           {openTodos.length === 0 ? (
             <p className="px-5 py-6 text-sm text-[#6B6560]">Geen open to do&apos;s.</p>
           ) : (
-            <div>{openTodos.map(renderTodo)}</div>
+            // Op de computer een vaste hoogte met eigen scroll, zodat een lange
+            // lijst de aantekeningen ernaast niet uit balans trekt.
+            <div className="lg:max-h-[620px] lg:overflow-y-auto">{openTodos.map(renderTodo)}</div>
           )}
           {doneTodos.length > 0 && (
             <div className="border-t border-[#EEF2EF]">
