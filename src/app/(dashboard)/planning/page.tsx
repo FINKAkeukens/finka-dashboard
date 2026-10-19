@@ -5,6 +5,7 @@ import { Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, 
 import { isCancelled } from '@/lib/project-dates'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
 import { PlanningProjectInfo } from '@/lib/planning-overzicht'
+import { fetchAll } from '@/lib/supabase/fetch-all'
 import PlanningOverzicht from './PlanningOverzicht'
 
 export default async function PlanningOverviewPage() {
@@ -40,11 +41,15 @@ export default async function PlanningOverviewPage() {
   let milestones: ProjectMilestone[] = []
   if (projectIds.length) {
     const [{ data: itemsData }, { data: msData }] = await Promise.all([
-      supabase.from('finka_checklist_items').select('*').in('project_id', projectIds).order('sort_order'),
-      supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).order('sort_order'),
+      fetchAll<ChecklistItem>((from, to) =>
+        supabase.from('finka_checklist_items').select('*').in('project_id', projectIds).order('id').range(from, to)
+      ),
+      fetchAll<ProjectMilestone>((from, to) =>
+        supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).order('id').range(from, to)
+      ),
     ])
-    items = (itemsData ?? []) as ChecklistItem[]
-    milestones = (msData ?? []) as ProjectMilestone[]
+    items = itemsData.sort((a, b) => a.sort_order - b.sort_order)
+    milestones = msData.sort((a, b) => a.sort_order - b.sort_order)
   }
 
   const planningProjects: PlanningProjectInfo[] = projects.map((p) => ({

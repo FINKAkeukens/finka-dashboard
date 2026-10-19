@@ -11,6 +11,7 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { averageDays, CANCELLED_STATUS_LABEL, isCancelled, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
 import { getIsoWeek } from '@/lib/iso-week'
+import { fetchAll } from '@/lib/supabase/fetch-all'
 import DeliveryTimesWidget from './DeliveryTimesWidget'
 
 export default async function DashboardPage() {
@@ -89,15 +90,20 @@ export default async function DashboardPage() {
     { data: activityData },
   ] = projectIds.length
     ? await Promise.all([
-        // Volledige rijen: ook nodig voor het Planning-blokje.
-        supabase.from('finka_checklist_items').select('*').in('project_id', projectIds),
+        // Volledige rijen: ook nodig voor het Planning-blokje. Meer dan
+        // 1000, dus in pagina's.
+        fetchAll<ChecklistItem>((from, to) =>
+          supabase.from('finka_checklist_items').select('*').in('project_id', projectIds).order('id').range(from, to)
+        ),
         supabase
           .from('finka_quotes')
           .select('project_id, akkoord_at')
           .in('project_id', projectIds)
           .not('akkoord_at', 'is', null)
           .order('akkoord_at', { ascending: true }),
-        supabase.from('finka_project_milestones').select('*').in('project_id', projectIds),
+        fetchAll<ProjectMilestone>((from, to) =>
+          supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).order('id').range(from, to)
+        ),
         supabase
           .from('finka_portal_activity')
           .select('project_id')

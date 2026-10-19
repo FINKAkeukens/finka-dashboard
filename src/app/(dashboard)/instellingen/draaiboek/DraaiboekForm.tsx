@@ -15,6 +15,7 @@ import {
 } from '@/lib/types'
 import { MILESTONE_LABELS, MILESTONE_ORDER, assigneeNames } from '@/lib/planning'
 import { renamePhase } from '@/lib/draaiboek'
+import { fetchAll } from '@/lib/supabase/fetch-all'
 
 // Instellingen > Draaiboek: fases (checklist-kopjes) met hun standaardstappen
 // (finka_checklist_templates) én de keuzelijst personen/partijen. Alles slaat
@@ -261,11 +262,11 @@ export default function DraaiboekForm({
   // stap nog niet is vrijgegeven).
   async function fanOutNewStep(categoryId: string, step: ChecklistTemplateItem) {
     const categoryLabel = categoryById.get(categoryId)?.label ?? 'Overig'
-    const { data: existingRows, error: fetchError } = await supabase
-      .from('finka_checklist_items')
-      .select('project_id, sort_order')
+    const { data: existingRows, error: fetchError } = await fetchAll<{ project_id: string; sort_order: number }>((from, to) =>
+      supabase.from('finka_checklist_items').select('id, project_id, sort_order').order('id').range(from, to)
+    )
     if (fetchError) {
-      setError(fetchError.message)
+      setError(fetchError)
       return
     }
     const maxSortByProject = new Map<string, number>()
