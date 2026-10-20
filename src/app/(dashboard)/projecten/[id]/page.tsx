@@ -21,6 +21,7 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
+import { ProjectTimeSummary } from '@/components/ProjectTimer'
 import { Appliance, Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
 import { leadTimeDays, RETIRED_MILESTONE_KEY } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
@@ -314,6 +315,7 @@ export default async function ProjectDetailPage({
             {projectRow.customer.first_name} {projectRow.customer.last_name} →
           </Link>
         )}
+        <ProjectTimeSummary projectId={id} />
 
         {/* Tijdlijn: eerste contact → akkoord → montage → afronding, met per
             fase de doorlooptijd sinds de vorige. De laatste drie datums komen

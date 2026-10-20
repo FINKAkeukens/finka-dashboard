@@ -2335,3 +2335,30 @@ CREATE POLICY "Staff kan intern lezen" ON storage.objects FOR SELECT TO authenti
 CREATE POLICY "Staff kan intern uploaden" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'intern' AND is_staff());
 CREATE POLICY "Staff kan intern bijwerken" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'intern' AND is_staff());
 CREATE POLICY "Staff kan intern verwijderen" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'intern' AND is_staff());
+
+-- =========================================================
+-- 88. Tijdregistratie per project.
+--
+--    Eén timer per staff-gebruiker: een rij met ended_at NULL is de
+--    lopende timer (de unieke index dwingt af dat er per gebruiker maar
+--    één tegelijk loopt). Wisselen van project = de lopende rij afsluiten
+--    en een nieuwe beginnen. Zie src/lib/time-tracking.ts.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_time_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_email TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT finka_time_entries_order CHECK (ended_at IS NULL OR ended_at >= started_at)
+);
+CREATE INDEX IF NOT EXISTS finka_time_entries_project_idx ON finka_time_entries(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS finka_time_entries_one_running ON finka_time_entries(user_id) WHERE ended_at IS NULL;
+
+ALTER TABLE finka_time_entries ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_time_entries;
+CREATE POLICY "Staff only" ON finka_time_entries FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_time_entries TO anon, authenticated, service_role;
