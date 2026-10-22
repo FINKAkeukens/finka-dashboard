@@ -135,3 +135,86 @@ export async function startTimer(
   })
   return error
 }
+
+// ---------------------------------------------------------------------------
+// Overzicht (/tijd en de kolom Tijd in de projectenlijst).
+
+export type TimePeriod = 'week' | 'maand' | 'jaar' | 'alles'
+
+export const TIME_PERIODS: { key: TimePeriod; label: string }[] = [
+  { key: 'week', label: 'Deze week' },
+  { key: 'maand', label: 'Deze maand' },
+  { key: 'jaar', label: 'Dit jaar' },
+  { key: 'alles', label: 'Alles' },
+]
+
+export function parseTimePeriod(value: string | undefined): TimePeriod {
+  return TIME_PERIODS.some((p) => p.key === value) ? (value as TimePeriod) : 'maand'
+}
+
+// Middernacht Nederlandse tijd op datum `ymd` (YYYY-MM-DD), als tijdstip. De
+// server draait in UTC; zonder dit zou een week om 01:00/02:00 beginnen.
+function amsterdamMidnight(ymd: string) {
+  const utc = new Date(`${ymd}T00:00:00Z`)
+  const asLocal = new Date(utc.toLocaleString('en-US', { timeZone: 'Europe/Amsterdam' }))
+  const asUtc = new Date(utc.toLocaleString('en-US', { timeZone: 'UTC' }))
+  return new Date(utc.getTime() - (asLocal.getTime() - asUtc.getTime()))
+}
+
+// Begin van de periode (week vanaf maandag); null = alles.
+export function periodStart(period: TimePeriod, now = new Date()): Date | null {
+  if (period === 'alles') return null
+  const today = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' })
+  const [y, m, d] = today.split('-').map(Number)
+  if (period === 'jaar') return amsterdamMidnight(`${y}-01-01`)
+  if (period === 'maand') return amsterdamMidnight(`${y}-${String(m).padStart(2, '0')}-01`)
+  const date = new Date(Date.UTC(y, m - 1, d))
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
+  return amsterdamMidnight(date.toISOString().slice(0, 10))
+}
+
+// Seconden van een sessie binnen de periode: een sessie die vóór het begin
+// startte telt alleen vanaf het begin mee.
+export function entrySecondsSince(
+  entry: Pick<TimeEntry, 'started_at' | 'ended_at'>,
+  since: Date | null,
+  now = Date.now()
+) {
+  if (!since || new Date(entry.started_at) >= since) return entrySeconds(entry, now)
+  return entrySeconds({ started_at: since.toISOString(), ended_at: entry.ended_at }, now)
+}
+
+// Naam voor sessies zonder persoon (van vóór migratie 89).
+export const NO_PERSON = 'Geen persoon'
+
+export type TimeEntryWithProject = TimeEntry & { project: TimerProject | null }
+
+export interface ProjectTimeTotal {
+  project: TimerProject
+  seconds: number
+  perPerson: Map<string, number>
+}
+
+function addTo(map: Map<string, number>, key: string, seconds: number) {
+  map.set(key, (map.get(key) ?? 0) + seconds)
+}
+
+// Totaal, per persoon en per project (meeste tijd eerst) binnen de periode.
+export function summarizeTime(entries: TimeEntryWithProject[], since: Date | null, now = Date.now()) {
+  let total = 0
+  const perPerson = new Map<string, number>()
+  const perProject = new Map<string, ProjectTimeTotal>()
+  for (const e of entries) {
+    const seconds = entrySecondsSince(e, since, now)
+    if (seconds === 0 || !e.project) continue
+    const person = e.person ?? NO_PERSON
+    total += seconds
+    addTo(perPerson, person, seconds)
+    const row = perProject.get(e.project_id) ?? { project: e.project, seconds: 0, perPerson: new Map() }
+    row.seconds += seconds
+    addTo(row.perPerson, person, seconds)
+    perProject.set(e.project_id, row)
+  }
+  const projects = [...perProject.values()].sort((a, b) => b.seconds - a.seconds)
+  return { total, perPerson, projects }
+}

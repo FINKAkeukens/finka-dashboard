@@ -12,6 +12,7 @@ import {
   fetchTimerPeople,
   formatClock,
   formatDuration,
+  NO_PERSON,
   projectLabel,
   projectSubLabel,
   RunningTimer,
@@ -538,7 +539,7 @@ function SessionEditor({
       <label className="block text-xs text-[#6B6560]">
         Persoon
         <select value={person} onChange={(e) => setPerson(e.target.value)} className={cn(inputClass, 'bg-white')}>
-          <option value="">Geen persoon</option>
+          <option value="">{NO_PERSON}</option>
           {/* Een naam die niet meer in de lijst staat blijft kiesbaar. */}
           {[...people, ...(entry.person && !people.includes(entry.person) ? [entry.person] : [])].map((p) => (
             <option key={p} value={p}>
@@ -689,7 +690,7 @@ export function ProjectTimeSummary({ projectId }: { projectId: string }) {
                 <span className="w-24 shrink-0 text-[#1C1B19]">{formatSessionDate(e.started_at)}</span>
                 <span className="flex-1 min-w-0 truncate text-[#6B6560] tabular-nums">
                   {formatTime(e.started_at)}–{e.ended_at ? formatTime(e.ended_at) : 'nu'}
-                  <span className="ml-2 text-xs text-[#9A948D]">{e.person ?? 'Geen persoon'}</span>
+                  <span className="ml-2 text-xs text-[#9A948D]">{e.person ?? NO_PERSON}</span>
                 </span>
                 <span className="tabular-nums text-[#1C1B19]">{formatDuration(entrySeconds(e, now))}</span>
                 {e.ended_at ? (

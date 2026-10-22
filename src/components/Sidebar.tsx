@@ -24,6 +24,7 @@ import {
   Truck,
   FolderOpen,
   NotebookPen,
+  Timer,
   Menu,
   X,
 } from 'lucide-react'
@@ -61,6 +62,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/projecten', label: 'Projecten', icon: FolderKanban },
       { href: '/planning', label: 'Planning', icon: CalendarRange },
+      { href: '/tijd', label: 'Tijd', icon: Timer },
     ],
   },
   {
