@@ -1,14 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-// Tijdregistratie per project (migratie 88). Eén timer per gebruiker: de rij
-// met ended_at NULL is de lopende timer. Wisselen van project = die rij
-// afsluiten en een nieuwe beginnen.
+// Tijdregistratie per project (migratie 88 + 89). Eén timer per persoon
+// (Merel, Kieke, ...): de rij met ended_at NULL is de lopende timer van die
+// persoon. Iedereen werkt op dezelfde login, dus de persoon is een naam en
+// niet de ingelogde gebruiker. Wisselen van project = die rij afsluiten en
+// een nieuwe beginnen.
 
 export interface TimeEntry {
   id: string
   project_id: string
   user_id: string
   user_email: string | null
+  person: string | null
   started_at: string
   ended_at: string | null
   created_at: string
@@ -75,14 +78,28 @@ export function projectSubLabel(project: TimerProject | null) {
   return parts.join(' · ')
 }
 
-export async function fetchRunningTimer(supabase: SupabaseClient, userId: string) {
+// Wie een timer kan aanzetten: de personen uit de "Wacht op"-lijst
+// (finka_assignees), behalve de klant.
+export async function fetchTimerPeople(supabase: SupabaseClient) {
+  const { data } = await supabase
+    .from('finka_assignees')
+    .select('name')
+    .eq('kind', 'persoon')
+    .eq('hidden', false)
+    .neq('name', 'Klant')
+    .order('sort_order')
+  return (data ?? []).map((a) => a.name as string)
+}
+
+// Alle lopende timers met een persoon (hooguit één per persoon).
+export async function fetchRunningTimers(supabase: SupabaseClient) {
   const { data } = await supabase
     .from('finka_time_entries')
     .select(`*, project:finka_projects(${TIMER_PROJECT_SELECT})`)
-    .eq('user_id', userId)
     .is('ended_at', null)
-    .maybeSingle()
-  return (data ?? null) as RunningTimer | null
+    .not('person', 'is', null)
+    .order('started_at')
+  return (data ?? []) as RunningTimer[]
 }
 
 export async function stopTimer(supabase: SupabaseClient, running: Pick<TimeEntry, 'id' | 'started_at'>) {
@@ -95,12 +112,13 @@ export async function stopTimer(supabase: SupabaseClient, running: Pick<TimeEntr
   return error
 }
 
-// Stopt een eventueel lopende timer van deze gebruiker en start er een voor
+// Stopt een eventueel lopende timer van deze persoon en start er een voor
 // projectId. Start- en eindtijd komen allebei van de klok van het apparaat,
 // zodat een sessie nooit negatief kan uitvallen door verschil met de server.
 export async function startTimer(
   supabase: SupabaseClient,
   user: { id: string; email?: string | null },
+  person: string,
   projectId: string,
   running: Pick<TimeEntry, 'id' | 'started_at'> | null
 ) {
@@ -112,6 +130,7 @@ export async function startTimer(
     project_id: projectId,
     user_id: user.id,
     user_email: user.email ?? null,
+    person,
     started_at: new Date().toISOString(),
   })
   return error

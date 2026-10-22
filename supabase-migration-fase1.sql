@@ -2362,3 +2362,19 @@ ALTER TABLE finka_time_entries ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Staff only" ON finka_time_entries;
 CREATE POLICY "Staff only" ON finka_time_entries FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
 GRANT ALL ON TABLE finka_time_entries TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 89. Timer per persoon in plaats van per login.
+--
+--    Merel en Kieke werken op dezelfde login, maar willen allebei hun
+--    eigen tijd op een project kunnen laten lopen, ook tegelijk. Elke
+--    sessie krijgt daarom de naam van de persoon (uit finka_assignees,
+--    soort 'persoon'); er loopt maximaal één timer per persoon. Oude
+--    sessies zonder naam blijven bestaan en zijn achteraf een naam te
+--    geven.
+-- =========================================================
+
+ALTER TABLE finka_time_entries ADD COLUMN IF NOT EXISTS person TEXT;
+DROP INDEX IF EXISTS finka_time_entries_one_running;
+CREATE UNIQUE INDEX IF NOT EXISTS finka_time_entries_one_running_person
+  ON finka_time_entries(person) WHERE ended_at IS NULL AND person IS NOT NULL;
