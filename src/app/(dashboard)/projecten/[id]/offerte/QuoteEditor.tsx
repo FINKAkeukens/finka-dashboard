@@ -37,6 +37,7 @@ const CUSTOMER_CATEGORY_BY_TYPE: Record<QuoteItemType, QuoteCustomerCategory> = 
 
 const CUSTOMER_CATEGORY_LABELS: Record<QuoteCustomerCategory, string> = {
   kasten: 'Kasten',
+  plattegrond: 'Plattegrond',
   werkblad: 'Werkblad',
   apparatuur: 'Apparatuur',
   accessoires: 'Accessoires',
