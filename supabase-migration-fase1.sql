@@ -2378,3 +2378,56 @@ ALTER TABLE finka_time_entries ADD COLUMN IF NOT EXISTS person TEXT;
 DROP INDEX IF EXISTS finka_time_entries_one_running;
 CREATE UNIQUE INDEX IF NOT EXISTS finka_time_entries_one_running_person
   ON finka_time_entries(person) WHERE ended_at IS NULL AND person IS NOT NULL;
+
+-- =========================================================
+-- 90. Bedrijfsgegevens en accounts (/bedrijf).
+--
+--    a. finka_company_info: vaste velden (KvK, btw, IBAN, ...) als
+--       sleutel/waarde; welke velden er zijn en in welke volgorde staat
+--       in src/lib/bedrijfsgegevens.ts. Gewoon staff-only, zoals de rest.
+--    b. finka_accounts: inloggegevens van leveranciers en diensten.
+--       Wachtwoorden staan versleuteld (AES-256-GCM) in logins[].secret;
+--       de sleutel (VAULT_ENCRYPTION_KEY) staat alleen op de server.
+--       Bewust GEEN policy voor authenticated: alleen de server (service
+--       role) leest en schrijft, na de staff-check en, voor wachtwoorden,
+--       de pincode. Zie src/lib/kluis.ts.
+--    c. finka_vault_settings: de pincode (scrypt-hash) en de teller voor
+--       foute pogingen. Ook alleen service role.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_company_info (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_company_info ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_company_info;
+CREATE POLICY "Staff only" ON finka_company_info FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_company_info TO authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS finka_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  url TEXT,
+  -- [{ label, username, secret }] — secret = versleuteld of null
+  logins JSONB NOT NULL DEFAULT '[]',
+  contacts TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_accounts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE finka_accounts FROM anon, authenticated;
+GRANT ALL ON TABLE finka_accounts TO service_role;
+
+CREATE TABLE IF NOT EXISTS finka_vault_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  pin_hash TEXT,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_vault_settings ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE finka_vault_settings FROM anon, authenticated;
+GRANT ALL ON TABLE finka_vault_settings TO service_role;
+INSERT INTO finka_vault_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

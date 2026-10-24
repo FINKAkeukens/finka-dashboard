@@ -24,6 +24,7 @@ import {
   Truck,
   FolderOpen,
   NotebookPen,
+  Building2,
   Timer,
   Menu,
   X,
@@ -51,6 +52,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/intern', label: 'FINKA intern', icon: NotebookPen },
+      { href: '/bedrijf', label: 'Bedrijfsgegevens', icon: Building2 },
     ],
   },
   {
