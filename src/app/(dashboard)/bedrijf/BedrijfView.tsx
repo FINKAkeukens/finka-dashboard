@@ -146,9 +146,12 @@ function CompanyInfo({ initialValues }: { initialValues: Record<string, string> 
                   disabled={!value}
                   className="size-4 accent-[#1C1B19] disabled:opacity-30"
                 />
-                <span className="w-36 sm:w-44 shrink-0 text-xs text-[#6B6560]">{f.label}</span>
-                <span className={cn('flex-1 min-w-0 text-sm break-words', value ? 'text-[#1C1B19]' : 'text-[#9A948D] italic')}>
-                  {value || 'Niet ingevuld'}
+                {/* Telefoon: label boven de waarde, anders wordt de waarde te smal. */}
+                <span className="flex-1 min-w-0 sm:flex sm:items-center">
+                  <span className="block sm:w-44 shrink-0 text-xs text-[#6B6560]">{f.label}</span>
+                  <span className={cn('block min-w-0 text-sm break-words', value ? 'text-[#1C1B19]' : 'text-[#9A948D] italic')}>
+                    {value || 'Niet ingevuld'}
+                  </span>
                 </span>
                 {value && (
                   <button onClick={() => copy(f.key, value)} className={iconButton} aria-label={`${f.label} kopiëren`}>
