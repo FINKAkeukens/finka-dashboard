@@ -161,23 +161,15 @@ Sla pure artikelnummers, leveranciersinterne codes en boekhoudkundige regels ove
 
 Zoek ook het totaalbedrag "Totaalprijs excl. BTW" (of vergelijkbaar, bv. onderaan bij "Overzicht") en geef dat als getal terug (zonder €-teken, punt als duizendtal-scheiding negeren, gebruik een punt als decimaalteken).
 
-Zoek tot slot de pagina met het bovenaanzicht (plattegrond van bovenaf, vaak met de titel "Bovenaanzicht"). Geef het paginanummer (1 = eerste pagina van de PDF) als "plattegrond_pagina", of null als er geen bovenaanzicht in zit — een perspectieftekening of vooraanzicht telt niet. Geef bij "plattegrond_toont_posities" aan of op die tekening de positienummers van de kasten zichtbaar zijn (true/false); alleen maatvoering telt niet als positienummers.
-
 Antwoord ALLEEN met geldige JSON:
 {
   "summary": ["regel 1", "regel 2", ...],
-  "totaal_excl_btw": 0,
-  "plattegrond_pagina": null,
-  "plattegrond_toont_posities": false
+  "totaal_excl_btw": 0
 }`
 
 interface KitchenSummaryResult {
   summary: string[]
   totaalExclBtw: number | null
-  // Pagina (1-based) met het bovenaanzicht — de client rendert die pagina
-  // zelf naar een afbeelding (zie src/lib/winner-plattegrond.ts).
-  plattegrondPagina: number | null
-  plattegrondToontPosities: boolean
 }
 
 export async function extractKitchenSummary(pdfBase64: string): Promise<KitchenSummaryResult> {
@@ -213,11 +205,9 @@ export async function extractKitchenSummary(pdfBase64: string): Promise<KitchenS
     return {
       summary: Array.isArray(parsed.summary) ? parsed.summary : [],
       totaalExclBtw: typeof parsed.totaal_excl_btw === 'number' ? parsed.totaal_excl_btw : null,
-      plattegrondPagina: Number.isInteger(parsed.plattegrond_pagina) && parsed.plattegrond_pagina > 0 ? parsed.plattegrond_pagina : null,
-      plattegrondToontPosities: parsed.plattegrond_toont_posities === true,
     }
   } catch {
-    return { summary: [], totaalExclBtw: null, plattegrondPagina: null, plattegrondToontPosities: false }
+    return { summary: [], totaalExclBtw: null }
   }
 }
 
