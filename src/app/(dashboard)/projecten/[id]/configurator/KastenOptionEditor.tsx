@@ -22,9 +22,9 @@ function readData(option: ConfiguratorOption): KastenOptionData {
     gross_cost_total: d?.gross_cost_total ?? option.cost_total,
     discount_keys: d?.discount_keys ?? [],
     plattegrond_url: d?.plattegrond_url ?? null,
+    plattegrond_bron_pdf_url: d?.plattegrond_bron_pdf_url ?? null,
     plattegrond_pagina: d?.plattegrond_pagina ?? null,
-    plattegrond_toont_posities: d?.plattegrond_toont_posities ?? false,
-    pdf_page_count: d?.pdf_page_count ?? null,
+    plattegrond_page_count: d?.plattegrond_page_count ?? null,
   }
 }
 
@@ -58,28 +58,14 @@ export default function KastenOptionEditor({
   const data = readData(option)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [renderingPage, setRenderingPage] = useState(false)
-  const [plattegrondError, setPlattegrondError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const [plattegrondBusy, setPlattegrondBusy] = useState(false)
+  const [plattegrondError, setPlattegrondError] = useState('')
+  const plattegrondInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
-
-  // Rendert de gekozen pagina van de uitdraai naar een PNG en zet die in
-  // Storage, naast de PDF zelf. Nieuw path per keer (timestamp): de
-  // staff-Storage-policy staat geen upsert toe, zie handleUpload.
-  async function uploadPlattegrond(source: Blob | string, requestedPage: number | 'laatste') {
-    const { blob, pageCount, pageNumber } = await renderPlattegrondPng(source, requestedPage)
-    const path = `${quoteId}/winnerflex-plattegrond-${Date.now()}.png`
-    const { error: storageError } = await supabase.storage
-      .from('offer-images')
-      .upload(path, blob, { contentType: 'image/png' })
-    if (storageError) throw new Error(storageError.message)
-    const { data: publicUrlData } = supabase.storage.from('offer-images').getPublicUrl(path)
-    return { url: publicUrlData.publicUrl, pageCount, pageNumber }
-  }
 
   async function handleUpload(file: File) {
     setUploadError('')
-    setPlattegrondError('')
     setUploading(true)
     try {
       // Eerst rechtstreeks naar Storage (i.p.v. de bytes via de route zelf
@@ -111,31 +97,16 @@ export default function KastenOptionEditor({
         // AI leest de kostprijs vóór korting — al aangevinkte kortingen
         // (discount_keys) blijven staan en worden opnieuw doorgerekend.
         const grossCostTotal = typeof body.totaalExclBtw === 'number' ? body.totaalExclBtw : data.gross_cost_total
-        // Plattegrond vóór de onChange hieronder: alles moet in één patch,
-        // anders overschrijft een tweede onChange (met de oude `data` uit
-        // deze closure) de net binnengekomen samenvatting. Mislukt alleen
-        // de plattegrond, dan gaat de rest gewoon door.
-        let plattegrond: { url: string | null; pagina: number | null; pageCount: number | null } = { url: null, pagina: null, pageCount: null }
-        if (typeof body.plattegrondPagina === 'number') {
-          try {
-            const { url, pageCount } = await uploadPlattegrond(file, body.plattegrondPagina)
-            plattegrond = { url, pagina: body.plattegrondPagina, pageCount }
-          } catch (err) {
-            setPlattegrondError(`Plattegrond maken mislukt: ${err instanceof Error ? err.message : 'onbekende fout'}`)
-          }
-        } else {
-          setPlattegrondError('Geen bovenaanzicht gevonden in deze uitdraai.')
-        }
         const patch: { data: KastenOptionData; cost_total?: number } = {
           data: {
             attachments: [body.attachment as OfferAttachment],
             summary_lines: body.summary?.length ? (body.summary as string[]) : data.summary_lines,
             gross_cost_total: grossCostTotal,
             discount_keys: data.discount_keys,
-            plattegrond_url: plattegrond.url,
-            plattegrond_pagina: plattegrond.pagina,
-            plattegrond_toont_posities: body.plattegrondToontPosities === true,
-            pdf_page_count: plattegrond.pageCount,
+            plattegrond_url: data.plattegrond_url,
+            plattegrond_bron_pdf_url: data.plattegrond_bron_pdf_url,
+            plattegrond_pagina: data.plattegrond_pagina,
+            plattegrond_page_count: data.plattegrond_page_count,
           },
         }
         if (typeof body.totaalExclBtw === 'number') {
@@ -156,31 +127,66 @@ export default function KastenOptionEditor({
 
   function removeAttachment(url: string) {
     onChange({
-      data: { attachments: data.attachments.filter((a) => a.url !== url), summary_lines: [], gross_cost_total: 0, discount_keys: [], plattegrond_url: null, plattegrond_pagina: null, plattegrond_toont_posities: false, pdf_page_count: null },
+      data: { ...data, attachments: data.attachments.filter((a) => a.url !== url), summary_lines: [], gross_cost_total: 0, discount_keys: [] },
       cost_total: 0,
     })
   }
 
-  // Handmatig een andere pagina kiezen, voor als de AI de verkeerde
-  // aanwees — haalt de PDF opnieuw op uit Storage. Of positienummers op die
-  // pagina staan weten we dan niet meer, dus die waarschuwing vervalt.
-  async function choosePlattegrondPage(requestedPage: number | 'laatste') {
-    const pdfUrl = data.attachments[0]?.url
-    if (!pdfUrl) return
+  // Plattegrond met positienummers — los van de order geüpload. Een
+  // afbeelding gaat ongewijzigd naar Storage; een PDF wordt eerst naar een
+  // PNG gerenderd (de offerte-PDF kan geen PDF-pagina insluiten). De
+  // bestandsnaam begint altijd met "winnerflex-plattegrond-": daaraan herkent
+  // replacePlattegrondSection een automatisch toegevoegde plattegrond. Nieuw
+  // path per keer (timestamp): de staff-Storage-policy staat geen upsert toe.
+  async function uploadToStorage(body: Blob, ext: string, contentType: string) {
+    const path = `${quoteId}/winnerflex-plattegrond-${Date.now()}.${ext}`
+    const { error: storageError } = await supabase.storage.from('offer-images').upload(path, body, { contentType })
+    if (storageError) throw new Error(storageError.message)
+    return supabase.storage.from('offer-images').getPublicUrl(path).data.publicUrl
+  }
+
+  async function handlePlattegrondUpload(file: File) {
     setPlattegrondError('')
-    setRenderingPage(true)
+    setPlattegrondBusy(true)
     try {
-      const { url, pageCount, pageNumber } = await uploadPlattegrond(pdfUrl, requestedPage)
-      onChange({ data: { ...data, plattegrond_url: url, plattegrond_pagina: pageNumber, plattegrond_toont_posities: true, pdf_page_count: pageCount } })
+      if (file.type === 'application/pdf') {
+        const { blob, pageCount } = await renderPlattegrondPng(file, 1)
+        const pdfUrl = await uploadToStorage(file, 'pdf', 'application/pdf')
+        const pngUrl = await uploadToStorage(blob, 'png', 'image/png')
+        onChange({ data: { ...data, plattegrond_url: pngUrl, plattegrond_bron_pdf_url: pdfUrl, plattegrond_pagina: 1, plattegrond_page_count: pageCount } })
+      } else if (file.type.startsWith('image/')) {
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+        const url = await uploadToStorage(file, ext, file.type)
+        onChange({ data: { ...data, plattegrond_url: url, plattegrond_bron_pdf_url: null, plattegrond_pagina: null, plattegrond_page_count: null } })
+      } else {
+        throw new Error('Alleen PDF of afbeelding (PNG/JPG)')
+      }
+    } catch (err) {
+      setPlattegrondError(`Plattegrond uploaden mislukt: ${err instanceof Error ? err.message : 'onbekende fout'}`)
+    } finally {
+      setPlattegrondBusy(false)
+      if (plattegrondInputRef.current) plattegrondInputRef.current.value = ''
+    }
+  }
+
+  // Bij een PDF met meerdere pagina's: andere pagina kiezen.
+  async function choosePlattegrondPage(pageNumber: number) {
+    if (!data.plattegrond_bron_pdf_url) return
+    setPlattegrondError('')
+    setPlattegrondBusy(true)
+    try {
+      const { blob } = await renderPlattegrondPng(data.plattegrond_bron_pdf_url, pageNumber)
+      const pngUrl = await uploadToStorage(blob, 'png', 'image/png')
+      onChange({ data: { ...data, plattegrond_url: pngUrl, plattegrond_pagina: pageNumber } })
     } catch (err) {
       setPlattegrondError(`Plattegrond maken mislukt: ${err instanceof Error ? err.message : 'onbekende fout'}`)
     } finally {
-      setRenderingPage(false)
+      setPlattegrondBusy(false)
     }
   }
 
   function removePlattegrond() {
-    onChange({ data: { ...data, plattegrond_url: null, plattegrond_pagina: null, plattegrond_toont_posities: false } })
+    onChange({ data: { ...data, plattegrond_url: null, plattegrond_bron_pdf_url: null, plattegrond_pagina: null, plattegrond_page_count: null } })
   }
 
   function updateGrossCostTotal(gross: number) {
@@ -274,48 +280,49 @@ export default function KastenOptionEditor({
         </div>
       )}
 
-      {data.attachments.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-xs text-[#6B6560]">Plattegrond (eigen pagina na de kastenlijst)</label>
-            <div className="flex items-center gap-2">
-              {data.pdf_page_count ? (
-                <select
-                  value={data.plattegrond_pagina ?? ''}
-                  onChange={(e) => choosePlattegrondPage(Number(e.target.value))}
-                  disabled={renderingPage || uploading}
-                  className="px-2 py-1 text-xs bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
-                >
-                  <option value="" disabled>Kies pagina</option>
-                  {Array.from({ length: data.pdf_page_count }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>Pagina {n}</option>
-                  ))}
-                </select>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => choosePlattegrondPage('laatste')} disabled={renderingPage || uploading}>
-                  Plattegrond toevoegen
-                </Button>
-              )}
-              {data.plattegrond_url && (
-                <button onClick={removePlattegrond} title="Plattegrond verwijderen">
-                  <X size={13} className="text-[#9A948D] hover:text-red-600" />
-                </button>
-              )}
-            </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-[#6B6560]">Plattegrond met positienummers (eigen pagina na de kastenlijst)</label>
+          <div className="flex items-center gap-2 shrink-0">
+            {data.plattegrond_page_count && data.plattegrond_page_count > 1 && (
+              <select
+                value={data.plattegrond_pagina ?? 1}
+                onChange={(e) => choosePlattegrondPage(Number(e.target.value))}
+                disabled={plattegrondBusy}
+                className="px-2 py-1 text-xs bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+              >
+                {Array.from({ length: data.plattegrond_page_count }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>Pagina {n}</option>
+                ))}
+              </select>
+            )}
+            <input
+              ref={plattegrondInputRef}
+              type="file"
+              accept="application/pdf,image/png,image/jpeg"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handlePlattegrondUpload(file)
+              }}
+            />
+            <Button variant="outline" size="sm" onClick={() => plattegrondInputRef.current?.click()} disabled={plattegrondBusy}>
+              <Upload size={13} className="mr-1.5" />
+              {plattegrondBusy ? 'Verwerken...' : data.plattegrond_url ? 'Vervangen' : 'Plattegrond uploaden'}
+            </Button>
+            {data.plattegrond_url && (
+              <button onClick={removePlattegrond} title="Plattegrond verwijderen">
+                <X size={13} className="text-[#9A948D] hover:text-red-600" />
+              </button>
+            )}
           </div>
-          {renderingPage && <p className="text-xs text-[#6B6560]">Plattegrond maken...</p>}
-          {plattegrondError && <p className="text-xs text-red-600">{plattegrondError}</p>}
-          {data.plattegrond_url && !data.plattegrond_toont_posities && (
-            <p className="text-xs text-amber-700">
-              Geen positienummers gevonden op deze plattegrond. Zet in Winner Flex de positienummers aan bij het afdrukken van het bovenaanzicht en upload de uitdraai opnieuw.
-            </p>
-          )}
-          {data.plattegrond_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={data.plattegrond_url} alt="Plattegrond" className="max-h-72 w-auto rounded-lg border border-[#DDD8D2] bg-white" />
-          )}
         </div>
-      )}
+        {plattegrondError && <p className="text-xs text-red-600">{plattegrondError}</p>}
+        {data.plattegrond_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={data.plattegrond_url} alt="Plattegrond" className="max-h-72 w-auto rounded-lg border border-[#DDD8D2] bg-white" />
+        )}
+      </div>
 
       <div className="space-y-1.5">
         <label className="text-xs text-[#6B6560]">Samenvatting (voor de klantversie)</label>

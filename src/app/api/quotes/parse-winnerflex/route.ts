@@ -50,15 +50,11 @@ export async function POST(request: NextRequest) {
 
   let summary: string[] = []
   let totaalExclBtw: number | null = null
-  let plattegrondPagina: number | null = null
-  let plattegrondToontPosities = false
   let summaryError: string | null = null
   try {
     const result = await extractKitchenSummary(buffer.toString('base64'))
     summary = result.summary
     totaalExclBtw = result.totaalExclBtw
-    plattegrondPagina = result.plattegrondPagina
-    plattegrondToontPosities = result.plattegrondToontPosities
     if (!summary.length && totaalExclBtw === null) {
       summaryError = 'Claude kon geen samenvatting/bedrag uit dit document halen.'
     }
@@ -71,8 +67,6 @@ export async function POST(request: NextRequest) {
     attachment: { name: filename, url: publicUrlData.publicUrl, size: typeof size === 'number' ? size : buffer.byteLength },
     summary,
     totaalExclBtw,
-    plattegrondPagina,
-    plattegrondToontPosities,
     summaryError,
   })
 }
