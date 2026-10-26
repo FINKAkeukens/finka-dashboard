@@ -2176,3 +2176,164 @@ ALTER TABLE finka_euroline_rates
 ALTER TABLE finka_appliances
   ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS verification JSONB;
+
+-- =========================================================
+-- 85. Samples (stalen) onder Gereedschap → Samples.
+--
+--    finka_samples: de fysieke stalen die FINKA heeft (fronten, werkbladen,
+--    grepen, ...). Eén rij = één fysiek exemplaar. Foto in de bestaande
+--    bucket offer-images onder samples/ (storage_path, om bij vervangen/
+--    verwijderen op te ruimen). size = maat van de staal (XL/L/M/S, leeg
+--    = onbekend). price_group = prijsgroep (PG) van de leverancier, vrije
+--    tekst omdat elke leverancier zijn eigen indeling heeft.
+--
+--    finka_sample_loans: uitleenhistorie. Een uitlening hoort bij een
+--    project (en daarmee een klant) of, zonder project, bij een losse naam
+--    in borrower_name (bv. een prospect). returned_at NULL = ligt nu nog
+--    uit; een staal heeft hooguit één openstaande uitlening (unieke index).
+--    Alleen intern gebruikt → staff-policy.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_samples (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'anders'
+    CHECK (category IN ('front', 'werkblad', 'greep', 'kleur', 'anders')),
+  supplier_id UUID REFERENCES finka_suppliers(id) ON DELETE SET NULL,
+  code TEXT,
+  model TEXT,
+  price_group TEXT,
+  color TEXT,
+  finish TEXT,
+  size TEXT CHECK (size IN ('XL', 'L', 'M', 'S')),
+  photo_url TEXT,
+  storage_path TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Voor het geval de tabel al bestond zonder model, prijsgroep, kleur of maat.
+ALTER TABLE finka_samples
+  ADD COLUMN IF NOT EXISTS model TEXT,
+  ADD COLUMN IF NOT EXISTS price_group TEXT,
+  ADD COLUMN IF NOT EXISTS color TEXT,
+  ADD COLUMN IF NOT EXISTS size TEXT CHECK (size IN ('XL', 'L', 'M', 'S'));
+
+CREATE TABLE IF NOT EXISTS finka_sample_loans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sample_id UUID NOT NULL REFERENCES finka_samples(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES finka_projects(id) ON DELETE SET NULL,
+  borrower_name TEXT,
+  lent_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date DATE,
+  returned_at DATE,
+  notes TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS finka_sample_loans_sample_idx ON finka_sample_loans(sample_id);
+CREATE UNIQUE INDEX IF NOT EXISTS finka_sample_loans_one_open
+  ON finka_sample_loans(sample_id) WHERE returned_at IS NULL;
+
+ALTER TABLE finka_samples ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_samples;
+CREATE POLICY "Staff only" ON finka_samples FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_samples TO anon, authenticated, service_role;
+
+ALTER TABLE finka_sample_loans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_sample_loans;
+CREATE POLICY "Staff only" ON finka_sample_loans FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_sample_loans TO anon, authenticated, service_role;
+
+-- Modellenlijst per leverancier + soort. Bij een sample met die combinatie
+-- wordt Model een keuzelijst en vult de gekozen regel de PG vanzelf in.
+-- finka_samples.model blijft vrije tekst (geen FK), zodat samples van
+-- leveranciers zonder lijst ook een model kunnen hebben. price_group '*' =
+-- zoals in de catalogus: geen vaste prijsgroep. Beheer via Instellingen →
+-- Sample-modellen.
+CREATE TABLE IF NOT EXISTS finka_sample_models (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id UUID NOT NULL REFERENCES finka_suppliers(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('front', 'werkblad', 'greep', 'kleur', 'anders')),
+  name TEXT NOT NULL,
+  price_group TEXT,
+  catalog_page TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (supplier_id, category, name)
+);
+
+ALTER TABLE finka_sample_models ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_sample_models;
+CREATE POLICY "Staff only" ON finka_sample_models FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_sample_models TO anon, authenticated, service_role;
+
+-- Sachsen-fronten uit "Overzicht Modellen" (catalogus, kolommen model/PG/pagina).
+INSERT INTO finka_sample_models (supplier_id, category, name, price_group, catalog_page)
+SELECT s.id, 'front', m.name, m.pg, m.page
+FROM finka_suppliers s
+CROSS JOIN (VALUES
+  ('Adina', '4', '11.PG4.08'),
+  ('Alina', '4', '11.PG4.06'),
+  ('Amalia', '7', '11.WL.23'),
+  ('Antonia', '6', '11.WL.17'),
+  ('Belana', '2', '11.PG2.07'),
+  ('Bonita', '7', '11.PG7.01'),
+  ('Britta', '6', '11.WL.19'),
+  ('Carmina', '3', '11.PG3.05'),
+  ('Casa', '6', '11.WL.21'),
+  ('Dana', '3', '11.PG3.03'),
+  ('Debora', '6', '11.WL.18'),
+  ('Donna', '6', '11.PG6.09'),
+  ('Edda', '1', '11.PG1.01'),
+  ('Fabia', '4', '11.PG4.10'),
+  ('Fabiola', '*', '11.WL.06'),
+  ('Ferra', '2', '11.PG2.10'),
+  ('Fiora', '5', '11.PG5.03'),
+  ('Flavia', '6', '11.WL.20'),
+  ('Kara', '8', '11.PG8.01'),
+  ('Kiara', '5', '11.PG5.02'),
+  ('Lana', '2', '11.PG2.04'),
+  ('Lara', '2', '11.PG2.02'),
+  ('Leila', '7', '11.WL.12'),
+  ('Leona', '*', '11.PG6.01'),
+  ('Leonora', '7', '11.PG7.03'),
+  ('Letizia', '*', '11.WL.08'),
+  ('Lisa', '1', '11.PG1.02'),
+  ('Luna', '4', '11.PG4.03'),
+  ('Maja', '5', '11.PG5.01'),
+  ('Nina', '4', '11.PG4.05'),
+  ('Patrizia', '*', '11.WL.10'),
+  ('Raja', '6', '11.PG6.07'),
+  ('Rena', '3', '11.PG3.04'),
+  ('Rica', '4', '11.PG4.02'),
+  ('Roberta-L', '4', '11.PG4.04'),
+  ('Ronda', '6', '11.PG6.08'),
+  ('Samara', '3', '11.PG3.01'),
+  ('Selma', '4', '11.PG4.01'),
+  ('Senta', '3', '11.PG3.02'),
+  ('Simona', '6', '11.WL.16'),
+  ('Stana', '2', '11.PG2.08'),
+  ('Stravia', '2', '11.PG2.06'),
+  ('Tabea', '7', '11.WL.22'),
+  ('Tania', '2', '11.PG2.01'),
+  ('Tessa', '7', '11.PG7.02'),
+  ('Thea', '3', '11.PG3.06')
+) AS m(name, pg, page)
+WHERE s.id = '1f216d82-95f6-439a-8817-34147b6a083e'
+ON CONFLICT (supplier_id, category, name) DO NOTHING;
+
+-- =========================================================
+-- 86. Materiaal + uitvoering bij samples.
+--
+--    material: vaste keuzes (Fineer, Houtlook, Lak, Hoogglanslak, Glas, zie
+--    SAMPLE_MATERIALS in src/lib/samples.ts) of zelf ingevuld via "Anders".
+--    Zelf ingevulde materialen verschijnen daarna als optie in de keuzelijst
+--    (afgeleid uit de bestaande samples, geen aparte tabel nodig).
+--    veneer_execution: uitvoering, alleen ingevuld bij materiaal Fineer.
+-- =========================================================
+
+ALTER TABLE finka_samples
+  ADD COLUMN IF NOT EXISTS material TEXT,
+  ADD COLUMN IF NOT EXISTS veneer_execution TEXT;

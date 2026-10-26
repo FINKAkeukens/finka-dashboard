@@ -40,6 +40,61 @@ export interface Supplier {
   created_at: string
 }
 
+// Stalen onder Gereedschap → Samples — migratie-sectie 85.
+export type SampleCategory = 'front' | 'werkblad' | 'greep' | 'kleur' | 'anders'
+export type SampleSize = 'XL' | 'L' | 'M' | 'S'
+
+export interface Sample {
+  id: string
+  name: string
+  category: SampleCategory
+  supplier_id: string | null
+  code: string | null
+  // Vrije tekst; bij een leverancier + soort met een modellenlijst
+  // (SampleModel) gekozen uit die lijst.
+  model: string | null
+  // Prijsgroep (PG) van de leverancier — vrije tekst, bv. "3".
+  price_group: string | null
+  color: string | null
+  finish: string | null
+  size: SampleSize | null
+  // Vaste keuze uit SAMPLE_MATERIALS of zelf ingevuld via "Anders".
+  material: string | null
+  // Uitvoering — alleen bij materiaal Fineer.
+  veneer_execution: string | null
+  photo_url: string | null
+  storage_path: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Modellenlijst per leverancier + soort, bv. de Sachsen-fronten met hun PG.
+export interface SampleModel {
+  id: string
+  supplier_id: string
+  category: SampleCategory
+  name: string
+  price_group: string | null
+  catalog_page: string | null
+  created_at: string
+}
+
+// returned_at NULL = de staal ligt nog uit. Hoort bij een project of, zonder
+// project, bij een losse naam (borrower_name).
+export interface SampleLoan {
+  id: string
+  sample_id: string
+  project_id: string | null
+  borrower_name: string | null
+  lent_at: string
+  due_date: string | null
+  returned_at: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
 export interface PriceQuote {
   price: number
   date: string | null

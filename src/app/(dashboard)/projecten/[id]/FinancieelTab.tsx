@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Checkbox } from '@/components/ui/checkbox'
+import { NumberInput } from '@/components/ui/number-input'
 import { formatPrice } from '@/lib/appliance-utils'
-import { selectOnFocus } from '@/lib/utils'
 import { CostCategoryKey, ProjectFinancialItem } from '@/lib/types'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
@@ -138,7 +138,6 @@ function TotalsRow({ label, t, bold }: { label: string; t: GroupTotals; bold?: b
       <td className={`px-3 py-2.5 align-top text-right ${textClass}`}>{formatPrice(t.prijsKlant)}</td>
       <td className={`px-3 py-2.5 align-top text-right bg-[#C9A96E]/10 ${textClass}`}>{formatPrice(t.werkelijkSum)}</td>
       <td className="px-3 py-2.5" />
-      <td className="px-3 py-2.5" />
       <td className={`px-3 py-2.5 align-top text-right ${weight} ${confirmClass(allConfirmed, verschilClass(verschil))}`}>
         {signedPrice(verschil)}
       </td>
@@ -241,35 +240,24 @@ export default function FinancieelTab({
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, werkelijk_bedrag: value } : i)))
   }
 
-  async function saveWerkelijk(item: ProjectFinancialItem) {
+  async function saveWerkelijk(id: string, value: number) {
     const { error: updError } = await supabase
       .from('finka_project_financials')
-      .update({ werkelijk_bedrag: item.werkelijk_bedrag, updated_at: new Date().toISOString() })
-      .eq('id', item.id)
+      .update({ werkelijk_bedrag: value, updated_at: new Date().toISOString() })
+      .eq('id', id)
     if (updError) setError(updError.message)
   }
 
   async function toggleBetaald(item: ProjectFinancialItem) {
     const betaald = !item.betaald
-    // Aanvinken zet de datum van vandaag (tenzij er al eentje stond, bv. na
-    // opnieuw aanvinken van een handmatig ingevulde datum); uitvinken wist 'm.
+    // Aanvinken zet op de achtergrond de datum van vandaag (tenzij er al
+    // eentje stond); uitvinken wist 'm. Niet meer zichtbaar of aan te passen
+    // in de tabel, maar de PNL per maand gebruikt 'm nog.
     const betaald_op = betaald ? item.betaald_op ?? vandaagISO() : null
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, betaald, betaald_op } : i)))
     const { error: updError } = await supabase
       .from('finka_project_financials')
       .update({ betaald, betaald_op, updated_at: new Date().toISOString() })
-      .eq('id', item.id)
-    if (updError) setError(updError.message)
-  }
-
-  // Handmatig aangepaste betaaldatum — leeg laten mag, dan is alleen bekend
-  // dát het betaald is en niet wanneer.
-  async function saveBetaaldOp(item: ProjectFinancialItem, value: string) {
-    const betaald_op = value || null
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, betaald_op } : i)))
-    const { error: updError } = await supabase
-      .from('finka_project_financials')
-      .update({ betaald_op, updated_at: new Date().toISOString() })
       .eq('id', item.id)
     if (updError) setError(updError.message)
   }
@@ -321,10 +309,6 @@ export default function FinancieelTab({
               <ColHeader label="Prijs klant" unit="€" className="w-24" />
               <ColHeader label="Werkelijke kosten" unit="€" className="w-36 bg-[#C9A96E]/10" />
               <th className="text-center px-2 py-3 text-xs font-medium text-[#6B6560] w-14">Betaald</th>
-              <th className="text-left px-3 py-3 text-xs font-medium text-[#6B6560] w-36">
-                Betaald op
-                <span className="block text-[10px] font-normal text-[#9A948D] normal-case">datum</span>
-              </th>
               <ColHeader label="Verschil kosten" unit="€" className="w-32" />
               <ColHeader label="Marge werkelijk" unit="€" className="w-32" />
             </tr>
@@ -354,15 +338,14 @@ export default function FinancieelTab({
                           }`}
                         >
                           <span className="text-sm text-[#9A948D] shrink-0">€</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={item.werkelijk_bedrag ?? item.begroot_bedrag}
+                          {/* NumberInput i.p.v. type="number": een getypte komma of punt maakte het
+                              natieve veld leeg, en leeg = terug naar het begrote bedrag. */}
+                          <NumberInput
+                            value={Number(item.werkelijk_bedrag ?? item.begroot_bedrag)}
                             placeholder="—"
-                            onChange={(e) => updateLocalWerkelijk(item.id, e.target.value === '' ? null : Number(e.target.value))}
-                            onBlur={() => saveWerkelijk(item)}
-                            onFocus={selectOnFocus}
-                            className={`w-full min-w-0 text-sm text-right bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                            onChange={(v) => updateLocalWerkelijk(item.id, v)}
+                            onBlur={(v) => saveWerkelijk(item.id, v)}
+                            className={`h-auto w-full min-w-0 rounded-none border-0 bg-transparent p-0 text-sm text-right ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${
                               !item.betaald ? 'italic' : ''
                             }`}
                           />
@@ -376,23 +359,6 @@ export default function FinancieelTab({
                             title="Vink aan zodra dit bedrag écht betaald/bevestigd is"
                           />
                         </div>
-                      </td>
-                      <td className="px-3 py-2.5 align-top">
-                        {item.betaald ? (
-                          <input
-                            type="date"
-                            value={item.betaald_op ?? ''}
-                            onChange={(e) => saveBetaaldOp(item, e.target.value)}
-                            title="Betaaldatum — aan te passen"
-                            className={`w-full text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] focus:bg-white ${
-                              item.betaald_op ? 'text-[#1C1B19]' : 'text-[#9A948D]'
-                            }`}
-                          />
-                        ) : (
-                          // Geen datumveld zolang "Betaald" uit staat — zo kan er
-                          // ook geen betaaldatum ontstaan zonder bevestiging.
-                          <span className="block px-2 py-1 text-sm text-[#9A948D]">—</span>
-                        )}
                       </td>
                       <td className={`px-3 py-2.5 align-top text-right ${item.betaald ? 'font-semibold' : 'font-medium'} ${confirmClass(item.betaald, verschilClass(f.verschilKosten))}`}>
                         {signedPrice(f.verschilKosten)}
@@ -411,11 +377,11 @@ export default function FinancieelTab({
           <tfoot>
             <TotalsRow label="Totaal" t={grandTotal} bold />
             <tr className="bg-white">
-              <td colSpan={9} className="px-3 py-2 text-right text-xs text-[#6B6560]">Btw ({btwPercentage}%)</td>
+              <td colSpan={8} className="px-3 py-2 text-right text-xs text-[#6B6560]">Btw ({btwPercentage}%)</td>
               <td className="px-3 py-2 text-right text-xs text-[#6B6560]">{formatPrice(btwBedrag)}</td>
             </tr>
             <tr className="bg-white border-t border-[#DDD8D2]">
-              <td colSpan={9} className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">Totaal (incl. btw)</td>
+              <td colSpan={8} className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">Totaal (incl. btw)</td>
               <td className="px-3 py-2.5 text-right text-sm font-semibold text-[#1C1B19]">{formatPrice(totaalInclBtw)}</td>
             </tr>
           </tfoot>
@@ -429,7 +395,7 @@ export default function FinancieelTab({
           <div className="px-3 pt-4 pb-2">
             <h3 className="text-sm font-medium text-[#1C1B19]">PNL per maand</h3>
             <p className="text-xs text-[#6B6560] mt-0.5">
-              De omzet valt in de maand van akkoord; kosten tellen in de maand van hun betaaldatum. Kostenregels zonder betaaldatum staan in de akkoord-maand, dus het totaal is altijd gelijk aan het overzicht hierboven.
+              De omzet valt in de maand van akkoord; kosten tellen in de maand waarin ze als betaald zijn aangevinkt. Nog niet betaalde kostenregels staan in de akkoord-maand, dus het totaal is altijd gelijk aan het overzicht hierboven.
             </p>
           </div>
           <table className="w-full text-sm">

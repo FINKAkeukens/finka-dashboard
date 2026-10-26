@@ -23,6 +23,7 @@ import {
   FileText,
   Truck,
   FolderOpen,
+  SwatchBook,
   Menu,
   X,
 } from 'lucide-react'
@@ -82,7 +83,10 @@ const groups: NavGroup[] = [
   },
   {
     label: 'Gereedschap',
-    items: [{ href: '/gereedschap/werkblad', label: 'Werkblad-rekentool', icon: Calculator }],
+    items: [
+      { href: '/gereedschap/werkblad', label: 'Werkblad-rekentool', icon: Calculator },
+      { href: '/gereedschap/samples', label: 'Samples', icon: SwatchBook },
+    ],
   },
   {
     label: 'Instellingen',
@@ -94,6 +98,7 @@ const groups: NavGroup[] = [
       { href: '/instellingen/maatformulier', label: 'Ruimte gereed', icon: Ruler },
       { href: '/instellingen/teksten', label: 'Standaardteksten', icon: FileText },
       { href: '/instellingen/documenten', label: 'Standaarddocumenten', icon: FolderOpen },
+      { href: '/instellingen/sample-modellen', label: 'Sample-modellen', icon: SwatchBook },
     ],
   },
 ]

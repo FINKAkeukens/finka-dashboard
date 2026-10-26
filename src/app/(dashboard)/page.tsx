@@ -215,8 +215,6 @@ export default async function DashboardPage() {
         <p className="text-sm text-[#6B6560] mt-1">Welkom terug bij FINKA</p>
       </div>
 
-      <DeliveryTimesWidget initialData={deliveryTimes} currentWeek={getIsoWeek(new Date())} />
-
       {/* Stats */}
       <div className="max-w-6xl grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
         {stats.map(({ label, value, icon: Icon, href, color }) => (
@@ -391,6 +389,10 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-8">
+        <DeliveryTimesWidget initialData={deliveryTimes} currentWeek={getIsoWeek(new Date())} />
       </div>
     </div>
   )

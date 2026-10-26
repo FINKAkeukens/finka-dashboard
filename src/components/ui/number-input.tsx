@@ -32,8 +32,10 @@ export function NumberInput({
   onChange: (value: number) => void
   // Vuurt ná de interne normalisatie-logica van handleBlur — voor aanroepers
   // die bij het verlaten van het veld nog iets willen doen (bv. direct
-  // opslaan), zonder zelf de tekst/parse-logica te hoeven overnemen.
-  onBlur?: () => void
+  // opslaan), zonder zelf de tekst/parse-logica te hoeven overnemen. Krijgt
+  // het definitieve getal mee: de onChange vlak ervoor is dan nog niet
+  // gerenderd, dus de state van de aanroeper kan nog de vorige waarde hebben.
+  onBlur?: (value: number) => void
   className?: string
   placeholder?: string
   min?: number
@@ -69,11 +71,13 @@ export function NumberInput({
 
   function handleBlur() {
     setFocused(false)
-    const parsed = parseNumber(text) ?? 0
+    // Een afsluitende punt/komma ("125,") telt bij het verlaten als "125"
+    // i.p.v. als ongeldig (→ 0).
+    const parsed = parseNumber(text.trim().replace(/[.,]$/, '')) ?? 0
     const clamped = min !== undefined ? Math.max(min, parsed) : parsed
     onChange(clamped)
     setText(formatForEdit(clamped))
-    onBlur?.()
+    onBlur?.(clamped)
   }
 
   return (
