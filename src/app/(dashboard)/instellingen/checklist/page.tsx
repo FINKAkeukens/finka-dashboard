@@ -1,32 +1,6 @@
-export const dynamic = 'force-dynamic'
+import { redirect } from 'next/navigation'
 
-import { createClient } from '@/lib/supabase/server'
-import { ChecklistCategoryItem, ChecklistTemplateItem } from '@/lib/types'
-import ChecklistTemplateForm from './ChecklistTemplateForm'
-
-export default async function ChecklistInstellingenPage() {
-  const supabase = await createClient()
-  const [{ data: categories }, { data: templates }] = await Promise.all([
-    supabase.from('finka_checklist_categories').select('*').order('sort_order', { ascending: true }),
-    supabase.from('finka_checklist_templates').select('*').order('sort_order', { ascending: true }),
-  ])
-
-  return (
-    <div className="p-4 md:p-8 max-w-3xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#1C1B19]">Checklist-items</h1>
-        <p className="text-sm text-[#6B6560] mt-1">
-          Dit is het standaardlijstje voor de Checklist-tab bij projecten. Zowel de kopjes als de items erbinnen zijn
-          aan te passen. Een nieuw item wordt automatisch toegevoegd bij alle projecten die al een checklist hebben
-          (en bij nieuwe checklists die vanaf nu worden aangemaakt). Een bestaand item hernoemen, verbergen of
-          verwijderen werkt wel alleen voor nieuw aan te maken checklists — al aangemaakte project-checklists blijven
-          daarin ongewijzigd.
-        </p>
-      </div>
-      <ChecklistTemplateForm
-        initialCategories={(categories ?? []) as ChecklistCategoryItem[]}
-        initialItems={(templates ?? []) as ChecklistTemplateItem[]}
-      />
-    </div>
-  )
+// Checklist-items heet nu Draaiboek (fases, stappen, volgorde en termijnen).
+export default function ChecklistInstellingenPage() {
+  redirect('/instellingen/draaiboek')
 }

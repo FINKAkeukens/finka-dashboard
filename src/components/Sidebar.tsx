@@ -24,10 +24,14 @@ import {
   Truck,
   FolderOpen,
   SwatchBook,
+  NotebookPen,
+  Building2,
+  Timer,
   Menu,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MobileTimer, SidebarTimer } from '@/components/ProjectTimer'
 
 interface NavItem {
   href: string
@@ -46,7 +50,11 @@ interface NavGroup {
 const groups: NavGroup[] = [
   {
     label: 'Overzicht',
-    items: [{ href: '/', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/intern', label: 'FINKA intern', icon: NotebookPen },
+      { href: '/bedrijf', label: 'Bedrijfsgegevens', icon: Building2 },
+    ],
   },
   {
     label: 'Klanten',
@@ -57,6 +65,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/projecten', label: 'Projecten', icon: FolderKanban },
       { href: '/planning', label: 'Planning', icon: CalendarRange },
+      { href: '/tijd', label: 'Tijd', icon: Timer },
     ],
   },
   {
@@ -93,7 +102,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/instellingen/euroline', label: 'Euroline-tarieven', icon: Settings },
       { href: '/instellingen/werkblad', label: 'Werkblad-prijzen', icon: Settings },
-      { href: '/instellingen/checklist', label: 'Checklist-items', icon: ListChecks },
+      { href: '/instellingen/draaiboek', label: 'Draaiboek', icon: ListChecks },
       { href: '/instellingen/vragenlijst', label: 'Vragenlijst', icon: HelpCircle },
       { href: '/instellingen/maatformulier', label: 'Ruimte gereed', icon: Ruler },
       { href: '/instellingen/teksten', label: 'Standaardteksten', icon: FileText },
@@ -183,6 +192,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-3 py-4 border-t border-[#DDD8D2]">
+        <SidebarTimer />
         <button
           onClick={handleLogout}
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[#6B6560] hover:bg-[#F7F5F2] hover:text-[#1C1B19] transition-colors w-full"
@@ -222,6 +232,7 @@ export function MobileNav() {
 
   return (
     <div className="md:hidden">
+      {!menuOpen && <MobileTimer />}
       {menuOpen && (
         <div className="fixed inset-0 z-40 bg-white flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-between px-5 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 border-b border-[#DDD8D2]">

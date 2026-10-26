@@ -8,9 +8,9 @@ import { nl } from 'date-fns/locale'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Plus, Trash2 } from 'lucide-react'
-import { MilestoneAssignee, MilestoneStatus, ProjectMilestone } from '@/lib/types'
+import { Assignee, MilestoneStatus, ProjectMilestone } from '@/lib/types'
 import {
-  ASSIGNEE_OPTIONS,
+  assigneeNames,
   MILESTONE_LABELS,
   MILESTONE_ORDER,
   MILESTONE_STATUS_COLORS,
@@ -28,9 +28,11 @@ type DraftMilestone = ProjectMilestone & { isNew?: boolean }
 export default function PlanningTab({
   projectId,
   milestones: initialMilestones,
+  assignees,
 }: {
   projectId: string
   milestones: ProjectMilestone[]
+  assignees: Assignee[]
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -73,6 +75,7 @@ export default function PlanningTab({
         label: '',
         notes: null,
         assigned_to: null,
+        priority: false,
         created_at: '',
         updated_at: '',
         isNew: true,
@@ -197,13 +200,14 @@ export default function PlanningTab({
               ))}
             </select>
             <select
+              aria-label="Wacht op"
               value={m.assigned_to ?? ''}
-              onChange={(e) => update(m.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })}
+              onChange={(e) => update(m.id, { assigned_to: e.target.value || null })}
               className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
-              <option value="">— Niemand —</option>
-              {ASSIGNEE_OPTIONS.map((a) => (
-                <option key={a} value={a}>{a}</option>
+              <option value="">Wacht op: niemand</option>
+              {assigneeNames(assignees, m.assigned_to).map((a) => (
+                <option key={a} value={a}>Wacht op: {a}</option>
               ))}
             </select>
             <Input
@@ -243,13 +247,14 @@ export default function PlanningTab({
               ))}
             </select>
             <select
+              aria-label="Wacht op"
               value={m.assigned_to ?? ''}
-              onChange={(e) => update(m.id, { assigned_to: (e.target.value || null) as MilestoneAssignee | null })}
+              onChange={(e) => update(m.id, { assigned_to: e.target.value || null })}
               className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
-              <option value="">— Niemand —</option>
-              {ASSIGNEE_OPTIONS.map((a) => (
-                <option key={a} value={a}>{a}</option>
+              <option value="">Wacht op: niemand</option>
+              {assigneeNames(assignees, m.assigned_to).map((a) => (
+                <option key={a} value={a}>Wacht op: {a}</option>
               ))}
             </select>
             <Input

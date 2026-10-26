@@ -2178,7 +2178,262 @@ ALTER TABLE finka_appliances
   ADD COLUMN IF NOT EXISTS verification JSONB;
 
 -- =========================================================
--- 85. Samples (stalen) onder Gereedschap → Samples.
+-- 85. Standaardteksten per offerteveld — een lijst kant-en-klare teksten
+--    per invulveld van de offerte (field_key, zie QUOTE_TEXT_FIELDS in
+--    src/lib/quote-text-snippets.ts), te beheren onder Instellingen →
+--    Standaardteksten en in de offerte in te voegen via het knopje
+--    "Standaardtekst" bij elk veld. Los van finka_default_texts (dat blijft
+--    het automatische vertrekpunt voor een nieuwe offerte).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_quote_text_snippets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  field_key TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS finka_quote_text_snippets_field_idx ON finka_quote_text_snippets (field_key, sort_order);
+
+ALTER TABLE finka_quote_text_snippets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_quote_text_snippets;
+CREATE POLICY "Staff only" ON finka_quote_text_snippets FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+
+GRANT ALL ON TABLE finka_quote_text_snippets TO anon, authenticated, service_role;
+-- 86. Planning: draaiboek vastgelegd, prio, eigen lijst personen/partijen,
+--    fase ↔ projectstatus.
+--
+--    a. De draaiboek-kolommen (sjabloon: depends_on/due_days/
+--       default_assignee/milestone_key; projectstap: template_id/nvt/
+--       status/assigned_to/due_date/notes/unlocked_at) stonden al live maar
+--       nog niet in dit bestand — hier idempotent vastgelegd.
+--    b. priority op projectstappen en mijlpalen/algemene taken: staat
+--       bovenaan /planning en bovenaan z'n fase.
+--    c. finka_assignees: de keuzelijst voor "toegewezen aan" (was hard
+--       gecodeerd Kieke/Merel/Leverancier/FINKA). assigned_to blijft tekst
+--       (de naam) — de CHECK-constraints gaan eraf zodat nieuwe namen
+--       werken. hidden i.p.v. verwijderen: oude toewijzingen blijven kloppen.
+--    d. status_id op een fase (checklist-kopje): welke projectstatus erbij
+--       hoort. Zo mag een fase een andere naam krijgen dan de status (de
+--       code rekent op vaste statusnamen zoals 'Akkoord'). Gevuld op
+--       gelijke naam, plus Afronding → Opgeleverd.
+-- =========================================================
+
+ALTER TABLE finka_checklist_templates
+  ADD COLUMN IF NOT EXISTS depends_on UUID[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS due_days INTEGER,
+  ADD COLUMN IF NOT EXISTS default_assignee TEXT,
+  ADD COLUMN IF NOT EXISTS milestone_key TEXT;
+
+ALTER TABLE finka_checklist_items
+  ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES finka_checklist_templates(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS nvt BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS status TEXT,
+  ADD COLUMN IF NOT EXISTS assigned_to TEXT,
+  ADD COLUMN IF NOT EXISTS due_date DATE,
+  ADD COLUMN IF NOT EXISTS notes TEXT,
+  ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS priority BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE finka_project_milestones
+  ADD COLUMN IF NOT EXISTS priority BOOLEAN NOT NULL DEFAULT false;
+
+-- Alle CHECK-constraints op de toewijs-kolommen weg (namen verschillen per
+-- tabel/historie, dus opzoeken i.p.v. raden).
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT conrelid::regclass AS tbl, conname
+    FROM pg_constraint
+    WHERE contype = 'c'
+      AND conrelid IN ('finka_project_milestones'::regclass, 'finka_checklist_items'::regclass, 'finka_checklist_templates'::regclass)
+      AND (pg_get_constraintdef(oid) ILIKE '%assigned_to%' OR pg_get_constraintdef(oid) ILIKE '%default_assignee%')
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.tbl, r.conname);
+  END LOOP;
+END $$;
+
+CREATE TABLE IF NOT EXISTS finka_assignees (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'partij' CHECK (kind IN ('persoon', 'bedrijf', 'partij')),
+  hidden BOOLEAN NOT NULL DEFAULT false,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_assignees ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_assignees;
+CREATE POLICY "Staff only" ON finka_assignees FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_assignees TO anon, authenticated, service_role;
+
+INSERT INTO finka_assignees (name, kind, sort_order) VALUES
+  ('Merel', 'persoon', 0),
+  ('Kieke', 'persoon', 1),
+  ('FINKA', 'bedrijf', 2),
+  ('Leverancier', 'partij', 3)
+ON CONFLICT (name) DO NOTHING;
+
+ALTER TABLE finka_checklist_categories
+  ADD COLUMN IF NOT EXISTS status_id UUID REFERENCES finka_project_statuses(id) ON DELETE SET NULL;
+
+UPDATE finka_checklist_categories c SET status_id = s.id
+FROM finka_project_statuses s
+WHERE c.status_id IS NULL
+  AND (s.label = c.label OR (c.label = 'Afronding' AND s.label = 'Opgeleverd'));
+
+-- =========================================================
+-- 87. FINKA intern: aantekeningen en inspiratie (niet projectgebonden).
+--
+--    De to do's op die pagina zijn de bestaande algemene taken
+--    (finka_project_milestones met project_id NULL) — geen nieuwe tabel.
+--    Inspiratie-bestanden staan in de afgeschermde bucket 'intern': alleen
+--    staff, openen via /api/bestand (zie src/lib/storage-url.ts).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_internal_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  pinned BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_internal_notes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_internal_notes;
+CREATE POLICY "Staff only" ON finka_internal_notes FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_internal_notes TO anon, authenticated, service_role;
+
+-- kind: 'afbeelding' / 'bestand' (file_url + storage_path) of 'link' (url).
+CREATE TABLE IF NOT EXISTS finka_internal_inspiration (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('afbeelding', 'bestand', 'link')),
+  title TEXT NOT NULL DEFAULT '',
+  note TEXT,
+  url TEXT,
+  file_url TEXT,
+  storage_path TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_internal_inspiration ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_internal_inspiration;
+CREATE POLICY "Staff only" ON finka_internal_inspiration FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_internal_inspiration TO anon, authenticated, service_role;
+
+-- Afgeschermde bucket, max 20 MB per bestand.
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('intern', 'intern', false, 20971520)
+ON CONFLICT (id) DO UPDATE SET public = false;
+
+DROP POLICY IF EXISTS "Staff kan intern lezen" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan intern uploaden" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan intern bijwerken" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan intern verwijderen" ON storage.objects;
+CREATE POLICY "Staff kan intern lezen" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'intern' AND is_staff());
+CREATE POLICY "Staff kan intern uploaden" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'intern' AND is_staff());
+CREATE POLICY "Staff kan intern bijwerken" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'intern' AND is_staff());
+CREATE POLICY "Staff kan intern verwijderen" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'intern' AND is_staff());
+
+-- =========================================================
+-- 88. Tijdregistratie per project.
+--
+--    Eén timer per staff-gebruiker: een rij met ended_at NULL is de
+--    lopende timer (de unieke index dwingt af dat er per gebruiker maar
+--    één tegelijk loopt). Wisselen van project = de lopende rij afsluiten
+--    en een nieuwe beginnen. Zie src/lib/time-tracking.ts.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_time_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_email TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT finka_time_entries_order CHECK (ended_at IS NULL OR ended_at >= started_at)
+);
+CREATE INDEX IF NOT EXISTS finka_time_entries_project_idx ON finka_time_entries(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS finka_time_entries_one_running ON finka_time_entries(user_id) WHERE ended_at IS NULL;
+
+ALTER TABLE finka_time_entries ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_time_entries;
+CREATE POLICY "Staff only" ON finka_time_entries FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_time_entries TO anon, authenticated, service_role;
+
+-- =========================================================
+-- 89. Timer per persoon in plaats van per login.
+--
+--    Merel en Kieke werken op dezelfde login, maar willen allebei hun
+--    eigen tijd op een project kunnen laten lopen, ook tegelijk. Elke
+--    sessie krijgt daarom de naam van de persoon (uit finka_assignees,
+--    soort 'persoon'); er loopt maximaal één timer per persoon. Oude
+--    sessies zonder naam blijven bestaan en zijn achteraf een naam te
+--    geven.
+-- =========================================================
+
+ALTER TABLE finka_time_entries ADD COLUMN IF NOT EXISTS person TEXT;
+DROP INDEX IF EXISTS finka_time_entries_one_running;
+CREATE UNIQUE INDEX IF NOT EXISTS finka_time_entries_one_running_person
+  ON finka_time_entries(person) WHERE ended_at IS NULL AND person IS NOT NULL;
+
+-- =========================================================
+-- 90. Bedrijfsgegevens en accounts (/bedrijf).
+--
+--    a. finka_company_info: vaste velden (KvK, btw, IBAN, ...) als
+--       sleutel/waarde; welke velden er zijn en in welke volgorde staat
+--       in src/lib/bedrijfsgegevens.ts. Gewoon staff-only, zoals de rest.
+--    b. finka_accounts: inloggegevens van leveranciers en diensten.
+--       Wachtwoorden staan versleuteld (AES-256-GCM) in logins[].secret;
+--       de sleutel (VAULT_ENCRYPTION_KEY) staat alleen op de server.
+--       Bewust GEEN policy voor authenticated: alleen de server (service
+--       role) leest en schrijft, na de staff-check en, voor wachtwoorden,
+--       de pincode. Zie src/lib/kluis.ts.
+--    c. finka_vault_settings: de pincode (scrypt-hash) en de teller voor
+--       foute pogingen. Ook alleen service role.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_company_info (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_company_info ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_company_info;
+CREATE POLICY "Staff only" ON finka_company_info FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_company_info TO authenticated, service_role;
+
+CREATE TABLE IF NOT EXISTS finka_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  url TEXT,
+  -- [{ label, username, secret }] — secret = versleuteld of null
+  logins JSONB NOT NULL DEFAULT '[]',
+  contacts TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_accounts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE finka_accounts FROM anon, authenticated;
+GRANT ALL ON TABLE finka_accounts TO service_role;
+
+CREATE TABLE IF NOT EXISTS finka_vault_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  pin_hash TEXT,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_vault_settings ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE finka_vault_settings FROM anon, authenticated;
+GRANT ALL ON TABLE finka_vault_settings TO service_role;
+INSERT INTO finka_vault_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- =========================================================
+-- 91. Samples (stalen) onder Gereedschap → Samples.
 --
 --    finka_samples: de fysieke stalen die FINKA heeft (fronten, werkbladen,
 --    grepen, ...). Eén rij = één fysiek exemplaar. Foto in de bestaande
@@ -2325,7 +2580,7 @@ WHERE s.id = '1f216d82-95f6-439a-8817-34147b6a083e'
 ON CONFLICT (supplier_id, category, name) DO NOTHING;
 
 -- =========================================================
--- 86. Materiaal + uitvoering bij samples.
+-- 92. Materiaal + uitvoering bij samples.
 --
 --    material: vaste keuzes (Fineer, Houtlook, Lak, Hoogglanslak, Glas, zie
 --    SAMPLE_MATERIALS in src/lib/samples.ts) of zelf ingevuld via "Anders".

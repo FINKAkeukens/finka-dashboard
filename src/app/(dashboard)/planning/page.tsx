@@ -1,64 +1,82 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
-import { Project, ProjectMilestone } from '@/lib/types'
+import { Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, Project, ProjectMilestone } from '@/lib/types'
 import { isCancelled } from '@/lib/project-dates'
-import PlanningAgenda, { PlanningProject } from './PlanningAgenda'
+import { phaseLabelForStatus } from '@/lib/draaiboek'
+import { PLANNING_ITEM_COLUMNS, PlanningProjectInfo, buildPlanningEntries } from '@/lib/planning-overzicht'
+import { fetchAll } from '@/lib/supabase/fetch-all'
+import { RETIRED_MILESTONE_KEY } from '@/lib/planning'
+import PlanningOverzicht from './PlanningOverzicht'
 
 export default async function PlanningOverviewPage() {
   const supabase = await createClient()
 
-  // Projecten en de algemene taken hangen niet van elkaar af — samen
-  // ophalen scheelt een netwerkrondje. De projectmijlpalen hebben de
-  // project-id's wél nodig en volgen dus daarna.
-  const [{ data: projectsData }, { data: generalData }] = await Promise.all([
+  // Alles wat niet van de project-id's afhangt in één rondje; de stappen en
+  // mijlpalen per project volgen daarna.
+  const [
+    { data: projectsData },
+    { data: generalData },
+    { data: templatesData },
+    { data: categoriesData },
+    { data: assigneesData },
+  ] = await Promise.all([
     supabase
       .from('finka_projects')
       .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
       .is('archived_at', null)
       .order('created_at', { ascending: false }),
-    // Algemene taken — niet aan een project gekoppeld, eigen sectie op de pagina.
-    supabase
-      .from('finka_project_milestones')
-      .select('*')
-      .is('project_id', null)
-      .order('sort_order'),
+    // Algemene taken — niet aan een project gekoppeld.
+    supabase.from('finka_project_milestones').select('*').is('project_id', null).order('sort_order'),
+    supabase.from('finka_checklist_templates').select('*'),
+    supabase.from('finka_checklist_categories').select('*').order('sort_order'),
+    supabase.from('finka_assignees').select('*').order('sort_order'),
   ])
 
   // Een geannuleerd project hoeft niet meer ingepland te worden.
   const projects = ((projectsData ?? []) as Project[]).filter((p) => !isCancelled(p))
   const projectIds = projects.map((p) => p.id)
+  const categories = (categoriesData ?? []) as ChecklistCategoryItem[]
+  const templates = (templatesData ?? []) as ChecklistTemplateItem[]
   const generalTasks = (generalData ?? []) as ProjectMilestone[]
 
+  let items: ChecklistItem[] = []
   let milestones: ProjectMilestone[] = []
   if (projectIds.length) {
-    const { data } = await supabase
-      .from('finka_project_milestones')
-      .select('*')
-      .in('project_id', projectIds)
-      .order('sort_order')
-    milestones = (data ?? []) as ProjectMilestone[]
+    const [{ data: itemsData }, { data: msData }] = await Promise.all([
+      fetchAll<ChecklistItem>((from, to) =>
+        supabase.from('finka_checklist_items').select(PLANNING_ITEM_COLUMNS).in('project_id', projectIds).order('id').range(from, to)
+      ),
+      fetchAll<ProjectMilestone>((from, to) =>
+        supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).neq('milestone_key', RETIRED_MILESTONE_KEY).order('id').range(from, to)
+      ),
+    ])
+    items = itemsData.sort((a, b) => a.sort_order - b.sort_order)
+    milestones = msData.sort((a, b) => a.sort_order - b.sort_order)
   }
 
-  const planningProjects: PlanningProject[] = projects.map((p) => ({
+  const planningProjects: PlanningProjectInfo[] = projects.map((p) => ({
     id: p.id,
     title: p.title,
     referenceNumber: p.reference_number,
     customerName: p.customer ? `${p.customer.first_name} ${p.customer.last_name}` : '—',
-    statusLabel: p.status?.label ?? null,
-    statusColor: p.status?.color ?? '#9CA3AF',
-    milestones: milestones.filter((m) => m.project_id === p.id),
+    phaseLabel: phaseLabelForStatus(categories, p.status_id, p.status?.label ?? null) ?? categories[0]?.label ?? null,
   }))
 
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Planning</h1>
-        <p className="text-sm text-[#6B6560] mt-1">
-          Aankomende mijlpalen van alle lopende projecten, op volgorde van datum. Status, toewijzing en notities pas je hier direct aan — datums wijzig je bij de Planning-tab van een project.
-        </p>
+        <p className="text-sm text-[#6B6560] mt-1">Taken en afspraken van alle lopende projecten.</p>
       </div>
-      <PlanningAgenda projects={planningProjects} generalTasks={generalTasks} />
+      {/* De lijst wordt hier op de server samengesteld: de browser krijgt
+          alleen de open taken, niet alle 1000+ projecttaken. */}
+      <PlanningOverzicht
+        projects={planningProjects}
+        initialEntries={buildPlanningEntries({ projects: planningProjects, items, templates, milestones, generalTasks })}
+        templates={templates}
+        assignees={(assigneesData ?? []) as Assignee[]}
+      />
     </div>
   )
 }

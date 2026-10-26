@@ -6,8 +6,10 @@ import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { ArrowRight, Plus } from 'lucide-react'
 import { Project, ProjectMilestone, ProjectStatus } from '@/lib/types'
-import { leadTimeDays, milestoneLabel, urgencyClass } from '@/lib/planning'
+import { leadTimeDays, milestoneLabel, RETIRED_MILESTONE_KEY, urgencyClass } from '@/lib/planning'
 import { CANCELLED_STATUS_LABEL, isCancelled } from '@/lib/project-dates'
+import { fetchAll } from '@/lib/supabase/fetch-all'
+import { entrySeconds, formatDuration, type TimeEntry } from '@/lib/time-tracking'
 import ProjectsTable, { type ProjectRow } from './ProjectsTable'
 
 // Eerstvolgende nog-niet-afgeronde mijlpaal met een datum — bepaalt zowel de
@@ -64,7 +66,7 @@ export default async function ProjectenPage({
 
   // Portaalactiviteit en mijlpalen hangen allebei alleen van de project-id's
   // af, niet van elkaar — dus ook samen, weer een rondje minder.
-  const [{ data: activityData }, { data: milestonesData }, { data: quotesData }] = projects.length
+  const [{ data: activityData }, { data: milestonesData }, { data: quotesData }, { data: timeData }] = projects.length
     ? await Promise.all([
         // Projecten waar de klant iets heeft gedaan dat staff nog niet gezien
         // heeft — zie migratie-sectie 63 / het meldingenblok op de projectpagina.
@@ -76,7 +78,8 @@ export default async function ProjectenPage({
         supabase
           .from('finka_project_milestones')
           .select('*')
-          .in('project_id', projects.map((p) => p.id)),
+          .in('project_id', projects.map((p) => p.id))
+          .neq('milestone_key', RETIRED_MILESTONE_KEY),
         // Voor "Laatst bewerkt": aan de offerte wordt het meest gewerkt,
         // terwijl het project zelf dan niet wijzigt.
         supabase
@@ -84,8 +87,22 @@ export default async function ProjectenPage({
           .select('project_id, updated_at')
           .in('project_id', projects.map((p) => p.id))
           .is('archived_at', null),
+        // Kolom Tijd: alle geregistreerde tijd per project (zie /tijd).
+        fetchAll<Pick<TimeEntry, 'project_id' | 'started_at' | 'ended_at'>>((from, to) =>
+          supabase
+            .from('finka_time_entries')
+            .select('project_id, started_at, ended_at')
+            .in('project_id', projects.map((p) => p.id))
+            .order('id')
+            .range(from, to)
+        ),
       ])
-    : [{ data: null }, { data: null }, { data: null }]
+    : [{ data: null }, { data: null }, { data: null }, { data: null }]
+
+  const secondsByProject = new Map<string, number>()
+  for (const e of timeData ?? []) {
+    secondsByProject.set(e.project_id, (secondsByProject.get(e.project_id) ?? 0) + entrySeconds(e))
+  }
 
   const lastQuoteEditByProject = new Map<string, string>()
   for (const q of (quotesData ?? []) as { project_id: string; updated_at: string }[]) {
@@ -135,12 +152,14 @@ export default async function ProjectenPage({
       milestoneClass: next ? urgencyClass(next.date as string) : '',
       hasPortalActivity: projectsWithPortalActivity.has(p.id),
       lastEdited: format(new Date(lastEdited), 'd MMM yyyy', { locale: nl }),
+      time: secondsByProject.get(p.id) ? formatDuration(secondsByProject.get(p.id) as number) : '—',
       sort: {
         customer: p.customer ? customerSortKey(p.customer.first_name, p.customer.last_name) : null,
         statusOrder: p.status?.sort_order ?? null,
         leadDays: p.first_contact_date ? leadTimeDays(p.first_contact_date) : null,
         milestoneTime: next ? new Date(next.date as string).getTime() : null,
         lastEditedTime: new Date(lastEdited).getTime(),
+        seconds: secondsByProject.get(p.id) ?? null,
       },
     }})
 

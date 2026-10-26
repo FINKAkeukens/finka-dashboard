@@ -21,6 +21,7 @@ export interface ProjectRow {
   milestoneClass: string
   hasPortalActivity: boolean
   lastEdited: string
+  time: string
   // Ruwe waarden om op te sorteren — de weergavetekst hierboven ("12 dagen",
   // "Inmeten — 3 okt") sorteert niet logisch. null = onbekend, staat altijd
   // onderaan, in welke richting je ook sorteert.
@@ -30,10 +31,19 @@ export interface ProjectRow {
     leadDays: number | null
     milestoneTime: number | null
     lastEditedTime: number
+    seconds: number | null
   }
 }
 
-type ColumnKey = 'reference' | 'title' | 'customerName' | 'statusLabel' | 'leadTime' | 'milestone' | 'lastEdited'
+type ColumnKey =
+  | 'reference'
+  | 'title'
+  | 'customerName'
+  | 'statusLabel'
+  | 'leadTime'
+  | 'milestone'
+  | 'lastEdited'
+  | 'time'
 // Alleen de kolommen met vrije tekst krijgen een zoekveld. Status heeft de
 // knoppenbalk erboven al, en doorlooptijd/mijlpaal zijn afgeleide waarden
 // waar tekstueel zoeken weinig oplevert.
@@ -47,6 +57,7 @@ const columns: { key: ColumnKey; label: string; placeholder?: string }[] = [
   { key: 'leadTime', label: 'Doorlooptijd' },
   { key: 'milestone', label: 'Volgende mijlpaal' },
   { key: 'lastEdited', label: 'Laatst bewerkt' },
+  { key: 'time', label: 'Tijd' },
 ]
 
 type SortDir = 'asc' | 'desc'
@@ -62,6 +73,7 @@ const FIRST_CLICK_DIR: Record<ColumnKey, SortDir> = {
   leadTime: 'desc', // langst lopend bovenaan
   milestone: 'asc', // eerstvolgende datum bovenaan
   lastEdited: 'desc', // net bewerkt bovenaan
+  time: 'desc', // meeste tijd bovenaan
 }
 
 // Zelfde volgorde als de server aanlevert: eerstvolgende mijlpaal bovenaan.
@@ -80,6 +92,7 @@ function sortValue(row: ProjectRow, key: ColumnKey): string | number | null {
     case 'leadTime': return row.sort.leadDays
     case 'milestone': return row.sort.milestoneTime
     case 'lastEdited': return row.sort.lastEditedTime
+    case 'time': return row.sort.seconds
   }
 }
 
@@ -235,6 +248,7 @@ export default function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
               </p>
               <p className="text-xs mt-1.5 truncate">
                 <span className={row.milestoneClass || 'text-[#9A948D] italic'}>{row.milestone}</span>
+                {row.sort.seconds !== null && <span className="text-[#9A948D] tabular-nums"> · {row.time}</span>}
               </p>
             </Link>
           ))
@@ -353,6 +367,7 @@ export default function ProjectsTable({ rows }: { rows: ProjectRow[] }) {
                     <span className={row.milestoneClass || 'text-[#9A948D] italic'}>{row.milestone}</span>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-[#6B6560] whitespace-nowrap">{row.lastEdited}</td>
+                  <td className="px-5 py-3.5 text-xs text-[#6B6560] whitespace-nowrap tabular-nums">{row.time}</td>
                 </tr>
               ))
             )}

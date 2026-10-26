@@ -3,10 +3,16 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { Users, Zap, Mail, TrendingUp, FolderKanban } from 'lucide-react'
 import Link from 'next/link'
-import { DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
+import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, DeliveryTime, Project, ProjectMilestone } from '@/lib/types'
 import { categoryLabel } from '@/lib/checklist'
+import { phaseLabelForStatus } from '@/lib/draaiboek'
+import { RETIRED_MILESTONE_KEY } from '@/lib/planning'
+import { BUCKET_ORDER, buildPlanningEntries, compareEntries, entryBucket, PLANNING_ITEM_COLUMNS, PlanningProjectInfo } from '@/lib/planning-overzicht'
+import { format } from 'date-fns'
+import { nl } from 'date-fns/locale'
 import { averageDays, CANCELLED_STATUS_LABEL, isCancelled, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
 import { getIsoWeek } from '@/lib/iso-week'
+import { fetchAll } from '@/lib/supabase/fetch-all'
 import DeliveryTimesWidget from './DeliveryTimesWidget'
 
 export default async function DashboardPage() {
@@ -21,6 +27,9 @@ export default async function DashboardPage() {
     { data: customersForStatus },
     { data: recentCustomers },
     { data: deliveryTimesData },
+    { data: categoriesData },
+    { data: templatesData },
+    { data: generalTasksData },
   ] = await Promise.all([
     supabase.from('finka_customers').select('*', { count: 'exact', head: true }).is('archived_at', null),
     supabase.from('finka_appliances').select('*', { count: 'exact', head: true }),
@@ -42,7 +51,11 @@ export default async function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('finka_delivery_times').select('brand, summary, source_email_date, updated_at'),
+    supabase.from('finka_checklist_categories').select('*').order('sort_order'),
+    supabase.from('finka_checklist_templates').select('*'),
+    supabase.from('finka_project_milestones').select('*').is('project_id', null),
   ])
+  const categories = (categoriesData ?? []) as ChecklistCategoryItem[]
   const deliveryTimes = (deliveryTimesData ?? []) as DeliveryTime[]
 
   // "Geannuleerd" is geen fase in de pijplijn, dus geen kolom in het
@@ -78,21 +91,20 @@ export default async function DashboardPage() {
     { data: activityData },
   ] = projectIds.length
     ? await Promise.all([
-        supabase
-          .from('finka_checklist_items')
-          .select('project_id, category, checked')
-          .in('project_id', projectIds),
+        // Volledige rijen: ook nodig voor het Planning-blokje. Meer dan
+        // 1000, dus in pagina's.
+        fetchAll<ChecklistItem>((from, to) =>
+          supabase.from('finka_checklist_items').select(PLANNING_ITEM_COLUMNS).in('project_id', projectIds).order('id').range(from, to)
+        ),
         supabase
           .from('finka_quotes')
           .select('project_id, akkoord_at')
           .in('project_id', projectIds)
           .not('akkoord_at', 'is', null)
           .order('akkoord_at', { ascending: true }),
-        supabase
-          .from('finka_project_milestones')
-          .select('project_id, milestone_key, date')
-          .in('project_id', projectIds)
-          .in('milestone_key', ['montage_start', 'oplevering']),
+        fetchAll<ProjectMilestone>((from, to) =>
+          supabase.from('finka_project_milestones').select('*').in('project_id', projectIds).neq('milestone_key', RETIRED_MILESTONE_KEY).order('id').range(from, to)
+        ),
         supabase
           .from('finka_portal_activity')
           .select('project_id')
@@ -101,18 +113,18 @@ export default async function DashboardPage() {
       ])
     : [{ data: null }, { data: null }, { data: null }, { data: null }]
 
+  // "n.v.t." telt als afgerond — er hoeft niets meer voor te gebeuren.
   const checklistItemsByProject = new Map<string, { category: string; checked: boolean }[]>()
   for (const item of checklistItems ?? []) {
     const list = checklistItemsByProject.get(item.project_id) ?? []
-    list.push({ category: item.category, checked: item.checked })
+    list.push({ category: item.category, checked: item.checked || item.nvt })
     checklistItemsByProject.set(item.project_id, list)
   }
 
   function phaseProgress(project: Project): { done: number; total: number; percentage: number } | null {
     if (!project.status) return null
-    const items = (checklistItemsByProject.get(project.id) ?? []).filter(
-      (i) => categoryLabel(i.category) === project.status!.label
-    )
+    const phase = phaseLabelForStatus(categories, project.status_id, project.status.label)
+    const items = (checklistItemsByProject.get(project.id) ?? []).filter((i) => categoryLabel(i.category) === phase)
     if (items.length === 0) return null
     const done = items.filter((i) => i.checked).length
     return { done, total: items.length, percentage: Math.round((done / items.length) * 100) }
@@ -137,7 +149,7 @@ export default async function DashboardPage() {
   for (const q of quotesData ?? []) {
     if (!akkoordAtByProject.has(q.project_id)) akkoordAtByProject.set(q.project_id, q.akkoord_at)
   }
-  for (const m of milestonesData ?? []) {
+  for (const m of (milestonesData ?? []).filter((m) => m.milestone_key === 'montage_start' || m.milestone_key === 'oplevering')) {
     if (!m.project_id) continue
     const list = timelineMilestonesByProject.get(m.project_id) ?? []
     list.push(m)
@@ -208,12 +220,73 @@ export default async function DashboardPage() {
     customerCountByStatus.set(c.status, (customerCountByStatus.get(c.status) ?? 0) + 1)
   }
 
+  // Planning-blokje: de eerste vijf uit /planning (prio, dan op urgentie).
+  // Taken zonder datum en zonder prio horen daar onderaan, hier niet.
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const planningProjects: PlanningProjectInfo[] = allProjects.map((p) => ({
+    id: p.id,
+    title: p.title,
+    referenceNumber: p.reference_number,
+    customerName: p.customer ? `${p.customer.first_name} ${p.customer.last_name}` : '—',
+    phaseLabel: null,
+  }))
+  const topPlanning = buildPlanningEntries({
+    projects: planningProjects,
+    items: (checklistItems ?? []) as ChecklistItem[],
+    templates: (templatesData ?? []) as ChecklistTemplateItem[],
+    milestones: (milestonesData ?? []) as ProjectMilestone[],
+    generalTasks: (generalTasksData ?? []) as ProjectMilestone[],
+  })
+    .map((e) => ({ e, bucket: entryBucket(e, today) }))
+    .filter(({ bucket }) => bucket !== 'geen')
+    .sort((a, b) => BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket) || compareEntries(a.e, b.e))
+    .slice(0, 5)
+
   return (
     <div className="p-4 md:p-8">
       <div className="max-w-6xl mb-8">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Dashboard</h1>
         <p className="text-sm text-[#6B6560] mt-1">Welkom terug bij FINKA</p>
       </div>
+
+      {topPlanning.length > 0 && (
+        <div className="max-w-6xl bg-white rounded-xl border border-[#DDD8D2] mb-8">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-[#DDD8D2]">
+            <h2 className="text-sm font-medium text-[#1C1B19]">Planning</h2>
+            <Link href="/planning" className="text-xs text-[#6B6560] hover:text-[#C9A96E]">Alles bekijken</Link>
+          </div>
+          <div className="divide-y divide-[#EFEBE6]">
+            {topPlanning.map(({ e, bucket }) => (
+              <Link
+                key={e.key}
+                href={e.project ? `/projecten/${e.project.id}?tab=planning` : '/intern'}
+                className="flex items-center gap-3 px-5 py-2.5 hover:bg-[#FAF8F5]"
+              >
+                {e.priority ? (
+                  <span className="w-5 h-5 rounded-md bg-red-600 text-white text-xs font-bold flex items-center justify-center shrink-0">!</span>
+                ) : (
+                  <span className="w-5 shrink-0" />
+                )}
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm text-[#1C1B19] truncate">{e.label}</span>
+                  <span className="block text-xs text-[#6B6560] truncate">
+                    {e.project ? `${e.project.referenceNumber} · ${e.project.customerName}` : 'FINKA intern'}
+                    {e.assignee ? ` · ${e.assignee}` : ''}
+                  </span>
+                </span>
+                <span
+                  className={`text-xs shrink-0 ${
+                    bucket === 'laat' ? 'text-red-600 font-medium' : bucket === 'vandaag' ? 'text-[#8A6A2E] font-medium' : 'text-[#6B6560]'
+                  }`}
+                >
+                  {e.date ? format(new Date(e.date), 'EEEEEE d MMM', { locale: nl }) : 'Geen datum'}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="max-w-6xl grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">

@@ -1,16 +1,35 @@
 import { differenceInCalendarDays } from 'date-fns'
-import { MilestoneAssignee, MilestoneKey, MilestoneStatus, ProjectMilestone } from './types'
+import { Assignee, MilestoneKey, MilestoneStatus, ProjectMilestone } from './types'
 
-// Vaste toewijs-opties — team is klein genoeg om dit hard te coderen i.p.v.
-// een aparte gebruikerslijst op te tuigen.
-export const ASSIGNEE_OPTIONS: MilestoneAssignee[] = ['Kieke', 'Merel', 'Leverancier', 'FINKA']
+// Wie kosten voorgeschoten heeft (Financieel > Kosten) — bewust een vaste
+// lijst mensen, los van de planning-keuzelijst: een leverancier of
+// montagepartij schiet geen kosten voor.
+export const PAYER_OPTIONS = ['Kieke', 'Merel', 'FINKA']
 
-// Vaste volgorde van de 5 standaardmijlpalen — 'custom'-items staan hier
+// Keuzelijst voor "Wacht op" (kolom assigned_to) — uit finka_assignees, verborgen namen
+// eruit. Staat er al een (inmiddels verborgen of onbekende) naam ingevuld,
+// dan blijft die zichtbaar zodat de select 'm niet stilletjes leeg toont.
+export function assigneeNames(assignees: Assignee[], current?: string | null): string[] {
+  const names = [...assignees]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .filter((a) => !a.hidden)
+    .map((a) => a.name)
+  if (current && !names.includes(current)) names.push(current)
+  return names
+}
+
+// Vaste volgorde van de standaardmijlpalen — 'custom'-items staan hier
 // bewust niet in, die worden los toegevoegd/verwijderd per project.
+// 'bestelling' is sinds 2026-10-19 geen afspraak meer (het is een taak:
+// "Kasten bestellen bij keukenleverancier"); de rijen bestaan nog wel in de
+// database (de trigger maakt ze aan), maar worden nergens meer getoond — zie
+// RETIRED_MILESTONE_KEY.
 export const MILESTONE_ORDER: Exclude<MilestoneKey, 'custom'>[] = [
   'kennismaking', 'meting', 'bespreken_eerste_offerte', 'bespreken_finale_offerte',
-  'bestelling', 'levering', 'montage_start', 'oplevering',
+  'levering', 'montage_start', 'oplevering',
 ]
+
+export const RETIRED_MILESTONE_KEY = 'bestelling'
 
 export const MILESTONE_LABELS: Record<Exclude<MilestoneKey, 'custom'>, string> = {
   kennismaking: 'Kennismaking',

@@ -11,7 +11,7 @@ const selectClass =
   'w-full h-9 px-3 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]'
 
 // Foto's staan in de bestaande bucket offer-images onder samples/ — zie
-// migratie-sectie 85.
+// migratie-sectie 91.
 export async function uploadSamplePhoto(
   supabase: ReturnType<typeof createClient>,
   file: File,

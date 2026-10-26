@@ -11,10 +11,12 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { ACCESSOIRE_APPLIANCE_TYPES, formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteDiscount, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteDiscount, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, QuoteTextSnippet, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
+import SnippetPicker from '@/components/SnippetPicker'
+import { insertSnippetText, QUOTE_TEXT_FIELDS, snippetsFor } from '@/lib/quote-text-snippets'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const TYPE_LABELS: Record<QuoteItemType, string> = {
@@ -58,24 +60,45 @@ const PAGE_ANCHOR_LABELS: Record<QuotePageAnchor, string> = {
 // die pagina in de klantversie, lichtgrijs zoals de sectielabels (zie
 // renderInline/DisclaimerFooter in offerte/[projectId]/page.tsx). Standaard
 // ingeklapt tenzij er al tekst in staat.
-function PageDisclaimerField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function PageDisclaimerField({
+  label,
+  value,
+  onChange,
+  snippets,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  snippets: QuoteTextSnippet[]
+}) {
   const [open, setOpen] = useState(() => !!value)
+  const picker = (
+    <SnippetPicker
+      snippets={snippets}
+      align={open ? 'right' : 'left'}
+      onPick={(s) => { onChange(insertSnippetText(value, s.body, 'text')); setOpen(true) }}
+    />
+  )
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 text-xs text-[#9A948D] hover:text-[#1C1B19]"
-      >
-        <Plus size={11} />
-        Disclaimer toevoegen
-      </button>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1.5 text-xs text-[#9A948D] hover:text-[#1C1B19]"
+        >
+          <Plus size={11} />
+          Disclaimer toevoegen
+        </button>
+        {picker}
+      </div>
     )
   }
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs">{label}</Label>
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-xs flex-1">{label}</Label>
+        {picker}
         <button
           type="button"
           onClick={() => { onChange(''); setOpen(false) }}
@@ -113,6 +136,25 @@ function round2(n: number) {
 const MARKER_REGEX = /==.+?==/
 function markerClass(value: string | null | undefined) {
   return value && MARKER_REGEX.test(value) ? 'border-red-400 focus:border-red-500 bg-red-50/50' : ''
+}
+
+// Veldlabel met rechts het "Standaardtekst"-knopje (zie SnippetPicker en
+// /instellingen/teksten).
+function SnippetLabel({
+  label,
+  snippets,
+  onPick,
+}: {
+  label: string
+  snippets: QuoteTextSnippet[]
+  onPick: (snippet: QuoteTextSnippet) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <Label>{label}</Label>
+      <SnippetPicker snippets={snippets} onPick={onPick} />
+    </div>
+  )
 }
 
 function lineTotal(item: Pick<DraftItem, 'quantity' | 'unit_price' | 'line_total' | 'line_total_source'>) {
@@ -192,6 +234,7 @@ export default function QuoteEditor({
   downloads,
   appliances,
   defaultTexts,
+  textSnippets,
 }: {
   projectId: string
   quote: Quote | null
@@ -199,6 +242,7 @@ export default function QuoteEditor({
   downloads: QuoteDownloadMeta[]
   appliances: Appliance[]
   defaultTexts: DefaultTexts
+  textSnippets: QuoteTextSnippet[]
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -300,6 +344,16 @@ export default function QuoteEditor({
   )
   function updatePageDisclaimer(key: PageDisclaimerKey, text: string) {
     setPageDisclaimers((prev) => ({ ...prev, [key]: text }))
+  }
+
+  // Props voor SnippetLabel bij een gewoon tekstveld: invoegen volgens de
+  // mode van dat veld in QUOTE_TEXT_FIELDS (aanvullen of vervangen).
+  function snippetProps(fieldKey: string, current: string, set: (v: string) => void) {
+    const mode = QUOTE_TEXT_FIELDS.find((f) => f.key === fieldKey)?.mode ?? 'text'
+    return {
+      snippets: snippetsFor(textSnippets, fieldKey),
+      onPick: (snippet: QuoteTextSnippet) => set(insertSnippetText(current, snippet.body, mode)),
+    }
   }
   const [customerPriceValue, setCustomerPriceValue] = useState(initialQuote?.customer_price ?? 0)
   const [customerPriceSource, setCustomerPriceSource] = useState<FieldSource>(
@@ -623,6 +677,12 @@ export default function QuoteEditor({
     setCustomerSections((prev) =>
       prev.map((s, i) => (i === index ? { ...s, lines: [...s.lines, { text: '', included: true }] } : s))
     )
+  }
+
+  // Standaardtekst "Sectieregels": elke regel van de tekst wordt een eigen regel.
+  function addSectionLinesFromText(index: number, text: string) {
+    const newLines = text.split('\n').map((t) => t.trim()).filter(Boolean).map((t) => ({ text: t, included: true }))
+    setCustomerSections((prev) => prev.map((s, i) => (i === index ? { ...s, lines: [...s.lines, ...newLines] } : s)))
   }
 
   function updateSectionLine(index: number, lineIndex: number, value: string) {
@@ -1170,6 +1230,7 @@ export default function QuoteEditor({
         label="Disclaimer — ontwerp/tekening (herhaalt op elke pagina van deze sectie)"
         value={pageDisclaimers.ontwerp ?? ''}
         onChange={(v) => updatePageDisclaimer('ontwerp', v)}
+        snippets={snippetsFor(textSnippets, 'disclaimer_ontwerp')}
       />
 
       <Dialog open={coverPickerOpen} onOpenChange={setCoverPickerOpen}>
@@ -1438,14 +1499,20 @@ export default function QuoteEditor({
           <div className="space-y-2 pt-2 border-t border-[#DDD8D2]">
             <div className="flex items-center justify-between">
               <Label className="text-xs">Korting (bedrag incl. BTW)</Label>
-              <button
-                type="button"
-                onClick={addDiscount}
-                className="inline-flex items-center gap-1 text-xs text-[#6B6560] hover:text-[#1C1B19]"
-              >
-                <Plus size={11} />
-                Korting toevoegen
-              </button>
+              <div className="flex items-center gap-4">
+                <SnippetPicker
+                  snippets={snippetsFor(textSnippets, 'korting')}
+                  onPick={(s) => setDiscounts((prev) => [...prev, { description: s.body, amount: 0 }])}
+                />
+                <button
+                  type="button"
+                  onClick={addDiscount}
+                  className="inline-flex items-center gap-1 text-xs text-[#6B6560] hover:text-[#1C1B19]"
+                >
+                  <Plus size={11} />
+                  Korting toevoegen
+                </button>
+              </div>
             </div>
             {discounts.map((d, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -1533,7 +1600,7 @@ export default function QuoteEditor({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Documentnaam</Label>
+          <SnippetLabel label="Documentnaam" {...snippetProps('document_label', customerDocumentLabel, setCustomerDocumentLabel)} />
           <Input
             value={customerDocumentLabel}
             onChange={(e) => setCustomerDocumentLabel(e.target.value)}
@@ -1544,7 +1611,7 @@ export default function QuoteEditor({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Titel op voorpagina</Label>
+          <SnippetLabel label="Titel op voorpagina" {...snippetProps('headline', customerHeadline, setCustomerHeadline)} />
           <textarea
             value={customerHeadline}
             onChange={(e) => setCustomerHeadline(e.target.value)}
@@ -1558,7 +1625,7 @@ export default function QuoteEditor({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Korte omschrijving (onder de titel)</Label>
+          <SnippetLabel label="Korte omschrijving (onder de titel)" {...snippetProps('subtitle', customerSubtitle, setCustomerSubtitle)} />
           <textarea
             value={customerSubtitle}
             onChange={(e) => setCustomerSubtitle(e.target.value)}
@@ -1570,11 +1637,12 @@ export default function QuoteEditor({
             label="Disclaimer — voorpagina"
             value={pageDisclaimers.voorpagina ?? ''}
             onChange={(v) => updatePageDisclaimer('voorpagina', v)}
+            snippets={snippetsFor(textSnippets, 'disclaimer_voorpagina')}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label>Introtekst</Label>
+          <SnippetLabel label="Introtekst" {...snippetProps('intro', customerIntroText, setCustomerIntroText)} />
           <textarea
             value={customerIntroText}
             onChange={(e) => setCustomerIntroText(e.target.value)}
@@ -1586,6 +1654,7 @@ export default function QuoteEditor({
             label="Disclaimer — toelichting"
             value={pageDisclaimers.toelichting ?? ''}
             onChange={(v) => updatePageDisclaimer('toelichting', v)}
+            snippets={snippetsFor(textSnippets, 'disclaimer_toelichting')}
           />
         </div>
 
@@ -1657,6 +1726,12 @@ export default function QuoteEditor({
                   onChange={(e) => updateSectionTitle(sIdx, e.target.value)}
                   className={`flex-1 text-sm font-medium bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${markerClass(section.title)}`}
                 />
+                <SnippetPicker
+                  iconOnly
+                  label="Standaardtitel"
+                  snippets={snippetsFor(textSnippets, 'sectie_titel')}
+                  onPick={(s) => updateSectionTitle(sIdx, s.body)}
+                />
                 {collapsed && (
                   <span className="text-xs text-[#9A948D]">{section.lines.length} regel{section.lines.length === 1 ? '' : 's'}</span>
                 )}
@@ -1715,6 +1790,12 @@ export default function QuoteEditor({
                   <Plus size={12} className="mr-1.5" />
                   Regel
                 </Button>
+                <SnippetPicker
+                  label="Standaardregels"
+                  align="left"
+                  snippets={snippetsFor(textSnippets, 'sectie_regels')}
+                  onPick={(s) => addSectionLinesFromText(sIdx, s.body)}
+                />
                 {section.category === 'accessoires' && (
                   <Button variant="outline" size="sm" onClick={() => setAccessoirePickerSectionIdx(sIdx)}>
                     <Zap size={12} className="mr-1.5" />
@@ -1791,6 +1872,7 @@ export default function QuoteEditor({
                 label="Disclaimer — onderaan deze sectie"
                 value={section.disclaimer ?? ''}
                 onChange={(v) => updateSectionDisclaimer(sIdx, v)}
+                snippets={snippetsFor(textSnippets, 'disclaimer_sectie')}
               />
               </>
               )}
@@ -1860,11 +1942,18 @@ export default function QuoteEditor({
                   <Button variant="outline" size="sm" onClick={fillCostLinesFromInternal}>
                     Vul in vanuit offerte
                   </Button>
+                  <SnippetPicker
+                    label="Standaardregel"
+                    align="left"
+                    snippets={snippetsFor(textSnippets, 'kostenregel')}
+                    onPick={(s) => setCustomerCostLines((prev) => [...prev, { label: s.title.trim(), description: s.body, amount: 0 }])}
+                  />
                 </div>
                 <PageDisclaimerField
                   label="Disclaimer — kosten"
                   value={pageDisclaimers.kosten ?? ''}
                   onChange={(v) => updatePageDisclaimer('kosten', v)}
+                  snippets={snippetsFor(textSnippets, 'disclaimer_kosten')}
                 />
               </>
             )}
@@ -1890,7 +1979,7 @@ export default function QuoteEditor({
                 </p>
 
                 <div className="space-y-1.5">
-                  <Label>Toelichting</Label>
+                  <SnippetLabel label="Toelichting" {...snippetProps('aansluitingen_toelichting', customerConnectionsIntro, setCustomerConnectionsIntro)} />
                   <textarea
                     value={customerConnectionsIntro}
                     onChange={(e) => setCustomerConnectionsIntro(e.target.value)}
@@ -1923,7 +2012,7 @@ export default function QuoteEditor({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Disclaimer</Label>
+                  <SnippetLabel label="Disclaimer" {...snippetProps('aansluitingen_disclaimer', customerConnectionsDisclaimer, setCustomerConnectionsDisclaimer)} />
                   <textarea
                     value={customerConnectionsDisclaimer}
                     onChange={(e) => setCustomerConnectionsDisclaimer(e.target.value)}
@@ -1978,7 +2067,7 @@ export default function QuoteEditor({
         </FieldWithSource>
 
         <div className="space-y-1.5">
-          <Label>Vervolgpagina — titel</Label>
+          <SnippetLabel label="Vervolgpagina — titel" {...snippetProps('vervolg_titel', customerClosingHeading, setCustomerClosingHeading)} />
           <Input
             value={customerClosingHeading}
             onChange={(e) => setCustomerClosingHeading(e.target.value)}
@@ -1989,7 +2078,7 @@ export default function QuoteEditor({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Vervolgpagina — tekst (volgende stappen)</Label>
+          <SnippetLabel label="Vervolgpagina — tekst (volgende stappen)" {...snippetProps('vervolg_tekst', customerClosingText, setCustomerClosingText)} />
           <textarea
             value={customerClosingText}
             onChange={(e) => setCustomerClosingText(e.target.value)}
@@ -2001,11 +2090,12 @@ export default function QuoteEditor({
             label="Disclaimer — vervolgpagina"
             value={pageDisclaimers.vervolg ?? ''}
             onChange={(v) => updatePageDisclaimer('vervolg', v)}
+            snippets={snippetsFor(textSnippets, 'disclaimer_vervolg')}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label>Afsluitende quote (laatste pagina)</Label>
+          <SnippetLabel label="Afsluitende quote (laatste pagina)" {...snippetProps('afsluitende_quote', customerClosingQuote, setCustomerClosingQuote)} />
           <Input
             value={customerClosingQuote}
             onChange={(e) => setCustomerClosingQuote(e.target.value)}
@@ -2017,11 +2107,12 @@ export default function QuoteEditor({
             label="Disclaimer — afsluitpagina"
             value={pageDisclaimers.afsluiting ?? ''}
             onChange={(v) => updatePageDisclaimer('afsluiting', v)}
+            snippets={snippetsFor(textSnippets, 'disclaimer_afsluiting')}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label>Voorbehoud-tekst (onder de totaalprijs)</Label>
+          <SnippetLabel label="Voorbehoud-tekst (onder de totaalprijs)" {...snippetProps('voorbehoud', customerDisclaimerText, setCustomerDisclaimerText)} />
           <textarea
             value={customerDisclaimerText}
             onChange={(e) => setCustomerDisclaimerText(e.target.value)}

@@ -8,7 +8,8 @@
 // uploaden): die dient alleen nog als stabiele verwijzing naar bucket + pad,
 // en wordt bij het tonen via fileHref() omgezet. Zo hoefde er geen data
 // gemigreerd te worden.
-export const PROTECTED_BUCKETS = ['klant-uploads', 'project-documenten', 'offerte-pdfs'] as const
+// 'intern' = FINKA intern (inspiratie): alleen staff, nooit een klant.
+export const PROTECTED_BUCKETS = ['klant-uploads', 'project-documenten', 'offerte-pdfs', 'intern'] as const
 export type ProtectedBucket = (typeof PROTECTED_BUCKETS)[number]
 
 const PUBLIC_MARKER = '/storage/v1/object/public/'

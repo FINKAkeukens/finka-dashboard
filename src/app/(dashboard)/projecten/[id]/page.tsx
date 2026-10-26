@@ -12,7 +12,8 @@ import DocumentenTab from './DocumentenTab'
 import QuoteEditor from './offerte/QuoteEditor'
 import ConfiguratorTab from './ConfiguratorTab'
 import PlanningTab from './PlanningTab'
-import ChecklistTab from './ChecklistTab'
+import ProjectTijdlijn from './ProjectTijdlijn'
+import { phaseLabelForStatus } from '@/lib/draaiboek'
 import VragenlijstTab from './VragenlijstTab'
 import MaatformulierTab from './MaatformulierTab'
 import FinancieelTab from './FinancieelTab'
@@ -20,8 +21,9 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
-import { Appliance, ChecklistItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
-import { leadTimeDays } from '@/lib/planning'
+import { ProjectTimeSummary } from '@/components/ProjectTimer'
+import { Appliance, Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
+import { leadTimeDays, RETIRED_MILESTONE_KEY } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 import { DEFAULT_TEXTS } from '@/lib/default-texts'
 import { standardDocumentsFor, termsReferenceDate } from '@/lib/standard-documents'
@@ -34,7 +36,10 @@ export default async function ProjectDetailPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { id } = await params
-  const { tab = 'offerte' } = await searchParams
+  const { tab: tabParam = 'offerte' } = await searchParams
+  // De losse Checklist-tab is opgegaan in de Planning-tab (tijdlijn); oude
+  // links met ?tab=checklist komen daar uit.
+  const tab = tabParam === 'checklist' ? 'planning' : tabParam
   const supabase = await createClient()
 
   // Alles wat bij élk tabblad nodig is, in één keer opgevraagd. Deze vijf
@@ -104,24 +109,26 @@ export default async function ProjectDetailPage({
     historyEntries = data ?? []
   }
 
+  // Planning-tab = tijdlijn van checklist + afspraken samen, dus daar ook
+  // de checklist-punten en het draaiboek (sjabloon + kopjes) bij.
   let milestones: ProjectMilestone[] = []
-  if (tab === 'planning') {
-    const { data } = await supabase
-      .from('finka_project_milestones')
-      .select('*')
-      .eq('project_id', id)
-      .order('sort_order')
-    milestones = (data ?? []) as ProjectMilestone[]
-  }
-
   let checklistItems: ChecklistItem[] = []
-  if (tab === 'checklist') {
-    const { data } = await supabase
-      .from('finka_checklist_items')
-      .select('*')
-      .eq('project_id', id)
-      .order('sort_order')
-    checklistItems = (data ?? []) as ChecklistItem[]
+  let checklistTemplates: ChecklistTemplateItem[] = []
+  let checklistCategories: ChecklistCategoryItem[] = []
+  let assignees: Assignee[] = []
+  if (tab === 'planning') {
+    const [{ data: msData }, { data: itemsData }, { data: tplData }, { data: catData }, { data: assigneeData }] = await Promise.all([
+      supabase.from('finka_project_milestones').select('*').eq('project_id', id).neq('milestone_key', RETIRED_MILESTONE_KEY).order('sort_order'),
+      supabase.from('finka_checklist_items').select('*').eq('project_id', id).order('sort_order'),
+      supabase.from('finka_checklist_templates').select('*').order('sort_order'),
+      supabase.from('finka_checklist_categories').select('*').order('sort_order'),
+      supabase.from('finka_assignees').select('*').order('sort_order'),
+    ])
+    assignees = (assigneeData ?? []) as Assignee[]
+    milestones = (msData ?? []) as ProjectMilestone[]
+    checklistItems = (itemsData ?? []) as ChecklistItem[]
+    checklistTemplates = (tplData ?? []) as ChecklistTemplateItem[]
+    checklistCategories = (catData ?? []) as ChecklistCategoryItem[]
   }
 
   let questionnaireCategories: QuestionnaireCategoryItem[] = []
@@ -237,6 +244,7 @@ export default async function ProjectDetailPage({
   let configuratorOptions: ConfiguratorOption[] = []
   let configuratorScenarios: ConfiguratorScenario[] = []
   let offerteDefaultTexts: DefaultTexts = DEFAULT_TEXTS
+  let quoteTextSnippets: QuoteTextSnippet[] = []
   if (tab === 'offerte' || tab === 'configurator') {
     const [{ data: quoteData }, { data: applianceData }, { data: ratesData }, { data: werkbladRatesData }] = await Promise.all([
       supabase
@@ -257,11 +265,13 @@ export default async function ProjectDetailPage({
     werkbladRates = werkbladRatesData as WerkbladRates | null
 
     if (quote && tab === 'offerte') {
-      const [{ data: itemsData }, { data: downloadsData }, { data: defaultTextsData }] = await Promise.all([
+      const [{ data: itemsData }, { data: downloadsData }, { data: defaultTextsData }, { data: snippetsData }] = await Promise.all([
         supabase.from('finka_quote_items').select('*').eq('quote_id', quote.id).order('sort_order'),
         supabase.from('finka_quote_downloads').select(QUOTE_DOWNLOAD_META_COLUMNS).eq('quote_id', quote.id).order('downloaded_at', { ascending: false }),
         supabase.from('finka_default_texts').select('*').limit(1).maybeSingle(),
+        supabase.from('finka_quote_text_snippets').select('*').order('sort_order'),
       ])
+      quoteTextSnippets = (snippetsData ?? []) as QuoteTextSnippet[]
       quoteItems = (itemsData ?? []) as QuoteItem[]
       quoteDownloads = (downloadsData ?? []) as unknown as QuoteDownloadMeta[]
       // Merge i.p.v. harde ?? fallback: als de rij bestaat maar een nieuw
@@ -305,6 +315,7 @@ export default async function ProjectDetailPage({
             {projectRow.customer.first_name} {projectRow.customer.last_name} →
           </Link>
         )}
+        <ProjectTimeSummary projectId={id} />
 
         {/* Tijdlijn: eerste contact → akkoord → montage → afronding, met per
             fase de doorlooptijd sinds de vorige. De laatste drie datums komen
@@ -383,7 +394,7 @@ export default async function ProjectDetailPage({
           appliances={appliances}
         />
       ) : tab === 'offerte' ? (
-        <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} defaultTexts={offerteDefaultTexts} />
+        <QuoteEditor projectId={id} quote={quote} items={quoteItems} downloads={quoteDownloads} appliances={appliances} defaultTexts={offerteDefaultTexts} textSnippets={quoteTextSnippets} />
       ) : tab === 'financieel' ? (
         <FinancieelTab
           items={financialItems}
@@ -392,9 +403,32 @@ export default async function ProjectDetailPage({
           afrondingDate={dates.afronding.date}
         />
       ) : tab === 'planning' ? (
-        <PlanningTab projectId={id} milestones={milestones} />
-      ) : tab === 'checklist' ? (
-        <ChecklistTab projectId={id} items={checklistItems} />
+        <div className="space-y-6">
+          <ProjectTijdlijn
+            projectId={id}
+            currentPhaseLabel={phaseLabelForStatus(checklistCategories, projectRow.status_id, projectRow.status?.label ?? null)}
+            items={checklistItems}
+            templates={checklistTemplates}
+            categories={checklistCategories}
+            milestones={milestones}
+            assignees={assignees}
+          />
+          {/* Volledige afspraken-editor (eigen afspraken toevoegen, notities)
+              — ingeklapt, de tijdlijn hierboven dekt het dagelijkse werk. De
+              key laat 'm opnieuw opstarten zodra de tijdlijn een mijlpaal
+              wijzigt (router.refresh), anders toont hij verouderde datums. */}
+          <details>
+            <summary className="cursor-pointer select-none text-sm font-medium text-[#6B6560] hover:text-[#1C1B19] mb-3">
+              Alle afspraken bewerken
+            </summary>
+            <PlanningTab
+              key={milestones.map((m) => `${m.id}:${m.updated_at}:${m.date}:${m.status}`).join('|')}
+              projectId={id}
+              milestones={milestones}
+              assignees={assignees}
+            />
+          </details>
+        </div>
       ) : tab === 'vragenlijst' ? (
         <VragenlijstTab projectId={id} categories={questionnaireCategories} questions={questionnaireQuestions} responses={questionnaireResponses} />
       ) : tab === 'maatformulier' ? (

@@ -40,7 +40,7 @@ export interface Supplier {
   created_at: string
 }
 
-// Stalen onder Gereedschap → Samples — migratie-sectie 85.
+// Stalen onder Gereedschap → Samples — migratie-sectie 91.
 export type SampleCategory = 'front' | 'werkblad' | 'greep' | 'kleur' | 'anders'
 export type SampleSize = 'XL' | 'L' | 'M' | 'S'
 
@@ -470,6 +470,20 @@ export interface DefaultTexts {
   offerte_connections_disclaimer: string
   aansluitschema_let_op_notities: string
   updated_at: string
+}
+
+// Bibliotheek met kant-en-klare teksten per invulveld van de offerte
+// (§ Instellingen → Standaardteksten) — anders dan DefaultTexts hierboven
+// geen automatisch vertrekpunt, maar keuzes die staff via het knopje
+// "Standaardtekst" bij een veld in QuoteEditor.tsx zelf invoegt. Velden:
+// QUOTE_TEXT_FIELDS in src/lib/quote-text-snippets.ts.
+export interface QuoteTextSnippet {
+  id: string
+  field_key: string
+  title: string
+  body: string
+  sort_order: number
+  created_at: string
 }
 
 export interface WerkbladMaterial {
@@ -929,7 +943,21 @@ export type MilestoneKey =
   | 'oplevering'
   | 'custom'
 export type MilestoneStatus = 'nog_doen' | 'gepland' | 'bevestigd' | 'bezig' | 'klaar'
-export type MilestoneAssignee = 'Kieke' | 'Merel' | 'Leverancier' | 'FINKA'
+// Naam uit finka_assignees (beheerd via Instellingen > Draaiboek) — vrije
+// tekst, geen vaste set meer: er kunnen personen/partijen bij komen.
+export type MilestoneAssignee = string
+
+export type AssigneeKind = 'persoon' | 'bedrijf' | 'partij'
+
+export interface Assignee {
+  id: string
+  name: string
+  kind: AssigneeKind
+  // Verborgen = niet meer te kiezen, bestaande toewijzingen blijven staan.
+  hidden: boolean
+  sort_order: number
+  created_at: string
+}
 
 // Planning-mijlpalen — elk project krijgt automatisch 5 vaste (zie
 // migratie-trigger create_default_milestones), zodat de projecttab en de
@@ -946,6 +974,8 @@ export interface ProjectMilestone {
   label: string | null
   notes: string | null
   assigned_to: MilestoneAssignee | null
+  // Prio: bovenaan /planning, ongeacht de datum.
+  priority: boolean
   created_at: string
   updated_at: string
 }
@@ -985,6 +1015,22 @@ export interface ChecklistItem {
   // het moment van "Checklist aanmaken", los aan/uit te zetten per project.
   visible_to_customer: boolean
   sort_order: number
+  // Draaiboek (migratie-sectie 86, zie src/lib/draaiboek.ts): de sjabloonstap
+  // waar dit punt van afstamt (NULL bij oude of vrij toegevoegde punten —
+  // die hebben geen voorgangers en zijn dus altijd zichtbaar).
+  template_id: string | null
+  // "Niet van toepassing" — telt als afgerond, maar zonder afvinkdatum.
+  nvt: boolean
+  status: string | null
+  assigned_to: MilestoneAssignee | null
+  // Deadline (datum zonder tijd, yyyy-MM-dd).
+  due_date: string | null
+  notes: string | null
+  // Wanneer de stap voor het eerst zichtbaar werd (alle voorgangers klaar,
+  // of handmatig vrijgegeven via "Vrijgeven").
+  unlocked_at: string | null
+  // Prio: bovenaan /planning en bovenaan z'n fase.
+  priority: boolean
   created_at: string
   updated_at: string
 }
@@ -996,6 +1042,9 @@ export interface ChecklistItem {
 export interface ChecklistCategoryItem {
   id: string
   label: string
+  // De projectstatus die bij deze fase hoort (migratie 86) — los van de
+  // naam, zodat een fase hernoemd kan worden zonder de status te raken.
+  status_id: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -1012,6 +1061,13 @@ export interface ChecklistTemplateItem {
   // Startwaarde voor ChecklistItem.visible_to_customer — zie daar.
   visible_to_customer: boolean
   sort_order: number
+  // Draaiboek: sjabloonstappen die eerst klaar/n.v.t. moeten zijn voordat
+  // deze stap verschijnt, de termijn in dagen vanaf dat moment, de
+  // standaardpersoon en een eventuele gekoppelde vaste mijlpaal.
+  depends_on: string[]
+  due_days: number | null
+  default_assignee: MilestoneAssignee | null
+  milestone_key: Exclude<MilestoneKey, 'custom'> | null
   created_at: string
   updated_at: string
 }
@@ -1312,4 +1368,33 @@ export interface DeliveryTime {
   summary: string
   source_email_date: string | null
   updated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// FINKA intern (/intern) — niet projectgebonden: aantekeningen en
+// inspiratie. De to do's daar zijn de algemene taken (ProjectMilestone met
+// project_id NULL). Zie migratie-sectie 87.
+// ---------------------------------------------------------------------------
+export interface InternalNote {
+  id: string
+  title: string
+  body: string
+  pinned: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type InspirationKind = 'afbeelding' | 'bestand' | 'link'
+
+export interface InternalInspiration {
+  id: string
+  kind: InspirationKind
+  title: string
+  note: string | null
+  // Bij 'link' de webadres; bij een upload file_url (publieke-URL-vorm, open
+  // via fileHref) + storage_path in de bucket 'intern'.
+  url: string | null
+  file_url: string | null
+  storage_path: string | null
+  created_at: string
 }

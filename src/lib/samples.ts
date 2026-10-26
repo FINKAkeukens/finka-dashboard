@@ -36,7 +36,7 @@ export function todayIso(): string {
 }
 
 // Een staal heeft hooguit één openstaande uitlening (unieke index in
-// migratie-sectie 85) — die bepaalt of hij beschikbaar is.
+// migratie-sectie 91) — die bepaalt of hij beschikbaar is.
 export function sampleAvailability(openLoan: SampleLoan | null | undefined): SampleAvailability {
   if (!openLoan) return 'beschikbaar'
   if (openLoan.due_date && openLoan.due_date < todayIso()) return 'te-laat'
