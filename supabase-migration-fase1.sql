@@ -2592,3 +2592,18 @@ ON CONFLICT (supplier_id, category, name) DO NOTHING;
 ALTER TABLE finka_samples
   ADD COLUMN IF NOT EXISTS material TEXT,
   ADD COLUMN IF NOT EXISTS veneer_execution TEXT;
+
+-- =========================================================
+-- 93. Eigen Euroline-tarieven.
+--
+--    custom_rates: zelf toegevoegde tarieven onder Instellingen →
+--    Euroline-tarieven, als lijst { id, name, amount, category }. Per
+--    project aan te vinken in de rekentool (euroline_inputs.custom_rate_ids,
+--    in de bestaande JSON van de optie); telt dan mee in de gekozen kostenrij
+--    (opslag/levering/installatie/service), zie computeEurolineTotals.
+--    Niet in de grondslag van de brandstoftoeslag. Bestaande tabel → geen
+--    nieuwe GRANT nodig.
+-- =========================================================
+
+ALTER TABLE finka_euroline_rates
+  ADD COLUMN IF NOT EXISTS custom_rates JSONB NOT NULL DEFAULT '[]'::jsonb;

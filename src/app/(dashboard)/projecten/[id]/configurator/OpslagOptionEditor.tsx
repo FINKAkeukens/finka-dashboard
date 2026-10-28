@@ -5,8 +5,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { NumberInput } from '@/components/ui/number-input'
 import EurolineInfoButton from '@/components/EurolineInfoButton'
 import { formatPrice } from '@/lib/appliance-utils'
-import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, eurolineTotaalExclBtw } from '@/lib/euroline-calc'
-import { ConfiguratorOption, EurolineInputs, EurolineRates, OpslagOptionData } from '@/lib/types'
+import {
+  computeEurolineTotals,
+  DEFAULT_EUROLINE_INPUTS,
+  eurolineTotaalExclBtw,
+} from '@/lib/euroline-calc'
+import { ConfiguratorOption, EurolineCustomRateCategory, EurolineInputs, EurolineRates, OpslagOptionData } from '@/lib/types'
 
 function readData(data: ConfiguratorOption['data']): OpslagOptionData {
   const d = data as unknown as Partial<OpslagOptionData> | undefined
@@ -32,11 +36,31 @@ export default function OpslagOptionEditor({
 }) {
   const inputs = readData(option.data).euroline_inputs
   const totals = computeEurolineTotals(inputs, rates)
+  const selectedCustom = new Set(inputs.custom_rate_ids ?? [])
 
   function updateInput(patch: Partial<EurolineInputs>) {
     const nextInputs = { ...inputs, ...patch }
     const nextTotals = computeEurolineTotals(nextInputs, rates)
     onChange({ data: { euroline_inputs: nextInputs }, cost_total: eurolineTotaalExclBtw(nextTotals) })
+  }
+
+  // Eigen tarieven (Instellingen → Euroline-tarieven) als vinkjes in het
+  // onderdeel van hun kostenrij, tussen de vaste velden.
+  function customRateCheckboxes(category: EurolineCustomRateCategory) {
+    return (rates.custom_rates ?? [])
+      .filter((r) => r.category === category)
+      .map((r) => (
+        <label key={r.id} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+          <Checkbox
+            checked={selectedCustom.has(r.id)}
+            onCheckedChange={(v) => {
+              const ids = (inputs.custom_rate_ids ?? []).filter((id) => id !== r.id)
+              updateInput({ custom_rate_ids: v === true ? [...ids, r.id] : ids })
+            }}
+          />
+          {r.name || 'Naamloos tarief'} (+€{(Number(r.amount) || 0).toFixed(2)})
+        </label>
+      ))
   }
 
   return (
@@ -62,6 +86,7 @@ export default function OpslagOptionEditor({
             />
             Installatie in buitengebied (€{rates.installatie_buitengebied_per_m1.toFixed(2)}/m1 i.p.v. €{rates.installatie_per_m1.toFixed(2)}/m1)
           </label>
+          {customRateCheckboxes('installatie')}
           <p className="text-[10px] text-[#9A948D]">
             €{inputs.installatie_buitengebied ? rates.installatie_buitengebied_per_m1.toFixed(2) : rates.installatie_per_m1.toFixed(2)} per m1
           </p>
@@ -80,6 +105,7 @@ export default function OpslagOptionEditor({
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.opslag)}</span>
           </div>
+          {customRateCheckboxes('opslag')}
           <p className="text-[10px] text-[#9A948D]">Basis €{rates.opslag_base.toFixed(2)}, +€{rates.opslag_per_week_extra.toFixed(2)}/week</p>
         </div>
 
@@ -144,6 +170,7 @@ export default function OpslagOptionEditor({
               />
               Werkblad extra verpakt (+€{rates.werkblad_extra_verpakking.toFixed(2)})
             </label>
+            {customRateCheckboxes('levering')}
             {/* Zonder brandstoftoeslag — die staat onderaan als los blok, ook
                al telt hij in de kostprijs-opbouw mee bij Levering. */}
             <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(totals.levering - totals.brandstoftoeslag)}</span>
@@ -161,6 +188,7 @@ export default function OpslagOptionEditor({
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.service)}</span>
           </div>
+          {customRateCheckboxes('service')}
           <p className="text-[10px] text-[#9A948D]">€{rates.service_tarief_per_uur}/uur, minimum €{rates.service_minimum} zodra er service is</p>
         </div>
 
@@ -194,9 +222,9 @@ export default function OpslagOptionEditor({
           {inputs.brandstoftoeslag && (
             <p className="text-[10px] text-[#9A948D]">
               {rates.brandstoftoeslag_percentage}% over {formatPrice(totals.brandstoftoeslag_grondslag)}: levering
-              {' '}{formatPrice(totals.brandstoftoeslag_grondslag - rates.opslag_base - (rates.brandstoftoeslag_over_installatie ? totals.installatie : 0))}
+              {' '}{formatPrice(totals.brandstoftoeslag_grondslag - rates.opslag_base - (rates.brandstoftoeslag_over_installatie ? totals.montage : 0))}
               {' '}+ basisopslag {formatPrice(rates.opslag_base)}
-              {rates.brandstoftoeslag_over_installatie && ` + montage ${formatPrice(totals.installatie)}`}
+              {rates.brandstoftoeslag_over_installatie && ` + montage ${formatPrice(totals.montage)}`}
               {' '}(zonder extra lostijd, extra opslag en extra verpakking). Telt in de offerte mee bij de kostenrij Levering.
             </p>
           )}

@@ -7,9 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { EurolineRates } from '@/lib/types'
+import { NumberInput } from '@/components/ui/number-input'
+import { Plus, Trash2 } from 'lucide-react'
+import { EurolineCustomRate, EurolineCustomRateCategory, EurolineRates } from '@/lib/types'
+import { EUROLINE_CUSTOM_RATE_CATEGORIES } from '@/lib/euroline-calc'
 
-type RateKey = Exclude<keyof EurolineRates, 'id' | 'updated_at' | 'brandstoftoeslag_over_installatie'>
+type RateKey = Exclude<keyof EurolineRates, 'id' | 'updated_at' | 'brandstoftoeslag_over_installatie' | 'custom_rates'>
 
 const FIELDS: { key: RateKey; label: string; hint: string }[] = [
   { key: 'opslag_base', label: 'Opslag — basis (3 weken, per keuken)', hint: '' },
@@ -42,6 +45,7 @@ export default function EurolineRatesForm({ rates }: { rates: EurolineRates | nu
     return initial
   })
   const [overInstallatie, setOverInstallatie] = useState(rates?.brandstoftoeslag_over_installatie ?? false)
+  const [customRates, setCustomRates] = useState<EurolineCustomRate[]>(rates?.custom_rates ?? [])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -59,7 +63,12 @@ export default function EurolineRatesForm({ rates }: { rates: EurolineRates | nu
     setError('')
     const { error } = await supabase
       .from('finka_euroline_rates')
-      .update({ ...values, brandstoftoeslag_over_installatie: overInstallatie, updated_at: new Date().toISOString() })
+      .update({
+        ...values,
+        brandstoftoeslag_over_installatie: overInstallatie,
+        custom_rates: customRates.map((r) => ({ ...r, name: r.name.trim() })),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', rates!.id)
 
     if (error) {
@@ -70,6 +79,10 @@ export default function EurolineRatesForm({ rates }: { rates: EurolineRates | nu
       router.refresh()
     }
     setSaving(false)
+  }
+
+  function updateCustomRate(id: string, patch: Partial<EurolineCustomRate>) {
+    setCustomRates((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
   }
 
   return (
@@ -87,6 +100,61 @@ export default function EurolineRatesForm({ rates }: { rates: EurolineRates | nu
             />
           </div>
         ))}
+        {/* Eigen tarieven staan tussen de vaste velden; naam, bedrag en
+           kostenrij zijn te bewerken. Per project aan te vinken in de
+           rekentool (EurolineInputs.custom_rate_ids). */}
+        {customRates.map((r) => (
+          <div key={r.id} className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <input
+                value={r.name}
+                onChange={(e) => updateCustomRate(r.id, { name: e.target.value })}
+                placeholder="Naam van het tarief"
+                aria-label="Naam van het tarief"
+                className="flex-1 min-w-0 text-xs font-medium text-[#1C1B19] bg-transparent border-b border-dashed border-[#DDD8D2] focus:border-[#1C1B19] focus:outline-none placeholder:text-[#9A948D]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Tarief "${r.name || 'naamloos'}" verwijderen? In projecten waar het aangevinkt staat telt het dan niet meer mee.`)) {
+                    setCustomRates((prev) => prev.filter((x) => x.id !== r.id))
+                  }
+                }}
+                title="Tarief verwijderen"
+                className="shrink-0 p-0.5 text-[#9A948D] hover:text-red-600"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <NumberInput value={Number(r.amount) || 0} onChange={(amount) => updateCustomRate(r.id, { amount })} className="h-9" />
+              <select
+                value={r.category}
+                onChange={(e) => updateCustomRate(r.id, { category: e.target.value as EurolineCustomRateCategory })}
+                title="Kostenrij in de offerte"
+                className="h-9 px-2 text-xs bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+              >
+                {Object.entries(EUROLINE_CUSTOM_RATE_CATEGORIES).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setCustomRates((prev) => [...prev, { id: crypto.randomUUID(), name: '', amount: 0, category: 'levering' }])}
+        >
+          <Plus size={14} className="mr-1" /> Tarief toevoegen
+        </Button>
+        <p className="text-xs text-[#6B6560] mt-1.5">
+          Een eigen tarief vink je per project aan in de rekentool. Het telt dan mee in de gekozen kostenrij, niet in de grondslag van de brandstoftoeslag.
+        </p>
       </div>
 
       <div className="space-y-2 pt-4 border-t border-[#DDD8D2]">

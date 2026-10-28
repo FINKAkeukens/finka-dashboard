@@ -427,6 +427,9 @@ export interface EurolineInputs {
   // zetten per project. Staat standaard aan (DEFAULT_EUROLINE_INPUTS); bij
   // oudere opties ontbreekt de sleutel en geldt diezelfde standaard.
   brandstoftoeslag: boolean
+  // Aangevinkte eigen tarieven (EurolineRates.custom_rates, op id). Ontbreekt
+  // bij oudere opties — behandel dat als [] (zie DEFAULT_EUROLINE_INPUTS).
+  custom_rate_ids: string[]
 }
 
 // Los instelbare Euroline-tarieven (§ Instellingen) — één rij, overal
@@ -456,7 +459,20 @@ export interface EurolineRates {
   // Rekent Euroline de brandstoftoeslag ook over montage? Op de factuur van
   // 10-10-2026 stond geen montage, dus nog onbekend — standaard uit.
   brandstoftoeslag_over_installatie: boolean
+  // Zelf toegevoegde tarieven (Instellingen → Euroline-tarieven). Tellen
+  // alleen mee als ze per project aangevinkt zijn (custom_rate_ids).
+  // Kan null zijn zolang migratie-sectie 93 niet gedraaid is.
+  custom_rates: EurolineCustomRate[] | null
   updated_at: string
+}
+
+export type EurolineCustomRateCategory = 'opslag' | 'levering' | 'installatie' | 'service'
+
+export interface EurolineCustomRate {
+  id: string
+  name: string
+  amount: number
+  category: EurolineCustomRateCategory
 }
 
 // Los instelbare standaardteksten (§ Instellingen → Standaardteksten) —
