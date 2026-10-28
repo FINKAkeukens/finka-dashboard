@@ -146,7 +146,7 @@ export function getSpecSummary(appliance: Appliance): string {
   if (s.db_sound && appliance.type !== 'vaatwasser') {
     parts.push(`${s.db_sound} dB`)
   }
-  if (s.energy_label) parts.push(`label ${s.energy_label}`)
+  if (s.energy_label) parts.push(`energielabel ${s.energy_label}`)
   if (s.product_line) parts.push(String(s.product_line))
   if (s.series) parts.push(String(s.series))
 

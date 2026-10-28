@@ -337,10 +337,20 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
   const [specFilters, setSpecFilters] = useState<Record<string, string>>({})
 
   const typeCounts = useMemo(() => countByType(appliances), [appliances])
-  const brands = useMemo(
-    () => Array.from(new Set(appliances.map(a => a.brand))).sort((a, b) => a.localeCompare(b, 'nl')),
-    [appliances]
-  )
+  // Eén filteroptie per merk, ongeacht hoofdletters ("Bora" en "BORA") —
+  // getoond in de spelling die het vaakst voorkomt.
+  const brands = useMemo(() => {
+    const counts = new Map<string, Map<string, number>>()
+    for (const a of appliances) {
+      const key = a.brand.trim().toLowerCase()
+      const spellings = counts.get(key) ?? new Map<string, number>()
+      spellings.set(a.brand.trim(), (spellings.get(a.brand.trim()) ?? 0) + 1)
+      counts.set(key, spellings)
+    }
+    return Array.from(counts.values())
+      .map(spellings => [...spellings.entries()].sort((x, y) => y[1] - x[1])[0][0])
+      .sort((a, b) => a.localeCompare(b, 'nl'))
+  }, [appliances])
   const detailAppliance = appliances.find(a => a.id === detailId) ?? null
   const toCheckCount = useMemo(() => appliances.filter(a => !a.verified_at || qualityWarnings(a).length > 0).length, [appliances])
 
@@ -389,7 +399,7 @@ export default function ApplianceLibrary({ appliances: initialAppliances }: { ap
       if (productLineFilter !== 'alle') {
         if (productLineFilter === PRODUCT_LINE_FILTER_NONE ? !!a.specs?.product_line : a.specs?.product_line !== productLineFilter) return false
       }
-      if (brandFilter !== 'alle' && a.brand !== brandFilter) return false
+      if (brandFilter !== 'alle' && a.brand.trim().toLowerCase() !== brandFilter.toLowerCase()) return false
       if (onlyToCheck && a.verified_at && qualityWarnings(a).length === 0) return false
       if (q) {
         const s = q.toLowerCase()
