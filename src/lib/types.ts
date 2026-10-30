@@ -123,6 +123,9 @@ export interface Appliance {
   // via een controle-ronde in Claude Code.
   verified_at?: string | null
   verification?: ApplianceVerificationMeta | null
+  // Zelf geschreven kernspec-regel (migratie-sectie 94); ingevuld gaat hij
+  // voor de automatische regel uit getSpecSummary.
+  spec_summary_override?: string | null
 }
 
 export interface ApplianceVerificationMeta {

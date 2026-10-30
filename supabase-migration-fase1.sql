@@ -2607,3 +2607,16 @@ ALTER TABLE finka_samples
 
 ALTER TABLE finka_euroline_rates
   ADD COLUMN IF NOT EXISTS custom_rates JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- =========================================================
+-- 94. Handmatige kernspec-regel per apparaat.
+--
+--    spec_summary_override: zelf geschreven kernspec-regel (de tekst tussen
+--    haakjes in de offerte, bv. "nis 178 cm · 289L · energielabel E").
+--    Ingevuld = gaat voor de automatisch opgebouwde regel, overal waar
+--    getSpecSummary gebruikt wordt (bibliotheek, configurator, offertes).
+--    Leeg = automatisch uit de specs. Bestaande tabel → geen nieuwe GRANT.
+-- =========================================================
+
+ALTER TABLE finka_appliances
+  ADD COLUMN IF NOT EXISTS spec_summary_override TEXT;

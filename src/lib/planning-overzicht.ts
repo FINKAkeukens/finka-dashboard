@@ -53,6 +53,12 @@ export const BUCKET_ORDER: PlanningBucket[] = ['prio', 'laat', 'vandaag', 'week'
 
 export function entryBucket(entry: PlanningEntry, today: Date): PlanningBucket {
   if (entry.priority) return 'prio'
+  return dateBucket(entry, today)
+}
+
+// Alleen op datum, los van prio — voor de kleur van de datum: een verlopen
+// deadline is rood, ook als de taak op prio staat.
+export function dateBucket(entry: PlanningEntry, today: Date): Exclude<PlanningBucket, 'prio'> {
   if (!entry.date) return 'geen'
   const days = differenceInCalendarDays(new Date(entry.date), today)
   if (days < 0) return 'laat'

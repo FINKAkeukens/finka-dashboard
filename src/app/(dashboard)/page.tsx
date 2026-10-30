@@ -7,7 +7,7 @@ import { ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, DeliveryTi
 import { categoryLabel } from '@/lib/checklist'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
 import { RETIRED_MILESTONE_KEY } from '@/lib/planning'
-import { BUCKET_ORDER, buildPlanningEntries, compareEntries, entryBucket, PLANNING_ITEM_COLUMNS, PlanningProjectInfo } from '@/lib/planning-overzicht'
+import { BUCKET_ORDER, buildPlanningEntries, compareEntries, dateBucket, entryBucket, PLANNING_ITEM_COLUMNS, PlanningProjectInfo } from '@/lib/planning-overzicht'
 import { format } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { averageDays, CANCELLED_STATUS_LABEL, isCancelled, isOnHold, onHoldDays, ON_HOLD_STATUS_LABEL, projectDates } from '@/lib/project-dates'
@@ -238,7 +238,7 @@ export default async function DashboardPage() {
     milestones: (milestonesData ?? []) as ProjectMilestone[],
     generalTasks: (generalTasksData ?? []) as ProjectMilestone[],
   })
-    .map((e) => ({ e, bucket: entryBucket(e, today) }))
+    .map((e) => ({ e, bucket: entryBucket(e, today), dateUrgency: dateBucket(e, today) }))
     .filter(({ bucket }) => bucket !== 'geen')
     .sort((a, b) => BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket) || compareEntries(a.e, b.e))
     .slice(0, 5)
@@ -257,7 +257,7 @@ export default async function DashboardPage() {
             <Link href="/planning" className="text-xs text-[#6B6560] hover:text-[#C9A96E]">Alles bekijken</Link>
           </div>
           <div className="divide-y divide-[#EFEBE6]">
-            {topPlanning.map(({ e, bucket }) => (
+            {topPlanning.map(({ e, dateUrgency }) => (
               <Link
                 key={e.key}
                 href={e.project ? `/projecten/${e.project.id}?tab=planning` : '/intern'}
@@ -277,7 +277,7 @@ export default async function DashboardPage() {
                 </span>
                 <span
                   className={`text-xs shrink-0 ${
-                    bucket === 'laat' ? 'text-red-600 font-medium' : bucket === 'vandaag' ? 'text-[#8A6A2E] font-medium' : 'text-[#6B6560]'
+                    dateUrgency === 'laat' ? 'text-red-600 font-medium' : dateUrgency === 'vandaag' ? 'text-[#8A6A2E] font-medium' : 'text-[#6B6560]'
                   }`}
                 >
                   {e.date ? format(new Date(e.date), 'EEEEEE d MMM', { locale: nl }) : 'Geen datum'}

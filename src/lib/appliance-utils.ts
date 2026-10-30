@@ -81,7 +81,15 @@ export function formatPrice(price: number | null | undefined) {
   return `€${price.toLocaleString('nl-NL', { minimumFractionDigits: 0 })}`
 }
 
+// Kernspec-regel: de handmatige regel uit de bibliotheek als die is
+// ingevuld, anders automatisch uit de specs (autoSpecSummary).
 export function getSpecSummary(appliance: Appliance): string {
+  const override = appliance.spec_summary_override?.trim()
+  if (override) return override
+  return autoSpecSummary(appliance)
+}
+
+export function autoSpecSummary(appliance: Pick<Appliance, 'type' | 'specs'>): string {
   const s = appliance.specs ?? {}
   const parts: string[] = []
 

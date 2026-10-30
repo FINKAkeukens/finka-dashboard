@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ApplianceType } from '@/lib/types'
-import { ENERGY_LABELS, PRODUCT_LINES, qualityWarnings, suggestCategory } from '@/lib/appliance-utils'
+import { ApplianceSpecs, ApplianceType } from '@/lib/types'
+import { autoSpecSummary, ENERGY_LABELS, PRODUCT_LINES, qualityWarnings, suggestCategory } from '@/lib/appliance-utils'
 import { applyDecoded, decodeModel } from '@/lib/model-decoder'
 import { AlertTriangle, Trash2, Wand2 } from 'lucide-react'
 
@@ -76,10 +76,12 @@ export default function EditApplianceForm({
   const [supplierId, setSupplierId] = useState((appliance.supplier_id as string) ?? '')
   const [quoteDate, setQuoteDate] = useState((appliance.quote_date as string) ?? '')
   const [notes, setNotes] = useState((appliance.notes as string) ?? '')
+  const [specOverride, setSpecOverride] = useState((appliance.spec_summary_override as string) ?? '')
   const [specs, setSpecs] = useState<Record<string, unknown>>((appliance.specs as Record<string, unknown>) ?? {})
   const wasVerified = !!appliance.verified_at
   const [verified, setVerified] = useState(wasVerified)
   const warnings = qualityWarnings({ type, brand, model, specs })
+  const autoText = autoSpecSummary({ type, specs: specs as ApplianceSpecs })
   const decoded = decodeModel(brand, model)
   const decodedNext = decoded ? applyDecoded({ type, specs }, decoded) : null
   const decodeChanges = decodedNext && (decodedNext.type !== type || JSON.stringify(decodedNext.specs) !== JSON.stringify(specs))
@@ -105,6 +107,7 @@ export default function EditApplianceForm({
       supplier_id: supplierId || null,
       quote_date: quoteDate || null,
       notes: notes || null,
+      spec_summary_override: specOverride.trim() || null,
       specs,
       // Alleen bij een wijziging van het vinkje — een bestaande controle-datum blijft anders staan.
       ...(verified !== wasVerified ? {
@@ -369,6 +372,29 @@ export default function EditApplianceForm({
           </span>
         </span>
       </label>
+
+      {/* Leeg = automatisch uit de specs hierboven; ingevuld gaat deze regel
+         voor, ook in toekomstige offertes (getSpecSummary). */}
+      <div className="border-t border-[#F0EDE9] pt-4 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <Label>Kernspec-regel (offertetekst)</Label>
+          {specOverride.trim() ? (
+            <button type="button" className="text-xs text-[#6B6560] underline" onClick={() => setSpecOverride('')}>
+              Terug naar automatisch
+            </button>
+          ) : (
+            <button type="button" className="text-xs text-[#6B6560] underline" onClick={() => setSpecOverride(autoText === '—' ? '' : autoText)}>
+              Automatische tekst bewerken
+            </button>
+          )}
+        </div>
+        <Input value={specOverride} onChange={e => setSpecOverride(e.target.value)} placeholder={autoText} />
+        <p className="text-xs text-[#9A948D]">
+          {specOverride.trim()
+            ? 'Handmatig — deze regel komt in nieuwe offertes en de configurator, ook als je de specs hierboven wijzigt.'
+            : 'Automatisch uit de specs hierboven. Vul iets in om de regel zelf te bepalen.'}
+        </p>
+      </div>
 
       <Field label="Notities">
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
