@@ -84,26 +84,3 @@ export function replaceCategoryLines(
   if (idx === -1) return [...sections, { category, title: defaultTitle, lines: newLines }]
   return sections.map((s, i) => (i === idx ? { ...s, lines: newLines } : s))
 }
-
-// Plattegrond-pagina bij de kastenlijst (zie KastenOptionData.plattegrond_url):
-// een sectie met alleen een afbeelding rendert in de klantversie als eigen
-// pagina (zie isPhotoOnly in offerte/[projectId]/page.tsx). Bestaat de sectie
-// al, dan wordt alleen de afbeelding vervangen — titel, plaats en disclaimer
-// die Merel in de Offerte aanpaste blijven staan. Nieuw → direct ná Kasten,
-// met hetzelfde anchor zodat ze in de PDF echt op elkaar volgen.
-// Heeft de gekozen optie geen plattegrond, dan gaat een eerder automatisch
-// toegevoegde weg (anders blijft de plattegrond van een andere optie staan,
-// met positienummers die niet bij de lijst horen) — een zelf toegevoegde
-// sectie met eigen afbeelding blijft onaangeroerd.
-export function replacePlattegrondSection(sections: QuoteCustomerSection[], url: string | null): QuoteCustomerSection[] {
-  const idx = sections.findIndex((s) => s.category === 'plattegrond')
-  if (!url) {
-    const isGenerated = idx !== -1 && (sections[idx].images ?? []).every((img) => img.includes('/winnerflex-plattegrond-'))
-    return isGenerated ? sections.filter((_, i) => i !== idx) : sections
-  }
-  if (idx !== -1) return sections.map((s, i) => (i === idx ? { ...s, images: [url] } : s))
-  const kastenIdx = sections.findIndex((s) => s.category === 'kasten')
-  const section: QuoteCustomerSection = { category: 'plattegrond', title: 'Plattegrond', lines: [], images: [url], anchor: sections[kastenIdx]?.anchor }
-  if (kastenIdx === -1) return [...sections, section]
-  return [...sections.slice(0, kastenIdx + 1), section, ...sections.slice(kastenIdx + 1)]
-}

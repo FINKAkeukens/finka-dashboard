@@ -140,52 +140,35 @@ Maak hiervan een overzichtelijke samenvatting in gewone, klantvriendelijke taal 
 
 Alle maten geef je ALTIJD in millimeters (mm) weer, ook als het brondocument de maat in cm of m vermeldt — reken dan zelf om (1 cm = 10 mm, 1 m = 1000 mm) en schrijf het resultaat als een geheel getal gevolgd door "mm", zonder spatie (bv. "600mm", niet "60cm" of "60 cm").
 
-Zet de regels in deze volgorde:
+Voorbeelden van hoe regels eruit moeten zien (dit is de stijl, niet de inhoud):
+- "Hoge kast, 2080mm"
+- "Plint, 130mm"
+- "Greeplijst, zwart"
+- "Handgrepen, RVS-look"
+- "Greeploze lage kasten, 780mm"
+- "Corpuskleur: wit"
+- "4x ladekast, 600mm breed"
+- "2x hoekkast, 900mm breed"
 
-1. Eerst één regel per positie uit de onderdelenlijst ("Meubelen", kolom "Pos."), oplopend op positienummer, altijd in de vorm "Pos. {nummer} — {omschrijving}". Het positienummer is het getal uit de kolom "Pos." van de uitdraai — verzin nooit zelf een nummer. De klant gebruikt deze nummers om de kast op de plattegrond terug te vinden, dus groepeer NOOIT meerdere posities op één regel, ook niet als de kasten gelijk zijn.
-   - Wél een eigen regel: kasten (onderkasten, hoge kasten, wandkasten, apparatuurkasten, hoekkasten), integratiefronten voor apparaten, losse fronten en nisplanken.
-   - Géén eigen regel: zijwanden/zijpanelen ("upright"), passtukken ("filler"), afdeklijsten ("cover strip"), plint, ventilatieroosters, eindprofielen en toeslagregels (bv. speciale lakkleur, maatwijziging). Die vat je samen in de algemene regels hieronder.
-   - Subposities (bv. 13.1, 39.2) krijgen geen eigen regel: neem wat voor de klant relevant is (afvalsysteem, bestekbak, verlichting, uittrekbaar interieur) op in de regel van de hoofdpositie. De hoofdpositie is ALTIJD het getal vóór de punt: 39.1, 39.2 en 39.3 horen bij Pos. 39, nooit bij een andere positie. Subposities staan vaak verderop in een aparte tabel ("Artikelen", "Accessoires") — koppel ze dan alsnog via dat getal vóór de punt.
-   Voorbeelden van de stijl (niet de inhoud):
-   - "Pos. 2 — Hoge kast voor koel-vriescombinatie, nis 1785mm"
-   - "Pos. 10 — Onderkast met 2 lades, 800mm breed"
-   - "Pos. 13 — Onderkast voor afvalbakken, 2x 42 liter, 600mm breed"
-   - "Pos. 21 — Nisplank, 1700mm lang"
-
-2. Daarna de algemene regels zonder positienummer: keukenmerk/frontmodel, front- en corpuskleur, handgrepen (met aantal), plint, werkhoogte, zijpanelen en andere onderdelen die niet bij één kast horen. Voorbeelden:
-   - "Corpuskleur: wit"
-   - "Plint, 130mm"
-   - "Handgrepen, oud messing (17 stuks)"
-
-Sla pure artikelnummers, leveranciersinterne codes en boekhoudkundige regels over.
+Groepeer waar zinvol (bv. "3x hoge kast, 2080mm" i.p.v. drie losse regels). Vat samen op basis van wat je in het document ziet: kastmaten en -aantallen, plint, front-/greepstijl, kleuren/afwerkingen, en andere herkenbare hoofdonderdelen. Sla pure artikelnummers, leveranciersinterne codes en boekhoudkundige regels over.
 
 Zoek ook het totaalbedrag "Totaalprijs excl. BTW" (of vergelijkbaar, bv. onderaan bij "Overzicht") en geef dat als getal terug (zonder €-teken, punt als duizendtal-scheiding negeren, gebruik een punt als decimaalteken).
-
-Zoek tot slot de pagina met het bovenaanzicht (plattegrond van bovenaf, vaak met de titel "Bovenaanzicht"). Geef het paginanummer (1 = eerste pagina van de PDF) als "plattegrond_pagina", of null als er geen bovenaanzicht in zit — een perspectieftekening of vooraanzicht telt niet. Geef bij "plattegrond_toont_posities" aan of op die tekening de positienummers van de kasten zichtbaar zijn (true/false); alleen maatvoering telt niet als positienummers.
 
 Antwoord ALLEEN met geldige JSON:
 {
   "summary": ["regel 1", "regel 2", ...],
-  "totaal_excl_btw": 0,
-  "plattegrond_pagina": null,
-  "plattegrond_toont_posities": false
+  "totaal_excl_btw": 0
 }`
 
 interface KitchenSummaryResult {
   summary: string[]
   totaalExclBtw: number | null
-  // Pagina (1-based) met het bovenaanzicht — de client rendert die pagina
-  // zelf naar een afbeelding (zie src/lib/winner-plattegrond.ts).
-  plattegrondPagina: number | null
-  plattegrondToontPosities: boolean
 }
 
 export async function extractKitchenSummary(pdfBase64: string): Promise<KitchenSummaryResult> {
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    // Eén regel per positie i.p.v. gegroepeerd — een grote keuken heeft 40+
-    // posities, dat paste niet meer in 2048.
-    max_tokens: 4096,
+    max_tokens: 2048,
     messages: [{
       role: 'user',
       content: [
@@ -213,11 +196,9 @@ export async function extractKitchenSummary(pdfBase64: string): Promise<KitchenS
     return {
       summary: Array.isArray(parsed.summary) ? parsed.summary : [],
       totaalExclBtw: typeof parsed.totaal_excl_btw === 'number' ? parsed.totaal_excl_btw : null,
-      plattegrondPagina: Number.isInteger(parsed.plattegrond_pagina) && parsed.plattegrond_pagina > 0 ? parsed.plattegrond_pagina : null,
-      plattegrondToontPosities: parsed.plattegrond_toont_posities === true,
     }
   } catch {
-    return { summary: [], totaalExclBtw: null, plattegrondPagina: null, plattegrondToontPosities: false }
+    return { summary: [], totaalExclBtw: null }
   }
 }
 

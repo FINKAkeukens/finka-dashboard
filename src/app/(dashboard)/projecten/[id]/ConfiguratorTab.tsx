@@ -22,7 +22,7 @@ import {
 } from '@/lib/types'
 import { DEFAULT_WERKBLAD_RATES } from '@/lib/werkblad-calc'
 import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, DEFAULT_EUROLINE_RATES } from '@/lib/euroline-calc'
-import { applianceCustomerText, DEFAULT_COST_BREAKDOWN, patchCostRow, replaceCategoryLines, replacePlattegrondSection } from '@/lib/configurator'
+import { applianceCustomerText, DEFAULT_COST_BREAKDOWN, patchCostRow, replaceCategoryLines } from '@/lib/configurator'
 import { ACCESSOIRE_APPLIANCE_TYPES } from '@/lib/appliance-utils'
 import KastenOptionEditor from './configurator/KastenOptionEditor'
 import WerkbladOptionEditor from './configurator/WerkbladOptionEditor'
@@ -224,7 +224,6 @@ export default function ConfiguratorTab({
         const d = kasten.data as KastenOptionData
         costBreakdown = patchCostRow(costBreakdown, 'keukenkastjes', kasten.cost_total)
         customerSections = replaceCategoryLines(customerSections, 'kasten', 'Kasten', d.summary_lines ?? [])
-        customerSections = replacePlattegrondSection(customerSections, d.plattegrond_url ?? null)
       }
       if (werkblad) {
         const d = werkblad.data as WerkbladOptionData
