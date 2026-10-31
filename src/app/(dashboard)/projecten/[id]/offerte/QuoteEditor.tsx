@@ -808,11 +808,18 @@ export default function QuoteEditor({
         .filter((r) => keys.includes(r.key))
         .reduce((sum, r) => sum + displayedCost(r) * (1 + r.marge_percentage / 100) * (1 + btwPercentage / 100), 0)
 
-    setCustomerCostLines([
-      { label: 'Keuken', description: 'Kasten, werkblad en apparatuur', amount: Math.round(sumKeysInclBtw(['keukenkastjes', 'apparatuur', 'werkblad', 'accessoires'])) },
-      { label: 'Opslag & levering', description: 'Verzekerde opslag en levering', amount: Math.round(sumKeysInclBtw(['opslag', 'levering'])) },
-      { label: 'Installatie', description: 'Installatie van de volledige keuken door ervaren monteurs', amount: Math.round(sumKeysInclBtw(['installatie', 'inmeten', 'service'])) },
-    ])
+    // Op de cent, niet op hele euro's: de regels moeten precies optellen tot
+    // wat de klant betaalt. Werkblad en apparatuur staan los, zodat die
+    // bedragen 1-op-1 uit de offerte komen; categorieën zonder bedrag vallen weg.
+    setCustomerCostLines(
+      [
+        { label: 'Keuken', description: 'Kasten en accessoires', amount: round2(sumKeysInclBtw(['keukenkastjes', 'accessoires'])) },
+        { label: 'Werkblad', description: '', amount: round2(sumKeysInclBtw(['werkblad'])) },
+        { label: 'Apparatuur', description: '', amount: round2(sumKeysInclBtw(['apparatuur'])) },
+        { label: 'Opslag & levering', description: 'Verzekerde opslag en levering', amount: round2(sumKeysInclBtw(['opslag', 'levering'])) },
+        { label: 'Installatie', description: 'Installatie van de volledige keuken door ervaren monteurs', amount: round2(sumKeysInclBtw(['installatie', 'inmeten', 'service'])) },
+      ].filter((l) => l.amount !== 0)
+    )
   }
 
   // Apparatuur uit de bibliotheek komt automatisch in de klantversie terecht
@@ -1930,7 +1937,7 @@ export default function QuoteEditor({
                     ))}
                     <div className="flex items-center justify-end gap-2 p-3 font-medium text-sm">
                       <span className="text-[#6B6560]">Totaal incl. BTW</span>
-                      <span className="w-24 text-right">{formatPrice(customerCostLines.reduce((s, l) => s + l.amount, 0))}</span>
+                      <span className="w-24 text-right">€{round2(customerCostLines.reduce((s, l) => s + (Number(l.amount) || 0), 0)).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       <span className="w-[13px]" />
                     </div>
                   </div>

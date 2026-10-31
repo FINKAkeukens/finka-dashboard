@@ -98,19 +98,38 @@ export function NumberInput({
   )
 }
 
-// Geen duizendtal-opmaak hier — dit is een edit-veld, geen weergave.
+// Geen duizendtal-opmaak hier — dit is een edit-veld, geen weergave. Wel
+// een komma als decimaalteken: dan is een punt altijd een duizendtal (zie
+// parseNumber) en wordt "12.500" niet per ongeluk €12,50.
 function formatForEdit(value: number): string {
-  return Number.isFinite(value) ? String(value) : ''
+  return Number.isFinite(value) ? String(value).replace('.', ',') : ''
 }
 
-// Accepteert zowel punt als komma als decimaalteken. Geeft null terug zolang
-// de tekst nog geen volledig geldig getal is (lege string, "-", een
-// afsluitende punt/komma tijdens het typen, etc.) — de aanroeper laat de
+// Accepteert zowel punt als komma als decimaalteken, plus NL-duizendtallen
+// ("1.250,50", "12.500") — die gaven eerst €0 resp. €12,50. Een losse punt
+// met precies drie cijfers erachter is een duizendtal, anders een
+// decimaalteken ("0.21", "12.5"). Geeft null
+// terug zolang de tekst nog geen volledig geldig getal is (lege string, "-",
+// een afsluitende punt/komma tijdens het typen, etc.) — de aanroeper laat de
 // weergave dan gewoon staan i.p.v. 'm te overschrijven, zodat doortypen kan.
-function parseNumber(raw: string): number | null {
-  const trimmed = raw.trim()
+export function parseNumber(raw: string): number | null {
+  const trimmed = raw.trim().replace(/[€\s]/g, '')
   if (trimmed === '' || trimmed === '-') return null
-  const normalized = trimmed.replace(',', '.')
+  const lastComma = trimmed.lastIndexOf(',')
+  const lastDot = trimmed.lastIndexOf('.')
+  let normalized: string
+  if (lastComma !== -1 && lastDot !== -1) {
+    // Beide aanwezig: het laatste teken is het decimaalteken.
+    normalized = lastComma > lastDot
+      ? trimmed.replace(/\./g, '').replace(',', '.')
+      : trimmed.replace(/,/g, '')
+  } else if ((trimmed.match(/\./g) ?? []).length > 1 || /^-?\d{1,3}\.\d{3}$/.test(trimmed)) {
+    normalized = trimmed.replace(/\./g, '')
+  } else if ((trimmed.match(/,/g) ?? []).length > 1) {
+    normalized = trimmed.replace(/,/g, '')
+  } else {
+    normalized = trimmed.replace(',', '.')
+  }
   if (normalized.endsWith('.') || normalized === '-.') return null
   const n = Number(normalized)
   return Number.isFinite(n) ? n : null

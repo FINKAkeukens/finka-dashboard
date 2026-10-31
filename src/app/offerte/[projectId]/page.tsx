@@ -12,6 +12,11 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('nl-NL').format(Math.round(n))
 }
 
+// Kostenpagina: op de cent, zodat de losse regels precies optellen.
+function formatPriceExact(n: number) {
+  return new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
@@ -657,21 +662,21 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
                   <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>{renderInline(line.label)}</div>
                   <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(line.description)}</div>
-                  <div style={{ fontSize: 13, color: '#1C1B19' }}>€ {formatPrice(line.amount)}</div>
+                  <div style={{ fontSize: 13, color: '#1C1B19' }}>€ {formatPriceExact(line.amount)}</div>
                 </div>
               ))}
               {discounts.map((d, i) => (
                 <div key={`korting-${i}`} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
                   <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>Korting</div>
                   <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(d.description)}</div>
-                  <div style={{ fontSize: 13, color: '#1C1B19' }}>− € {formatPrice(d.amount)}</div>
+                  <div style={{ fontSize: 13, color: '#1C1B19' }}>− € {formatPriceExact(d.amount)}</div>
                 </div>
               ))}
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0' }}>
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#1C1B19', textTransform: 'uppercase', fontWeight: 600 }}>Totaal</div>
                 <div />
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPrice(costLines.reduce((s, l) => s + l.amount, 0) - discountTotal)}</div>
+                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPriceExact(costLines.reduce((s, l) => s + (Number(l.amount) || 0), 0) - discountTotal)}</div>
                   <div style={{ fontSize: 9, color: '#9B9591', textTransform: 'uppercase', letterSpacing: '0.08em' }}>incl. BTW</div>
                 </div>
               </div>
