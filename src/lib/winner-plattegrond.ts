@@ -26,9 +26,15 @@ export async function loadPdf(source: Blob | string) {
   return pdfjs.getDocument({ data }).promise
 }
 
-export async function renderPlattegrondPng(source: Blob | string, pageNumber: number): Promise<{ blob: Blob; pageCount: number }> {
+// 'laatste': voor uitdraaien van vóór deze functie, waarvan de AI nooit een
+// pagina heeft aangewezen — in Winner Flex staat het bovenaanzicht achteraan.
+export async function renderPlattegrondPng(
+  source: Blob | string,
+  requestedPage: number | 'laatste'
+): Promise<{ blob: Blob; pageCount: number; pageNumber: number }> {
   const pdf = await loadPdf(source)
   try {
+    const pageNumber = requestedPage === 'laatste' ? pdf.numPages : requestedPage
     if (pageNumber < 1 || pageNumber > pdf.numPages) {
       throw new Error(`Pagina ${pageNumber} bestaat niet (de uitdraai heeft ${pdf.numPages} pagina's)`)
     }
@@ -53,7 +59,7 @@ export async function renderPlattegrondPng(source: Blob | string, pageNumber: nu
 
     const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
     if (!blob) throw new Error('Afbeelding maken mislukt')
-    return { blob, pageCount: pdf.numPages }
+    return { blob, pageCount: pdf.numPages, pageNumber }
   } finally {
     pdf.destroy()
   }

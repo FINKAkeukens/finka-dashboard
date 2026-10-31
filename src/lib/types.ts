@@ -672,16 +672,14 @@ export interface KastenOptionData {
   // dus die blijft ongewijzigd de bron van waarheid voor prijsberekeningen.
   gross_cost_total: number
   discount_keys: string[]
-  // Plattegrond met positienummers — los geüpload naast de order (de order
-  // zelf bevat geen bovenaanzicht met nummers). Altijd een afbeelding: een
-  // PDF wordt client-side gerenderd (zie src/lib/winner-plattegrond.ts),
-  // waarbij de bron-PDF bewaard blijft om later een andere pagina te kiezen.
+  // Bovenaanzicht uit de uitdraai, als afbeelding (de PDF-pagina die de AI
+  // aanwees, client-side gerenderd — zie src/lib/winner-plattegrond.ts).
   // Komt bij "Toepassen op Offerte" als eigen pagina direct na de kastenlijst.
   // Ontbreekt bij opties van vóór deze functie.
   plattegrond_url?: string | null
-  plattegrond_bron_pdf_url?: string | null
   plattegrond_pagina?: number | null
-  plattegrond_page_count?: number | null
+  plattegrond_toont_posities?: boolean
+  pdf_page_count?: number | null
 }
 
 export interface WerkbladOptionData {
