@@ -11,7 +11,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { ACCESSOIRE_APPLIANCE_TYPES, formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
-import { Appliance, CostBreakdownItem, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteDiscount, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, QuoteTextSnippet, SectionImagePosition, SectionImageSize } from '@/lib/types'
+import { Appliance, CostBreakdownItem, CostCategoryKey, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteDiscount, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, QuoteTextSnippet, SectionImagePosition, SectionImageSize } from '@/lib/types'
 import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
@@ -284,9 +284,14 @@ export default function QuoteEditor({
   const [customerSections, setCustomerSections] = useState<QuoteCustomerSection[]>(
     normalizeSections(initialQuote?.customer_sections)
   )
-  const [customerCostLines, setCustomerCostLines] = useState<CustomerCostLine[]>(
-    initialQuote?.customer_cost_lines ?? []
+  // Kostenregels zijn voortaan excl. BTW; oudere (incl. BTW) worden bij het
+  // openen eenmalig omgerekend en bij de volgende opslag zo bewaard.
+  const [customerCostLines, setCustomerCostLines] = useState<CustomerCostLine[]>(() =>
+    (initialQuote?.customer_cost_lines ?? []).map((l) =>
+      l.excl_btw ? l : { ...l, amount: round2((Number(l.amount) || 0) / (1 + (initialQuote?.btw_percentage ?? 21) / 100)), excl_btw: true }
+    )
   )
+  const [costPickKeys, setCostPickKeys] = useState<CostCategoryKey[]>([])
   // Puur lokale UI-state (niet opgeslagen) om lange sectielijsten in te klappen.
   // Standaard ingeklapt — zelf uitklappen per sectie/blok waar nodig.
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(
@@ -773,7 +778,7 @@ export default function QuoteEditor({
   }
 
   function addCostLine() {
-    setCustomerCostLines((prev) => [...prev, { label: '', description: '', amount: 0 }])
+    setCustomerCostLines((prev) => [...prev, { label: '', description: '', amount: 0, excl_btw: true }])
   }
 
   function updateCostLine(index: number, patch: Partial<CustomerCostLine>) {
@@ -796,30 +801,35 @@ export default function QuoteEditor({
     e.target.value = ''
   }
 
-  // Eenmalige, handmatig te bevestigen suggestie op basis van de interne
-  // kostprijs-opbouw — geen live koppeling, staff blijft alles overschrijven.
-  // Bedragen zijn de daadwerkelijke klantprijs: kostprijs + marge (zelfde
-  // opbouw als totaalPrijsExclBtw hierboven) + BTW — nooit de kostprijs of
-  // marge zelf, die blijven uitsluitend intern.
-  function fillCostLinesFromInternal() {
-    if (customerCostLines.length && !confirm('Bestaande kostenregels vervangen door de actuele bedragen uit de offerte?')) return
-    const sumKeysInclBtw = (keys: CostBreakdownItem['key'][]) =>
+  // Klantprijs van één of meer posten uit het kostenoverzicht: kostprijs +
+  // marge, excl. BTW (zelfde opbouw als totaalPrijsExclBtw) — nooit de
+  // kostprijs of marge zelf, die blijven uitsluitend intern. Een gekoppelde
+  // regel rekent zo altijd mee met de actuele offerte.
+  function categoryPriceExclBtw(keys: CostCategoryKey[]): number {
+    return round2(
       costBreakdown
         .filter((r) => keys.includes(r.key))
-        .reduce((sum, r) => sum + displayedCost(r) * (1 + r.marge_percentage / 100) * (1 + btwPercentage / 100), 0)
-
-    // Op de cent, niet op hele euro's: de regels moeten precies optellen tot
-    // wat de klant betaalt. Werkblad en apparatuur staan los, zodat die
-    // bedragen 1-op-1 uit de offerte komen; categorieën zonder bedrag vallen weg.
-    setCustomerCostLines(
-      [
-        { label: 'Keuken', description: 'Kasten en accessoires', amount: round2(sumKeysInclBtw(['keukenkastjes', 'accessoires'])) },
-        { label: 'Werkblad', description: '', amount: round2(sumKeysInclBtw(['werkblad'])) },
-        { label: 'Apparatuur', description: '', amount: round2(sumKeysInclBtw(['apparatuur'])) },
-        { label: 'Opslag & levering', description: 'Verzekerde opslag en levering', amount: round2(sumKeysInclBtw(['opslag', 'levering'])) },
-        { label: 'Installatie', description: 'Installatie van de volledige keuken door ervaren monteurs', amount: round2(sumKeysInclBtw(['installatie', 'inmeten', 'service'])) },
-      ].filter((l) => l.amount !== 0)
+        .reduce((sum, r) => sum + displayedCost(r) * (1 + r.marge_percentage / 100), 0)
     )
+  }
+
+  function costLineAmount(line: CustomerCostLine): number {
+    return line.keys?.length ? categoryPriceExclBtw(line.keys) : Number(line.amount) || 0
+  }
+
+  function costCategoryLabel(key: CostCategoryKey): string {
+    return costBreakdown.find((r) => r.key === key)?.label ?? key
+  }
+
+  // Aangevinkte posten als losse regels, of samen als één regel.
+  function addCostLinesFromPick(combine: boolean) {
+    const keys = costBreakdown.map((r) => r.key).filter((k) => costPickKeys.includes(k))
+    if (!keys.length) return
+    const lines: CustomerCostLine[] = combine
+      ? [{ label: keys.map(costCategoryLabel).join(' & '), description: '', amount: 0, keys, excl_btw: true }]
+      : keys.map((k) => ({ label: costCategoryLabel(k), description: '', amount: 0, keys: [k], excl_btw: true }))
+    setCustomerCostLines((prev) => [...prev, ...lines])
+    setCostPickKeys([])
   }
 
   // Apparatuur uit de bibliotheek komt automatisch in de klantversie terecht
@@ -941,7 +951,7 @@ export default function QuoteEditor({
       customer_subtitle: customerSubtitle || null,
       customer_intro_text: customerIntroText || null,
       customer_sections: customerSections,
-      customer_cost_lines: customerCostLines,
+      customer_cost_lines: customerCostLines.map((l) => ({ ...l, amount: costLineAmount(l), excl_btw: true })),
       connections_image_url: connectionsImageUrl || null,
       customer_connections_intro: customerConnectionsIntro || null,
       customer_connections_disclaimer: customerConnectionsDisclaimer || null,
@@ -1907,54 +1917,128 @@ export default function QuoteEditor({
             {!kostenCollapsed && (
               <>
                 <p className="text-xs text-[#6B6560]">
-                  Losse regels — verschijnt alleen als hier iets staat. Met &ldquo;Vul in vanuit offerte&rdquo; zet je de daadwerkelijke klantprijzen per categorie neer (incl. marge en BTW, nooit de kostprijs of marge zelf) — dit overschrijft de bestaande regels hieronder, dus controleer/pas aan voor je opslaat.
+                  Verschijnt alleen als hier iets staat. Bedragen zijn incl. marge en excl. BTW; de BTW komt er in de klantversie onderaan bij. Regels uit het kostenoverzicht rekenen mee met de offerte.
                 </p>
-                {customerCostLines.length > 0 && (
+                {customerCostLines.length > 0 && (() => {
+                  const subtotaal = round2(customerCostLines.reduce((s, l) => s + costLineAmount(l), 0))
+                  const btwBedrag = round2(subtotaal * btwPercentage / 100)
+                  const verschil = round2(totaalPrijsExclBtw - subtotaal)
+                  const fmt = (n: number) => `€${n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  return (
                   <div className="bg-[#F7F5F2] rounded-lg border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
                     {customerCostLines.map((line, idx) => (
-                      <div key={idx} className="flex items-center gap-2 p-3">
+                      <div key={idx} className="flex items-start gap-2 p-3">
                         <input
                           value={line.label}
                           onChange={(e) => updateCostLine(idx, { label: e.target.value })}
                           placeholder="Bijv. Keuken"
-                          className={`w-32 text-sm font-medium bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] uppercase ${markerClass(line.label)}`}
+                          className={`w-40 text-sm font-medium bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] uppercase ${markerClass(line.label)}`}
                         />
-                        <input
-                          value={line.description}
-                          onChange={(e) => updateCostLine(idx, { description: e.target.value })}
-                          placeholder="Omschrijving..."
-                          className={`flex-1 text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${markerClass(line.description)}`}
-                        />
-                        <NumberInput
-                          value={line.amount}
-                          onChange={(amount) => updateCostLine(idx, { amount: round2(amount) })}
-                          className="w-24 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
-                        />
-                        <button onClick={() => removeCostLine(idx)} title="Regel verwijderen">
+                        <div className="flex-1 min-w-0">
+                          <input
+                            value={line.description}
+                            onChange={(e) => updateCostLine(idx, { description: e.target.value })}
+                            placeholder="Omschrijving..."
+                            className={`w-full text-sm bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19] ${markerClass(line.description)}`}
+                          />
+                          {line.keys?.length ? (
+                            <p className="px-2 text-[11px] text-[#9A948D]">Uit kostenoverzicht: {line.keys.map(costCategoryLabel).join(' + ')}</p>
+                          ) : null}
+                        </div>
+                        {line.keys?.length ? (
+                          <div className="flex flex-col items-end">
+                            <span className="w-28 text-sm text-right px-2 py-1">{fmt(costLineAmount(line))}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateCostLine(idx, { amount: costLineAmount(line), keys: undefined })}
+                              className="px-2 text-[11px] text-[#9A948D] hover:text-[#1C1B19] underline"
+                              title="Bedrag zelf aanpassen; rekent dan niet meer mee met de offerte"
+                            >
+                              Handmatig
+                            </button>
+                          </div>
+                        ) : (
+                          <NumberInput
+                            value={line.amount}
+                            onChange={(amount) => updateCostLine(idx, { amount: round2(amount) })}
+                            className="w-28 text-sm text-right bg-transparent border border-transparent hover:border-[#DDD8D2] rounded px-2 py-1 focus:outline-none focus:border-[#1C1B19]"
+                          />
+                        )}
+                        <button onClick={() => removeCostLine(idx)} title="Regel verwijderen" className="pt-1.5">
                           <X size={13} className="text-[#9A948D] hover:text-red-600" />
                         </button>
                       </div>
                     ))}
-                    <div className="flex items-center justify-end gap-2 p-3 font-medium text-sm">
-                      <span className="text-[#6B6560]">Totaal incl. BTW</span>
-                      <span className="w-24 text-right">€{round2(customerCostLines.reduce((s, l) => s + (Number(l.amount) || 0), 0)).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      <span className="w-[13px]" />
+                    <div className="p-3 text-sm space-y-1">
+                      <div className="flex justify-end gap-2">
+                        <span className="text-[#6B6560]">Subtotaal excl. BTW</span>
+                        <span className="w-28 text-right">{fmt(subtotaal)}</span>
+                        <span className="w-[13px]" />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <span className="text-[#6B6560]">BTW {btwPercentage}%</span>
+                        <span className="w-28 text-right">{fmt(btwBedrag)}</span>
+                        <span className="w-[13px]" />
+                      </div>
+                      <div className="flex justify-end gap-2 font-medium">
+                        <span className="text-[#6B6560]">Totaal incl. BTW{kortingInclBtw ? ' (vóór korting)' : ''}</span>
+                        <span className="w-28 text-right">{fmt(round2(subtotaal + btwBedrag))}</span>
+                        <span className="w-[13px]" />
+                      </div>
+                      {verschil !== 0 && (
+                        <p className="text-right text-xs text-amber-700">
+                          Verschil met kostenoverzicht: {verschil > 0 ? '−' : '+'}{fmt(Math.abs(verschil))} (kostenoverzicht {fmt(totaalPrijsExclBtw)} excl. BTW)
+                        </p>
+                      )}
                     </div>
                   </div>
-                )}
+                  )
+                })()}
+                <div className="rounded-lg border border-[#DDD8D2] p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#1C1B19]">Uit kostenoverzicht</span>
+                    <button
+                      type="button"
+                      onClick={() => setCostPickKeys(costPickKeys.length === costBreakdown.length ? [] : costBreakdown.map((r) => r.key))}
+                      className="text-[11px] text-[#9A948D] hover:text-[#1C1B19] underline"
+                    >
+                      {costPickKeys.length === costBreakdown.length ? 'Niets selecteren' : 'Alles selecteren'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {costBreakdown.map((r) => {
+                      const used = customerCostLines.some((l) => l.keys?.includes(r.key))
+                      return (
+                        <label key={r.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={costPickKeys.includes(r.key)}
+                            onCheckedChange={(v) => setCostPickKeys((prev) => (v ? [...prev, r.key] : prev.filter((k) => k !== r.key)))}
+                          />
+                          <span className={`flex-1 ${used ? 'text-[#9A948D]' : 'text-[#1C1B19]'}`}>{r.label}{used ? ' (gebruikt)' : ''}</span>
+                          <span className="text-xs text-[#6B6560]">{categoryPriceExclBtw([r.key]).toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' })}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="outline" size="sm" disabled={!costPickKeys.length} onClick={() => addCostLinesFromPick(false)}>
+                      Los toevoegen
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={costPickKeys.length < 2} onClick={() => addCostLinesFromPick(true)}>
+                      Combineren tot één regel
+                    </Button>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={addCostLine}>
                     <Plus size={12} className="mr-1.5" />
-                    Regel toevoegen
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={fillCostLinesFromInternal}>
-                    Vul in vanuit offerte
+                    Eigen regel
                   </Button>
                   <SnippetPicker
                     label="Standaardregel"
                     align="left"
                     snippets={snippetsFor(textSnippets, 'kostenregel')}
-                    onPick={(s) => setCustomerCostLines((prev) => [...prev, { label: s.title.trim(), description: s.body, amount: 0 }])}
+                    onPick={(s) => setCustomerCostLines((prev) => [...prev, { label: s.title.trim(), description: s.body, amount: 0, excl_btw: true }])}
                   />
                 </div>
                 <PageDisclaimerField

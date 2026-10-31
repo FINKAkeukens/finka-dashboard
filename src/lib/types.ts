@@ -843,7 +843,13 @@ export interface QuoteCustomerLine {
 export interface CustomerCostLine {
   label: string
   description: string
+  // Bij excl_btw: bedrag incl. marge, excl. BTW (de klantversie telt de BTW
+  // er onderaan bij op). Oudere regels zonder excl_btw zijn incl. BTW.
   amount: number
+  // Posten uit het kostenoverzicht waar deze regel het bedrag van optelt —
+  // leeg/afwezig = handmatig ingevuld bedrag.
+  keys?: CostCategoryKey[]
+  excl_btw?: boolean
 }
 
 export interface ConnectionRow {

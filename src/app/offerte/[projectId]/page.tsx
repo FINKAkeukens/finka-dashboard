@@ -195,7 +195,21 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
 
   const c = project.customer
   const sections = (quote.customer_sections ?? []) as QuoteCustomerSection[]
-  const costLines = (quote.customer_cost_lines ?? []) as CustomerCostLine[]
+  // Regels gekoppeld aan posten uit het kostenoverzicht opnieuw uitrekenen
+  // (kostprijs + marge, excl. BTW): de Configurator kan cost_breakdown
+  // bijwerken zonder dat de offerte daarna nog opgeslagen is.
+  const costLines = ((quote.customer_cost_lines ?? []) as CustomerCostLine[]).map((l) =>
+    l.excl_btw && l.keys?.length
+      ? {
+          ...l,
+          amount: Math.round(
+            (quote.cost_breakdown ?? [])
+              .filter((r) => l.keys!.includes(r.key))
+              .reduce((sum, r) => sum + (Number(r.werkelijke_kosten) || 0) * (1 + (Number(r.marge_percentage) || 0) / 100), 0) * 100
+          ) / 100,
+        }
+      : l
+  )
   const pageDisclaimers = quote.page_disclaimers ?? {}
   // Voorpagina-afbeelding komt uit de gekozen bibliotheekfoto — renders en de
   // tekening zijn bedoeld voor latere pagina's, niet voor de voorpagina.
@@ -206,6 +220,11 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   // nog per regel met omschrijving tonen.
   const discounts = (quote.discounts ?? []).filter((d) => d.amount > 0)
   const discountTotal = discounts.reduce((s, d) => s + d.amount, 0)
+  // Kostenregels zijn excl. BTW (BTW onderaan erbij); oudere offertes
+  // hebben nog regels incl. BTW, die tonen we zoals ze waren.
+  const costExclBtw = costLines.length > 0 && costLines.every((l) => l.excl_btw)
+  const costSubtotal = Math.round(costLines.reduce((s, l) => s + (Number(l.amount) || 0), 0) * 100) / 100
+  const costBtw = costExclBtw ? Math.round(costSubtotal * (quote.btw_percentage ?? 21)) / 100 : 0
 
   // Secties gegroepeerd op anchor (welk vast blok ze voorafgaan — zie
   // QuotePageAnchor in types.ts en de "Vóór: ..."-keuze in QuoteEditor.tsx).
@@ -662,21 +681,35 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
                   <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>{renderInline(line.label)}</div>
                   <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(line.description)}</div>
-                  <div style={{ fontSize: 13, color: '#1C1B19' }}>€ {formatPriceExact(line.amount)}</div>
+                  <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(line.amount)}</div>
                 </div>
               ))}
+              {costExclBtw && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0 4px' }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>Subtotaal</div>
+                    <div style={{ fontSize: 12, color: '#9B9591' }}>excl. BTW</div>
+                    <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(costSubtotal)}</div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '4px 0 14px', borderBottom: '1px solid #E6E2D9' }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>BTW</div>
+                    <div style={{ fontSize: 12, color: '#9B9591' }}>{quote.btw_percentage}%</div>
+                    <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(costBtw)}</div>
+                  </div>
+                </>
+              )}
               {discounts.map((d, i) => (
                 <div key={`korting-${i}`} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
                   <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>Korting</div>
                   <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(d.description)}</div>
-                  <div style={{ fontSize: 13, color: '#1C1B19' }}>− € {formatPriceExact(d.amount)}</div>
+                  <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>− € {formatPriceExact(d.amount)}</div>
                 </div>
               ))}
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0' }}>
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#1C1B19', textTransform: 'uppercase', fontWeight: 600 }}>Totaal</div>
                 <div />
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPriceExact(costLines.reduce((s, l) => s + (Number(l.amount) || 0), 0) - discountTotal)}</div>
+                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPriceExact(costSubtotal + costBtw - discountTotal)}</div>
                   <div style={{ fontSize: 9, color: '#9B9591', textTransform: 'uppercase', letterSpacing: '0.08em' }}>incl. BTW</div>
                 </div>
               </div>
