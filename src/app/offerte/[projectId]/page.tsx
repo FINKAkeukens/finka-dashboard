@@ -676,41 +676,41 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
             <h2 className="serif" style={{ fontSize: 40, fontWeight: 550, lineHeight: 1, color: '#1C1B19', marginBottom: 24 }}>
               Kosten.
             </h2>
-            <div style={{ borderTop: '1px solid #E6E2D9' }}>
-              {costLines.map((line, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>{renderInline(line.label)}</div>
-                  <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(line.description)}</div>
-                  <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(line.amount)}</div>
-                </div>
-              ))}
-              {costExclBtw && (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0 4px' }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>Subtotaal</div>
-                    <div style={{ fontSize: 12, color: '#9B9591' }}>excl. BTW</div>
-                    <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(costSubtotal)}</div>
+            {/* Smaller dan de pagina: op de liggende A4 stonden de bedragen
+                anders ver van hun omschrijving. Bedragen in een vaste kolom,
+                subtotaal/BTW/totaal als blok rechts eronder. */}
+            <div style={{ maxWidth: 760 }}>
+              <div style={{ borderTop: '1px solid #E6E2D9' }}>
+                {costLines.map((line, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '190px 1fr 130px', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>{renderInline(line.label)}</div>
+                    <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(line.description)}</div>
+                    <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(line.amount)}</div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '4px 0 14px', borderBottom: '1px solid #E6E2D9' }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>BTW</div>
-                    <div style={{ fontSize: 12, color: '#9B9591' }}>{quote.btw_percentage}%</div>
-                    <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(costBtw)}</div>
+                ))}
+              </div>
+              <div style={{ marginLeft: 'auto', width: 340, paddingTop: 10 }}>
+                {costExclBtw && (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 16, padding: '4px 0' }}>
+                      <div style={{ fontSize: 12, color: '#6B6560' }}>Subtotaal excl. BTW</div>
+                      <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(costSubtotal)}</div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 16, padding: '4px 0' }}>
+                      <div style={{ fontSize: 12, color: '#6B6560' }}>BTW {quote.btw_percentage}%</div>
+                      <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>€ {formatPriceExact(costBtw)}</div>
+                    </div>
+                  </>
+                )}
+                {discounts.map((d, i) => (
+                  <div key={`korting-${i}`} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 16, padding: '4px 0' }}>
+                    <div style={{ fontSize: 12, color: '#6B6560' }}>Korting{d.description ? <> — {renderInline(d.description)}</> : null}</div>
+                    <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>− € {formatPriceExact(d.amount)}</div>
                   </div>
-                </>
-              )}
-              {discounts.map((d, i) => (
-                <div key={`korting-${i}`} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #E6E2D9', alignItems: 'baseline' }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#9B9591', textTransform: 'uppercase' }}>Korting</div>
-                  <div style={{ fontSize: 12, color: '#1C1B19' }}>{renderInline(d.description)}</div>
-                  <div style={{ fontSize: 13, color: '#1C1B19', textAlign: 'right' }}>− € {formatPriceExact(d.amount)}</div>
-                </div>
-              ))}
-              <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 16, padding: '14px 0' }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#1C1B19', textTransform: 'uppercase', fontWeight: 600 }}>Totaal</div>
-                <div />
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600 }}>€ {formatPriceExact(costSubtotal + costBtw - discountTotal)}</div>
-                  <div style={{ fontSize: 9, color: '#9B9591', textTransform: 'uppercase', letterSpacing: '0.08em' }}>incl. BTW</div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 16, padding: '10px 0 0', marginTop: 6, borderTop: '1px solid #1C1B19', alignItems: 'baseline' }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: '#1C1B19', textTransform: 'uppercase', fontWeight: 600 }}>Totaal incl. BTW</div>
+                  <div style={{ fontSize: 14, color: '#1C1B19', fontWeight: 600, textAlign: 'right' }}>€ {formatPriceExact(costSubtotal + costBtw - discountTotal)}</div>
                 </div>
               </div>
             </div>
