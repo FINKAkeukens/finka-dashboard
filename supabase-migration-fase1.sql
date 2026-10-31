@@ -2620,3 +2620,20 @@ ALTER TABLE finka_euroline_rates
 
 ALTER TABLE finka_appliances
   ADD COLUMN IF NOT EXISTS spec_summary_override TEXT;
+
+-- =========================================================
+-- 95. Configurator: onderdeel Maatwerk.
+--
+--    Nieuwe sectie 'maatwerk' (offerte uploaden of zelf invullen, zelfde
+--    datavorm als werkblad zonder rekentool) met een eigen kostenrij
+--    'maatwerk' in cost_breakdown (JSON, geen schemawijziging). Bestaande
+--    kostenoverzichten houden NULL en tellen dus geen maatwerk mee.
+--    Bestaande tabellen → geen nieuwe GRANT nodig.
+-- =========================================================
+
+ALTER TABLE finka_configurator_options DROP CONSTRAINT IF EXISTS finka_configurator_options_section_check;
+ALTER TABLE finka_configurator_options ADD CONSTRAINT finka_configurator_options_section_check
+  CHECK (section IN ('kasten', 'apparatuur', 'accessoires', 'werkblad', 'maatwerk', 'opslag'));
+
+ALTER TABLE finka_configurator_scenarios
+  ADD COLUMN IF NOT EXISTS maatwerk_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL;

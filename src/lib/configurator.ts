@@ -10,12 +10,22 @@ export const DEFAULT_COST_BREAKDOWN: CostBreakdownItem[] = [
   { key: 'apparatuur', label: 'Apparatuur', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'werkblad', label: 'Aanrechtblad', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 25, marge_percentage_source: 'def' },
   { key: 'accessoires', label: 'Accessoires', werkelijke_kosten: 0, werkelijke_kosten_source: 'auto', marge_percentage: 10, marge_percentage_source: 'def' },
+  { key: 'maatwerk', label: 'Maatwerk', werkelijke_kosten: 0, werkelijke_kosten_source: 'def', marge_percentage: 25, marge_percentage_source: 'def' },
   { key: 'inmeten', label: 'Inmeten', werkelijke_kosten: 250, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'opslag', label: 'Opslag', werkelijke_kosten: 139.75, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'levering', label: 'Levering', werkelijke_kosten: 360.25, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'installatie', label: 'Installatie', werkelijke_kosten: 0, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
   { key: 'service', label: 'Service', werkelijke_kosten: 250, werkelijke_kosten_source: 'def', marge_percentage: 0, marge_percentage_source: 'def' },
 ]
+
+// Vult ontbrekende kostenrijen aan uit DEFAULT_COST_BREAKDOWN (op hun vaste
+// plek) — offertes van vóór een nieuwe categorie (bv. Maatwerk) hebben die
+// rij anders niet, en dan kan er ook niets op toegepast worden.
+export function withDefaultCostRows(rows: CostBreakdownItem[]): CostBreakdownItem[] {
+  if (!rows.length) return DEFAULT_COST_BREAKDOWN
+  return DEFAULT_COST_BREAKDOWN.map((d) => rows.find((r) => r.key === d.key) ?? d)
+    .concat(rows.filter((r) => !DEFAULT_COST_BREAKDOWN.some((d) => d.key === r.key)))
+}
 
 // Zelfde tekst-opbouw als voorheen in QuoteEditor's applianceCustomerText —
 // alle relevante specs, nooit de prijs (die blijft uitsluitend intern).
@@ -66,7 +76,7 @@ export function computeKastenNetCostTotal(grossCostTotal: number, discountKeys: 
 // ('in': een bewuste keuze via "Toepassen op Offerte", geen live/automatische
 // waarde meer).
 export function patchCostRow(rows: CostBreakdownItem[], key: CostCategoryKey, werkelijke_kosten: number): CostBreakdownItem[] {
-  return rows.map((r) => (r.key === key ? { ...r, werkelijke_kosten, werkelijke_kosten_source: 'in' as const } : r))
+  return withDefaultCostRows(rows).map((r) => (r.key === key ? { ...r, werkelijke_kosten, werkelijke_kosten_source: 'in' as const } : r))
 }
 
 // Vervangt de regels van deze klantversie-categorie volledig — zelfde

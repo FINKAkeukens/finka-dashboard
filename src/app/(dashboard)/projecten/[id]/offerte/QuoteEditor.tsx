@@ -12,7 +12,7 @@ import { FieldWithSource, SourceTag } from '@/components/FieldWithSource'
 import { logAudit, logFieldChanges } from '@/lib/audit'
 import { ACCESSOIRE_APPLIANCE_TYPES, formatPrice, getSpecSummary, TYPE_LABELS as APPLIANCE_TYPE_LABELS } from '@/lib/appliance-utils'
 import { Appliance, CostBreakdownItem, CostCategoryKey, CustomerCostLine, DefaultTexts, FieldSource, PageDisclaimerKey, Quote, QUOTE_PAGE_ANCHORS, QuoteDiscount, QuoteCustomerCategory, QuoteCustomerSection, QuoteDownloadMeta, QuoteItem, QuoteItemType, QuotePageAnchor, QuoteTextSnippet, SectionImagePosition, SectionImageSize } from '@/lib/types'
-import { DEFAULT_COST_BREAKDOWN } from '@/lib/configurator'
+import { withDefaultCostRows } from '@/lib/configurator'
 import { ArrowRight, ChevronDown, GripVertical, Plus, RotateCcw, Trash2, Upload, X, Zap } from 'lucide-react'
 import AppliancePickerModal from './AppliancePickerModal'
 import SnippetPicker from '@/components/SnippetPicker'
@@ -40,6 +40,7 @@ const CUSTOMER_CATEGORY_LABELS: Record<QuoteCustomerCategory, string> = {
   werkblad: 'Werkblad',
   apparatuur: 'Apparatuur',
   accessoires: 'Accessoires',
+  maatwerk: 'Maatwerk',
   overig: 'Overig',
 }
 
@@ -366,7 +367,7 @@ export default function QuoteEditor({
   )
 
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdownItem[]>(
-    initialQuote?.cost_breakdown?.length ? initialQuote.cost_breakdown : DEFAULT_COST_BREAKDOWN
+    withDefaultCostRows(initialQuote?.cost_breakdown ?? [])
   )
   const [btwPercentage, setBtwPercentage] = useState(initialQuote?.btw_percentage ?? 21)
   const [overallMarginPercentage, setOverallMarginPercentage] = useState(0)

@@ -13,6 +13,7 @@ import {
   CostCategoryKey,
   EurolineRates,
   KastenOptionData,
+  MaatwerkOptionData,
   OpslagOptionData,
   Quote,
   QuoteCustomerCategory,
@@ -22,22 +23,24 @@ import {
 } from '@/lib/types'
 import { DEFAULT_WERKBLAD_RATES } from '@/lib/werkblad-calc'
 import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, DEFAULT_EUROLINE_RATES } from '@/lib/euroline-calc'
-import { applianceCustomerText, DEFAULT_COST_BREAKDOWN, patchCostRow, replaceCategoryLines } from '@/lib/configurator'
+import { applianceCustomerText, patchCostRow, replaceCategoryLines, withDefaultCostRows } from '@/lib/configurator'
 import { ACCESSOIRE_APPLIANCE_TYPES } from '@/lib/appliance-utils'
 import KastenOptionEditor from './configurator/KastenOptionEditor'
 import WerkbladOptionEditor from './configurator/WerkbladOptionEditor'
 import OpslagOptionEditor from './configurator/OpslagOptionEditor'
 import ApparatuurOptionEditor from './configurator/ApparatuurOptionEditor'
+import MaatwerkOptionEditor from './configurator/MaatwerkOptionEditor'
 import OptionTabs from './configurator/OptionTabs'
 import ScenarioCard from './configurator/ScenarioCard'
 
-const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'accessoires', 'werkblad', 'opslag']
+const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'accessoires', 'werkblad', 'maatwerk', 'opslag']
 
 const SECTION_LABELS: Record<ConfiguratorSection, string> = {
   kasten: 'Kasten',
   apparatuur: 'Apparatuur',
   accessoires: 'Accessoires',
   werkblad: 'Werkblad',
+  maatwerk: 'Maatwerk',
   opslag: 'Opslag, levering en montage',
 }
 
@@ -46,17 +49,19 @@ const SECTION_DESCRIPTIONS: Record<ConfiguratorSection, string> = {
   apparatuur: 'Kies apparatuur uit de bibliotheek — vergelijk bijvoorbeeld twee merken als losse opties.',
   accessoires: 'Kranen en spoelbakken uit de bibliotheek — eigen kostenrij, los van de apparatuur.',
   werkblad: 'Upload een werkblad-specificatie of bereken zelf een richtprijs per optie.',
+  maatwerk: 'Upload een offerte voor maatwerk of vul zelf kostprijs en omschrijving in.',
   opslag: 'Opslag, levering, installatie en service op basis van de Euroline-tarieven.',
 }
 
 type OptionPatch = Partial<Pick<ConfiguratorOption, 'name' | 'data' | 'cost_total'>>
-type ScenarioPatch = Partial<Pick<ConfiguratorScenario, 'name' | 'kasten_option_id' | 'apparatuur_option_id' | 'accessoires_option_id' | 'werkblad_option_id' | 'opslag_option_id'>>
+type ScenarioPatch = Partial<Pick<ConfiguratorScenario, 'name' | 'kasten_option_id' | 'apparatuur_option_id' | 'accessoires_option_id' | 'werkblad_option_id' | 'maatwerk_option_id' | 'opslag_option_id'>>
 
 const SCENARIO_FIELD_BY_SECTION: Record<ConfiguratorSection, keyof ScenarioPatch> = {
   kasten: 'kasten_option_id',
   apparatuur: 'apparatuur_option_id',
   accessoires: 'accessoires_option_id',
   werkblad: 'werkblad_option_id',
+  maatwerk: 'maatwerk_option_id',
   opslag: 'opslag_option_id',
 }
 
@@ -211,11 +216,12 @@ export default function ConfiguratorTab({
         .single()
       if (fetchError || !freshQuote) throw new Error(fetchError?.message ?? 'Offerte niet gevonden')
 
-      let costBreakdown = freshQuote.cost_breakdown?.length ? freshQuote.cost_breakdown : DEFAULT_COST_BREAKDOWN
+      let costBreakdown = withDefaultCostRows(freshQuote.cost_breakdown ?? [])
       let customerSections = Array.isArray(freshQuote.customer_sections) ? freshQuote.customer_sections : []
 
       const kasten = options.find((o) => o.id === scenario.kasten_option_id)
       const werkblad = options.find((o) => o.id === scenario.werkblad_option_id)
+      const maatwerk = options.find((o) => o.id === scenario.maatwerk_option_id)
       const opslag = options.find((o) => o.id === scenario.opslag_option_id)
       const apparatuur = options.find((o) => o.id === scenario.apparatuur_option_id)
       const accessoires = options.find((o) => o.id === scenario.accessoires_option_id)
@@ -229,6 +235,11 @@ export default function ConfiguratorTab({
         const d = werkblad.data as WerkbladOptionData
         costBreakdown = patchCostRow(costBreakdown, 'werkblad', werkblad.cost_total)
         customerSections = replaceCategoryLines(customerSections, 'werkblad', 'Werkblad', d.summary_lines ?? [])
+      }
+      if (maatwerk) {
+        const d = maatwerk.data as Partial<MaatwerkOptionData>
+        costBreakdown = patchCostRow(costBreakdown, 'maatwerk', maatwerk.cost_total)
+        customerSections = replaceCategoryLines(customerSections, 'maatwerk', 'Maatwerk', d.summary_lines ?? [])
       }
       if (opslag) {
         // Optie nog nooit aangeraakt (data === {}) → val terug op de
@@ -340,6 +351,7 @@ export default function ConfiguratorTab({
     apparatuur: optionsFor('apparatuur'),
     accessoires: optionsFor('accessoires'),
     werkblad: optionsFor('werkblad'),
+    maatwerk: optionsFor('maatwerk'),
     opslag: optionsFor('opslag'),
   }
 
@@ -394,6 +406,13 @@ export default function ConfiguratorTab({
                   <WerkbladOptionEditor
                     quoteId={quote.id}
                     wbRates={wbRates}
+                    option={active}
+                    onChange={(patch) => updateOption(active.id, patch)}
+                  />
+                )}
+                {active && section === 'maatwerk' && (
+                  <MaatwerkOptionEditor
+                    quoteId={quote.id}
                     option={active}
                     onChange={(patch) => updateOption(active.id, patch)}
                   />
@@ -459,7 +478,7 @@ export default function ConfiguratorTab({
                 applying={applyingIds.has(scenario.id)}
                 applied={appliedIds.has(scenario.id)}
                 applyError={applyErrors[scenario.id] ?? ''}
-                costBreakdown={quote?.cost_breakdown?.length ? quote.cost_breakdown : DEFAULT_COST_BREAKDOWN}
+                costBreakdown={withDefaultCostRows(quote?.cost_breakdown ?? [])}
                 btwPercentage={quote?.btw_percentage ?? 21}
                 eurolineRates={eRates}
               />

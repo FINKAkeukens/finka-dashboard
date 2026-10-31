@@ -305,6 +305,7 @@ export type CostCategoryKey =
   | 'apparatuur'
   | 'werkblad'
   | 'accessoires'
+  | 'maatwerk'
   | 'inmeten'
   | 'opslag'
   | 'levering'
@@ -657,7 +658,7 @@ export interface Quote {
 // maar voedt de kostenrij 'accessoires' en levert offerteregels van type
 // 'accessoire'. Kranen/spoelbakken zitten in die sectie, de rest bij
 // apparatuur — zie ACCESSOIRE_APPLIANCE_TYPES in src/lib/appliance-utils.ts.
-export type ConfiguratorSection = 'kasten' | 'apparatuur' | 'accessoires' | 'werkblad' | 'opslag'
+export type ConfiguratorSection = 'kasten' | 'apparatuur' | 'accessoires' | 'werkblad' | 'maatwerk' | 'opslag'
 
 // JSONB-vorm per sectie — vrij van vorm zodat "Dupliceren" gewoon een
 // deep-copy van `data` is. Elke sectie krijgt zijn eigen data-interface;
@@ -700,11 +701,18 @@ export interface ApparatuurOptionData {
   summary_lines: string[]
 }
 
+// Maatwerk (timmerwerk, kasten op maat, wandpanelen e.d.): leveranciers-
+// offerte uploaden (AI destilleert samenvatting + bedrag) of zelf invullen.
+export interface MaatwerkOptionData {
+  attachments: OfferAttachment[]
+  summary_lines: string[]
+}
+
 export interface OpslagOptionData {
   euroline_inputs: EurolineInputs
 }
 
-export type ConfiguratorOptionData = KastenOptionData | WerkbladOptionData | ApparatuurOptionData | OpslagOptionData
+export type ConfiguratorOptionData = KastenOptionData | WerkbladOptionData | ApparatuurOptionData | MaatwerkOptionData | OpslagOptionData
 
 export interface ConfiguratorOption {
   id: string
@@ -729,6 +737,8 @@ export interface ConfiguratorScenario {
   // die tellen dan gewoon geen accessoires mee.
   accessoires_option_id: string | null
   werkblad_option_id: string | null
+  // NULL bij kostenoverzichten van vóór de maatwerk-sectie (migratie 95).
+  maatwerk_option_id: string | null
   opslag_option_id: string | null
   created_at: string
   updated_at: string
@@ -821,7 +831,7 @@ export interface QuoteDownloadSnapshot {
   connections_image_url: string | null
 }
 
-export type QuoteCustomerCategory = 'kasten' | 'werkblad' | 'apparatuur' | 'accessoires' | 'overig'
+export type QuoteCustomerCategory = 'kasten' | 'werkblad' | 'apparatuur' | 'accessoires' | 'maatwerk' | 'overig'
 
 export interface QuoteCustomerLine {
   text: string

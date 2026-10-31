@@ -8,13 +8,14 @@ import { ConfiguratorOption, ConfiguratorScenario, ConfiguratorSection, CostBrea
 import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS } from '@/lib/euroline-calc'
 import { Trash2 } from 'lucide-react'
 
-const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'accessoires', 'werkblad', 'opslag']
+const SECTIONS: ConfiguratorSection[] = ['kasten', 'apparatuur', 'accessoires', 'werkblad', 'maatwerk', 'opslag']
 
 const SECTION_LABELS: Record<ConfiguratorSection, string> = {
   kasten: 'Kasten',
   apparatuur: 'Apparatuur',
   accessoires: 'Accessoires',
   werkblad: 'Werkblad',
+  maatwerk: 'Maatwerk',
   opslag: 'Opslag, levering en montage',
 }
 
@@ -24,6 +25,7 @@ function selectedOptionId(scenario: ConfiguratorScenario, section: ConfiguratorS
     case 'apparatuur': return scenario.apparatuur_option_id
     case 'accessoires': return scenario.accessoires_option_id
     case 'werkblad': return scenario.werkblad_option_id
+    case 'maatwerk': return scenario.maatwerk_option_id
     case 'opslag': return scenario.opslag_option_id
   }
 }
@@ -91,6 +93,8 @@ export default function ScenarioCard({
   if (accessoiresOpt) klantprijsExclBtw += accessoiresOpt.cost_total * (1 + marginFor('accessoires') / 100)
   const werkbladOpt = selectedBySection.werkblad
   if (werkbladOpt) klantprijsExclBtw += werkbladOpt.cost_total * (1 + marginFor('werkblad') / 100)
+  const maatwerkOpt = selectedBySection.maatwerk
+  if (maatwerkOpt) klantprijsExclBtw += maatwerkOpt.cost_total * (1 + marginFor('maatwerk') / 100)
   const opslagOpt = selectedBySection.opslag
   if (opslagOpt) {
     const d = opslagOpt.data as Partial<OpslagOptionData>

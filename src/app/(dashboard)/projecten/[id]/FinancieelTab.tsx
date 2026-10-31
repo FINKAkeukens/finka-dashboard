@@ -24,11 +24,11 @@ function ColHeader({ label, unit, className = '' }: { label: string; unit: strin
   )
 }
 
-// Zelfde 9 categorieën als de kostprijs-opbouw in Offerte, gegroepeerd in
+// Zelfde 10 categorieën als de kostprijs-opbouw in Offerte, gegroepeerd in
 // "Inkoop" (materiaal/product) en "Diensten" — zelfde indeling als het
 // financiële sjabloon dat FINKA al gebruikte.
 const GROUPS: { label: string; categories: CostCategoryKey[] }[] = [
-  { label: 'Inkoop', categories: ['keukenkastjes', 'apparatuur', 'werkblad', 'accessoires'] },
+  { label: 'Inkoop', categories: ['keukenkastjes', 'apparatuur', 'werkblad', 'accessoires', 'maatwerk'] },
   { label: 'Diensten', categories: ['inmeten', 'opslag', 'levering', 'installatie', 'service'] },
 ]
 
@@ -37,6 +37,7 @@ const CATEGORY_LABELS: Record<CostCategoryKey, string> = {
   apparatuur: 'Apparatuur',
   werkblad: 'Aanrechtblad',
   accessoires: 'Accessoires',
+  maatwerk: 'Maatwerk',
   inmeten: 'Inmeten',
   opslag: 'Opslag',
   levering: 'Levering/transport',
