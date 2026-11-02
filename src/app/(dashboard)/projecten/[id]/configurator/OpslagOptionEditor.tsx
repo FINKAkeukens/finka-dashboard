@@ -8,11 +8,14 @@ import { formatPrice } from '@/lib/appliance-utils'
 import {
   computeEurolineTotals,
   DEFAULT_EUROLINE_INPUTS,
+  effectiveEurolineRates,
   EUROLINE_CUSTOM_RATE_CATEGORIES,
   EUROLINE_OWN_COST_KEYS,
+  eurolineRateLabel,
   eurolineTotaalExclBtw,
+  isEurolineRateVariable,
 } from '@/lib/euroline-calc'
-import { ConfiguratorOption, EurolineCustomRateCategory, EurolineInputs, EurolineRates, OpslagOptionData } from '@/lib/types'
+import { ConfiguratorOption, EurolineCustomRate, EurolineCustomRateCategory, EurolineInputs, EurolineRateKey, EurolineRates, OpslagOptionData } from '@/lib/types'
 
 function readData(data: ConfiguratorOption['data']): OpslagOptionData {
   const d = data as unknown as Partial<OpslagOptionData> | undefined
@@ -27,6 +30,9 @@ function readData(data: ConfiguratorOption['data']): OpslagOptionData {
 // als voorheen in QuoteEditor, nu per optie. cost_total is de som van de 4
 // categorieën, altijd live herberekend uit euroline_inputs + de actuele
 // tarieven (zelfde filosofie als in Offerte: nooit een bevroren bedrag).
+// Namen komen uit de instellingen (eurolineRateLabel); een tarief dat daar
+// "per project aanpasbaar" staat krijgt hier een bedragveld, bewaard in
+// euroline_inputs.rate_overrides.
 export default function OpslagOptionEditor({
   rates,
   option,
@@ -38,7 +44,11 @@ export default function OpslagOptionEditor({
 }) {
   const inputs = readData(option.data).euroline_inputs
   const totals = computeEurolineTotals(inputs, rates)
+  // Tarieven zoals ze in dit project gelden (met per project aangepaste bedragen).
+  const eff = effectiveEurolineRates(rates, inputs)
   const selectedCustom = new Set(inputs.custom_rate_ids ?? [])
+  const label = (key: EurolineRateKey) => eurolineRateLabel(rates, key)
+  const eur = (n: number) => `€${(Number(n) || 0).toFixed(2)}`
 
   function updateInput(patch: Partial<EurolineInputs>) {
     const nextInputs = { ...inputs, ...patch }
@@ -46,13 +56,53 @@ export default function OpslagOptionEditor({
     onChange({ data: { euroline_inputs: nextInputs }, cost_total: eurolineTotaalExclBtw(nextTotals) })
   }
 
-  // Eigen tarieven (Instellingen → Euroline-tarieven) als vinkjes in het
-  // onderdeel van hun kostenrij, tussen de vaste velden.
-  function customRateCheckboxes(category: EurolineCustomRateCategory) {
-    return (rates.custom_rates ?? [])
-      .filter((r) => r.category === category)
-      .map((r) => (
-        <label key={r.id} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+  function setOverride(id: string, value: number) {
+    updateInput({ rate_overrides: { ...(inputs.rate_overrides ?? {}), [id]: value } })
+  }
+
+  // Bedrag van een vast tarief: bij "per project aanpasbaar" een invulveld
+  // (voorstel uit de instellingen), anders de vaste prijs als tekst.
+  function rateAmount(key: EurolineRateKey, prefix = '+') {
+    if (!isEurolineRateVariable(rates, key)) return <span>({prefix}{eur(eff[key])})</span>
+    return (
+      <NumberInput
+        value={eff[key]}
+        onChange={(v) => setOverride(key, v)}
+        aria-label={`${label(key)} — bedrag voor dit project`}
+        className="h-7 w-24 text-xs border-[#C9A96E]"
+      />
+    )
+  }
+
+  // Variabele basis-/eenheidstarieven (geen vinkje): eigen regel met invulveld.
+  function variableRateRows(keys: EurolineRateKey[]) {
+    return keys
+      .filter((key) => isEurolineRateVariable(rates, key))
+      .map((key) => (
+        <div key={key} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+          {label(key)}
+          {rateAmount(key)}
+        </div>
+      ))
+  }
+
+  function toggle(key: EurolineRateKey, checked: boolean, onToggle: (v: boolean) => void) {
+    return (
+      <div key={key} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+        <label className="flex items-center gap-1.5">
+          <Checkbox checked={checked} onCheckedChange={(v) => onToggle(v === true)} />
+          {label(key)}
+        </label>
+        {rateAmount(key)}
+      </div>
+    )
+  }
+
+  function customRateToggle(r: EurolineCustomRate, showCategory = false) {
+    const amount = eff.custom_rates?.find((x) => x.id === r.id)?.amount ?? r.amount
+    return (
+      <div key={r.id} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+        <label className="flex items-center gap-1.5">
           <Checkbox
             checked={selectedCustom.has(r.id)}
             onCheckedChange={(v) => {
@@ -60,13 +110,30 @@ export default function OpslagOptionEditor({
               updateInput({ custom_rate_ids: v === true ? [...ids, r.id] : ids })
             }}
           />
-          {r.name || 'Naamloos tarief'} (+€{(Number(r.amount) || 0).toFixed(2)})
+          {r.name || 'Naamloos tarief'}
         </label>
-      ))
+        {r.variable ? (
+          <NumberInput
+            value={Number(amount) || 0}
+            onChange={(v) => setOverride(r.id, v)}
+            aria-label={`${r.name || 'Eigen tarief'} — bedrag voor dit project`}
+            className="h-7 w-24 text-xs border-[#C9A96E]"
+          />
+        ) : (
+          <span>(+{eur(amount)})</span>
+        )}
+        {showCategory && <span className="text-[#9A948D]">· {EUROLINE_CUSTOM_RATE_CATEGORIES[r.category]}</span>}
+      </div>
+    )
   }
 
-  // Eigen tarieven in kostenrijen die deze optie zelf niet vult
-  // (Keukenkastjes, Apparatuur, ...) — eigen blok onderaan.
+  // Eigen tarieven als vinkjes in het onderdeel van hun kostenrij.
+  function customRateCheckboxes(category: EurolineCustomRateCategory) {
+    return (rates.custom_rates ?? []).filter((r) => r.category === category).map((r) => customRateToggle(r))
+  }
+
+  // Eigen tarieven in kostenrijen die deze optie zelf niet vult (Maatwerk) —
+  // eigen blok onderaan.
   const otherCustomRates = (rates.custom_rates ?? []).filter((r) => !EUROLINE_OWN_COST_KEYS.includes(r.category))
   const otherCustomTotal = Object.values(totals.extra).reduce((sum, n) => sum + (n ?? 0), 0)
 
@@ -91,11 +158,12 @@ export default function OpslagOptionEditor({
               checked={inputs.installatie_buitengebied}
               onCheckedChange={(v) => updateInput({ installatie_buitengebied: v === true })}
             />
-            Installatie in buitengebied (€{rates.installatie_buitengebied_per_m1.toFixed(2)}/m1 i.p.v. €{rates.installatie_per_m1.toFixed(2)}/m1)
+            {label('installatie_buitengebied_per_m1')} ({eur(eff.installatie_buitengebied_per_m1)}/m1 i.p.v. {eur(eff.installatie_per_m1)}/m1)
           </label>
+          {variableRateRows(['installatie_per_m1', 'installatie_buitengebied_per_m1'])}
           {customRateCheckboxes('installatie')}
           <p className="text-[10px] text-[#9A948D]">
-            €{inputs.installatie_buitengebied ? rates.installatie_buitengebied_per_m1.toFixed(2) : rates.installatie_per_m1.toFixed(2)} per m1
+            {eur(inputs.installatie_buitengebied ? eff.installatie_buitengebied_per_m1 : eff.installatie_per_m1)} per m1
           </p>
         </div>
 
@@ -112,8 +180,9 @@ export default function OpslagOptionEditor({
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.opslag)}</span>
           </div>
+          {variableRateRows(['opslag_base', 'opslag_per_week_extra'])}
           {customRateCheckboxes('opslag')}
-          <p className="text-[10px] text-[#9A948D]">Basis €{rates.opslag_base.toFixed(2)}, +€{rates.opslag_per_week_extra.toFixed(2)}/week</p>
+          <p className="text-[10px] text-[#9A948D]">{label('opslag_base')} {eur(eff.opslag_base)}, +{eur(eff.opslag_per_week_extra)}/week</p>
         </div>
 
         <div className="space-y-1.5 col-span-2">
@@ -122,41 +191,18 @@ export default function OpslagOptionEditor({
             <EurolineInfoButton category="levering" />
           </div>
           <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.levering_groter}
-                onCheckedChange={(v) => updateInput({ levering_groter: v === true })}
-              />
-              Grotere levering (&gt;5 pallets, +€{rates.levering_groter_toeslag.toFixed(2)})
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.levering_niet_begane_grond}
-                onCheckedChange={(v) => updateInput({ levering_niet_begane_grond: v === true })}
-              />
-              Niet begane grond (+€{rates.levering_niet_begane_grond.toFixed(2)})
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.levering_verhuislift}
-                onCheckedChange={(v) => updateInput({ levering_verhuislift: v === true })}
-              />
-              Verhuislift / buitenlift (+€{rates.levering_verhuislift.toFixed(2)})
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.levering_buiten_werkgebied}
-                onCheckedChange={(v) => updateInput({ levering_buiten_werkgebied: v === true })}
-              />
-              Buiten werkgebied Euroline (+€{rates.levering_buiten_werkgebied.toFixed(2)})
-            </label>
+            {toggle('levering_groter_toeslag', inputs.levering_groter, (v) => updateInput({ levering_groter: v }))}
+            {toggle('levering_niet_begane_grond', inputs.levering_niet_begane_grond, (v) => updateInput({ levering_niet_begane_grond: v }))}
+            {toggle('levering_verhuislift', inputs.levering_verhuislift, (v) => updateInput({ levering_verhuislift: v }))}
+            {toggle('levering_buiten_werkgebied', inputs.levering_buiten_werkgebied, (v) => updateInput({ levering_buiten_werkgebied: v }))}
             <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              Extra lostijd (halve uren)
+              {label('levering_extra_lostijd_per_halfuur')} (halve uren)
               <NumberInput
                 value={inputs.levering_extra_lostijd_halfuren}
                 onChange={(levering_extra_lostijd_halfuren) => updateInput({ levering_extra_lostijd_halfuren })}
                 className="h-7 w-16"
               />
+              {isEurolineRateVariable(rates, 'levering_extra_lostijd_per_halfuur') && <>× {rateAmount('levering_extra_lostijd_per_halfuur', '')}</>}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
               Werkblad-levering
@@ -166,23 +212,18 @@ export default function OpslagOptionEditor({
                 className="h-7 text-xs bg-white border border-[#DDD8D2] rounded px-1.5 focus:outline-none focus:border-[#1C1B19]"
               >
                 <option value="geen">Geen</option>
-                <option value="multiplex">Multiplex/Greenpanel (+€{rates.werkblad_multiplex.toFixed(2)})</option>
-                <option value="composiet">Composiet/keramiek/hardsteen (+€{rates.werkblad_composiet.toFixed(2)})</option>
+                <option value="multiplex">{label('werkblad_multiplex')} (+{eur(eff.werkblad_multiplex)})</option>
+                <option value="composiet">{label('werkblad_composiet')} (+{eur(eff.werkblad_composiet)})</option>
               </select>
             </div>
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.werkblad_extra_verpakt}
-                onCheckedChange={(v) => updateInput({ werkblad_extra_verpakt: v === true })}
-              />
-              Werkblad extra verpakt (+€{rates.werkblad_extra_verpakking.toFixed(2)})
-            </label>
+            {toggle('werkblad_extra_verpakking', inputs.werkblad_extra_verpakt, (v) => updateInput({ werkblad_extra_verpakt: v }))}
             {customRateCheckboxes('levering')}
             {/* Zonder brandstoftoeslag — die staat onderaan als los blok, ook
                al telt hij in de kostprijs-opbouw mee bij Levering. */}
             <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(totals.levering - totals.brandstoftoeslag)}</span>
           </div>
-          <p className="text-[10px] text-[#9A948D]">Basis €{rates.levering_base.toFixed(2)} (regulier, incl. 1 uur lostijd)</p>
+          {variableRateRows(['levering_base', 'werkblad_multiplex', 'werkblad_composiet'])}
+          <p className="text-[10px] text-[#9A948D]">{label('levering_base')}: {eur(eff.levering_base)}</p>
         </div>
 
         <div className="space-y-1.5 col-span-2">
@@ -195,20 +236,15 @@ export default function OpslagOptionEditor({
             />
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.service)}</span>
           </div>
+          {variableRateRows(['service_tarief_per_uur', 'service_minimum'])}
           {customRateCheckboxes('service')}
-          <p className="text-[10px] text-[#9A948D]">€{rates.service_tarief_per_uur}/uur, minimum €{rates.service_minimum} zodra er service is</p>
+          <p className="text-[10px] text-[#9A948D]">{eur(eff.service_tarief_per_uur)}/uur, minimum {eur(eff.service_minimum)} zodra er service is</p>
         </div>
 
         <div className="space-y-1.5 col-span-2">
           <Label className="text-xs">Inmeten</Label>
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-              <Checkbox
-                checked={inputs.inmeten}
-                onCheckedChange={(v) => updateInput({ inmeten: v === true })}
-              />
-              Inmeten meerekenen (€{rates.inmeten_tarief.toFixed(2)})
-            </label>
+            {toggle('inmeten_tarief', inputs.inmeten, (v) => updateInput({ inmeten: v }))}
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.inmeten)}</span>
           </div>
           {customRateCheckboxes('inmeten')}
@@ -230,8 +266,8 @@ export default function OpslagOptionEditor({
           {inputs.brandstoftoeslag && (
             <p className="text-[10px] text-[#9A948D]">
               {rates.brandstoftoeslag_percentage}% over {formatPrice(totals.brandstoftoeslag_grondslag)}: levering
-              {' '}{formatPrice(totals.brandstoftoeslag_grondslag - rates.opslag_base - (rates.brandstoftoeslag_over_installatie ? totals.montage : 0))}
-              {' '}+ basisopslag {formatPrice(rates.opslag_base)}
+              {' '}{formatPrice(totals.brandstoftoeslag_grondslag - eff.opslag_base - (rates.brandstoftoeslag_over_installatie ? totals.montage : 0))}
+              {' '}+ basisopslag {formatPrice(eff.opslag_base)}
               {rates.brandstoftoeslag_over_installatie && ` + montage ${formatPrice(totals.montage)}`}
               {' '}(zonder extra lostijd, extra opslag en extra verpakking). Telt in de offerte mee bij de kostenrij Levering.
             </p>
@@ -243,19 +279,7 @@ export default function OpslagOptionEditor({
         <div className="space-y-1.5">
           <Label className="text-xs">Eigen tarieven in andere kostenrijen</Label>
           <div className="flex items-center gap-4 flex-wrap">
-            {otherCustomRates.map((r) => (
-              <label key={r.id} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
-                <Checkbox
-                  checked={selectedCustom.has(r.id)}
-                  onCheckedChange={(v) => {
-                    const ids = (inputs.custom_rate_ids ?? []).filter((id) => id !== r.id)
-                    updateInput({ custom_rate_ids: v === true ? [...ids, r.id] : ids })
-                  }}
-                />
-                {r.name || 'Naamloos tarief'} (+€{(Number(r.amount) || 0).toFixed(2)})
-                <span className="text-[#9A948D]">· {EUROLINE_CUSTOM_RATE_CATEGORIES[r.category]}</span>
-              </label>
-            ))}
+            {otherCustomRates.map((r) => customRateToggle(r, true))}
             <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(otherCustomTotal)}</span>
           </div>
           <p className="text-[10px] text-[#9A948D]">Telt bij toepassen op de offerte op bij de genoemde kostenrij.</p>

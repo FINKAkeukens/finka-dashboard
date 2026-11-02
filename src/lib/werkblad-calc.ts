@@ -1,4 +1,4 @@
-import { WerkbladCalcInputs, WerkbladExtra, WerkbladPart, WerkbladRates } from './types'
+import { WerkbladCalcInputs, WerkbladCutout, WerkbladExtra, WerkbladMaterial, WerkbladPart, WerkbladRates, WerkbladServiceKey } from './types'
 
 export function uid() {
   return Math.random().toString(36).slice(2, 9)
@@ -15,8 +15,55 @@ export function newWerkbladPart(rates: WerkbladRates): WerkbladPart {
     length: 3000,
     depth: 600,
     thickness: 20,
-    cutouts: { kookplaat: false, spoelbak: false, kraan: false },
+    cutouts: {},
   }
+}
+
+const DEFAULT_CUTOUT_NAMES: Record<string, string> = { kookplaat: 'Kookplaat', spoelbak: 'Spoelbak', kraan: 'Kraan (boring)' }
+
+// Uitsparingen als lijst — uit cutout_list (migratie-sectie 98), of zolang
+// die leeg is afgeleid uit het oude vaste trio in cutouts.
+export function werkbladCutouts(rates: WerkbladRates): WerkbladCutout[] {
+  if (rates.cutout_list?.length) return rates.cutout_list
+  return (['kookplaat', 'spoelbak', 'kraan'] as const).map((id) => ({
+    id, name: DEFAULT_CUTOUT_NAMES[id], amount: Number(rates.cutouts?.[id]) || 0,
+  }))
+}
+
+export const WERKBLAD_SERVICE_FIELDS: { key: WerkbladServiceKey; label: string; unit: string }[] = [
+  { key: 'hoekverbinding', label: 'Hoekverbinding', unit: 'per koppeling' },
+  { key: 'inmeten', label: 'Inmeten', unit: 'vast bedrag' },
+  { key: 'montage', label: 'Montage', unit: 'vast bedrag' },
+  { key: 'transport', label: 'Transporttoeslag', unit: 'vast bedrag' },
+]
+
+export function werkbladServiceLabel(rates: WerkbladRates, key: WerkbladServiceKey): string {
+  return rates.service_settings?.[key]?.name?.trim() || WERKBLAD_SERVICE_FIELDS.find((f) => f.key === key)!.label
+}
+
+// "Naam – Leverancier" voor keuzelijsten; de leverancier staat sinds sectie
+// 98 los (oudere materialen hebben hem nog in de naam).
+export function werkbladMaterialLabel(m: WerkbladMaterial): string {
+  return m.supplier?.trim() ? `${m.name} – ${m.supplier.trim()}` : m.name
+}
+
+// Prijzen zoals ze in dit project gelden: bij een variabel tarief het in de
+// rekentool ingevulde bedrag (rate_overrides), anders de prijs uit de
+// instellingen. Alle berekeningen lopen hierlangs.
+export function effectiveWerkbladRates(rates: WerkbladRates, inputs: Pick<WerkbladCalcInputs, 'rate_overrides'>): WerkbladRates {
+  const o = inputs.rate_overrides ?? {}
+  const pick = (variable: boolean | undefined, key: string, fallback: number) =>
+    variable && typeof o[key] === 'number' ? o[key] : fallback
+  const result: WerkbladRates = {
+    ...rates,
+    materials: rates.materials.map((m) => ({ ...m, price_per_m2: pick(m.variable, `material:${m.id}`, Number(m.price_per_m2) || 0) })),
+    thicknesses: rates.thicknesses.map((t) => ({ ...t, surcharge: pick(t.variable, `thickness:${t.mm}`, Number(t.surcharge) || 0) })),
+    cutout_list: werkbladCutouts(rates).map((c) => ({ ...c, amount: pick(c.variable, `cutout:${c.id}`, Number(c.amount) || 0) })),
+  }
+  for (const { key } of WERKBLAD_SERVICE_FIELDS) {
+    result[key] = pick(rates.service_settings?.[key]?.variable, key, Number(rates[key]) || 0)
+  }
+  return result
 }
 
 // Fallback als de werkblad-tarievenrij (nog) niet geladen kon worden — zelfde
@@ -35,6 +82,8 @@ export const DEFAULT_WERKBLAD_RATES: WerkbladRates = {
   montage: 0,
   transport: 0,
   extras: [],
+  cutout_list: [],
+  service_settings: {},
   updated_at: '',
 }
 
@@ -90,9 +139,9 @@ export function computeWerkbladPart(part: WerkbladPart, rates: WerkbladRates): W
   const perM2 = (mat ? Number(mat.price_per_m2) : 0) + (thick ? Number(thick.surcharge) : 0)
   const materialCost = area * perM2
   let cutoutCost = 0
-  ;(['kookplaat', 'spoelbak', 'kraan'] as const).forEach((c) => {
-    if (part.cutouts[c]) cutoutCost += Number(rates.cutouts[c]) || 0
-  })
+  for (const c of werkbladCutouts(rates)) {
+    if (part.cutouts?.[c.id]) cutoutCost += Number(c.amount) || 0
+  }
   return {
     area,
     meters,
@@ -100,7 +149,7 @@ export function computeWerkbladPart(part: WerkbladPart, rates: WerkbladRates): W
     materialCost,
     cutoutCost,
     total: round2(materialCost + cutoutCost),
-    matName: mat ? mat.name : '— geen materiaal —',
+    matName: mat ? werkbladMaterialLabel(mat) : '— geen materiaal —',
     band: depthBand(Number(part.depth) || 0),
   }
 }
@@ -119,7 +168,8 @@ export interface WerkbladCalcTotals {
   totaal: number
 }
 
-export function computeWerkbladTotals(inputs: WerkbladCalcInputs, rates: WerkbladRates): WerkbladCalcTotals {
+export function computeWerkbladTotals(inputs: WerkbladCalcInputs, baseRates: WerkbladRates): WerkbladCalcTotals {
+  const rates = effectiveWerkbladRates(baseRates, inputs)
   const parts = inputs.parts.map((part) => ({ part, calc: computeWerkbladPart(part, rates) }))
   const totalArea = round2(parts.reduce((s, p) => s + p.calc.area, 0))
   const bladTotaal = round2(parts.reduce((s, p) => s + p.calc.total, 0))

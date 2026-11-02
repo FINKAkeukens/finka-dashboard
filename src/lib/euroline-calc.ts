@@ -1,4 +1,4 @@
-import { CostCategoryKey, EurolineCustomRateCategory, EurolineInputs, EurolineRates } from './types'
+import { CostCategoryKey, EurolineCustomRate, EurolineCustomRateCategory, EurolineInputs, EurolineRateKey, EurolineRates } from './types'
 
 function round2(n: number) {
   return Math.round(n * 100) / 100
@@ -30,7 +30,52 @@ export const DEFAULT_EUROLINE_RATES: EurolineRates = {
   brandstoftoeslag_percentage: 0,
   brandstoftoeslag_over_installatie: false,
   custom_rates: [],
+  rate_settings: {},
   updated_at: '',
+}
+
+// De vaste tarieven per onderdeel, met hun standaardnaam en eenheid — de
+// naam is per tarief te overschrijven (rate_settings), de rekenwijze niet.
+export const EUROLINE_RATE_FIELDS: { key: EurolineRateKey; category: EurolineCustomRateCategory; label: string; unit: string }[] = [
+  { key: 'opslag_base', category: 'opslag', label: 'Basis (3 weken, per keuken)', unit: 'vast bedrag' },
+  { key: 'opslag_per_week_extra', category: 'opslag', label: 'Per extra week (na 3 weken)', unit: 'per week' },
+  { key: 'levering_base', category: 'levering', label: 'Basis (regulier, max 5 pallets, incl. 1 uur lostijd)', unit: 'vast bedrag' },
+  { key: 'levering_groter_toeslag', category: 'levering', label: 'Grotere levering (>5 pallets)', unit: 'toeslag' },
+  { key: 'levering_niet_begane_grond', category: 'levering', label: 'Niet begane grond', unit: 'toeslag' },
+  { key: 'levering_verhuislift', category: 'levering', label: 'Verhuislift / buitenlift', unit: 'toeslag' },
+  { key: 'levering_extra_lostijd_per_halfuur', category: 'levering', label: 'Extra lostijd', unit: 'per half uur' },
+  { key: 'levering_buiten_werkgebied', category: 'levering', label: 'Buiten werkgebied Euroline', unit: 'toeslag' },
+  { key: 'werkblad_multiplex', category: 'levering', label: 'Werkblad multiplex/Greenpanel/Greengridz', unit: 'keuze werkblad' },
+  { key: 'werkblad_composiet', category: 'levering', label: 'Werkblad composiet/keramiek/hardsteen', unit: 'keuze werkblad' },
+  { key: 'werkblad_extra_verpakking', category: 'levering', label: 'Werkblad extra verpakt', unit: 'toeslag' },
+  { key: 'installatie_per_m1', category: 'installatie', label: 'Montage standaard', unit: 'per m1' },
+  { key: 'installatie_buitengebied_per_m1', category: 'installatie', label: 'Montage buitengebied', unit: 'per m1' },
+  { key: 'service_tarief_per_uur', category: 'service', label: 'Tarief nacalculatie', unit: 'per uur' },
+  { key: 'service_minimum', category: 'service', label: 'Minimumbedrag (zodra er service is)', unit: 'minimum' },
+  { key: 'inmeten_tarief', category: 'inmeten', label: 'Inmeten', unit: 'vast bedrag' },
+]
+
+export function eurolineRateLabel(rates: EurolineRates, key: EurolineRateKey): string {
+  return rates.rate_settings?.[key]?.name?.trim() || EUROLINE_RATE_FIELDS.find((f) => f.key === key)?.label || key
+}
+
+export function isEurolineRateVariable(rates: EurolineRates, key: EurolineRateKey): boolean {
+  return !!rates.rate_settings?.[key]?.variable
+}
+
+// Tarieven zoals ze in dit project gelden: bij een variabel tarief het per
+// project ingevulde bedrag (rate_overrides), anders het tarief uit de
+// instellingen. Alle berekeningen lopen hierlangs.
+export function effectiveEurolineRates(rates: EurolineRates, inputs: EurolineInputs): EurolineRates {
+  const overrides = inputs.rate_overrides ?? {}
+  const result: EurolineRates = { ...rates }
+  for (const { key } of EUROLINE_RATE_FIELDS) {
+    if (isEurolineRateVariable(rates, key) && typeof overrides[key] === 'number') result[key] = overrides[key]
+  }
+  result.custom_rates = (rates.custom_rates ?? []).map((r): EurolineCustomRate =>
+    r.variable && typeof overrides[r.id] === 'number' ? { ...r, amount: overrides[r.id] } : r
+  )
+  return result
 }
 
 // Kostenrijen die je bij een eigen tarief kunt kiezen, in de volgorde en met
@@ -132,7 +177,8 @@ export interface EurolineTotals {
   extra: Partial<Record<CostCategoryKey, number>>
 }
 
-export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRates): EurolineTotals {
+export function computeEurolineTotals(inputs: EurolineInputs, baseRates: EurolineRates): EurolineTotals {
+  const rates = effectiveEurolineRates(baseRates, inputs)
   const werkbladLeveringToeslag =
     inputs.werkblad_levering === 'multiplex' ? rates.werkblad_multiplex
     : inputs.werkblad_levering === 'composiet' ? rates.werkblad_composiet

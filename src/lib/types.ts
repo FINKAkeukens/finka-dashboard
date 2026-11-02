@@ -434,6 +434,10 @@ export interface EurolineInputs {
   // Aangevinkte eigen tarieven (EurolineRates.custom_rates, op id). Ontbreekt
   // bij oudere opties — behandel dat als [] (zie DEFAULT_EUROLINE_INPUTS).
   custom_rate_ids: string[]
+  // Per project ingevulde bedragen voor variabele tarieven — op kolomnaam
+  // (vast tarief) of id (eigen tarief). Ontbreekt = het voorstel uit de
+  // instellingen.
+  rate_overrides?: Record<string, number>
 }
 
 // Los instelbare Euroline-tarieven (§ Instellingen) — één rij, overal
@@ -467,6 +471,7 @@ export interface EurolineRates {
   // alleen mee als ze per project aangevinkt zijn (custom_rate_ids).
   // Kan null zijn zolang migratie-sectie 93 niet gedraaid is.
   custom_rates: EurolineCustomRate[] | null
+  rate_settings: Partial<Record<EurolineRateKey, EurolineRateSetting>> | null
   updated_at: string
 }
 
@@ -476,8 +481,24 @@ export type EurolineCustomRateCategory = Extract<CostCategoryKey, 'maatwerk' | '
 export interface EurolineCustomRate {
   id: string
   name: string
+  // Bij een variabel tarief: het voorstel waarmee een project begint.
   amount: number
   category: EurolineCustomRateCategory
+  // true = per project aan te passen (EurolineInputs.rate_overrides).
+  variable?: boolean
+}
+
+// Vaste tarieven = de getal-kolommen van EurolineRates.
+export type EurolineRateKey = Exclude<
+  keyof EurolineRates,
+  'id' | 'updated_at' | 'brandstoftoeslag_over_installatie' | 'brandstoftoeslag_percentage' | 'custom_rates' | 'rate_settings'
+>
+
+// Per vast tarief: eigen naam en of het per project aan te passen is
+// (migratie-sectie 97).
+export interface EurolineRateSetting {
+  name?: string
+  variable?: boolean
 }
 
 // Los instelbare standaardteksten (§ Instellingen → Standaardteksten) —
@@ -511,11 +532,32 @@ export interface WerkbladMaterial {
   id: string
   name: string
   price_per_m2: number
+  // Leverancier los van de naam (filter in Instellingen → Werkbladprijzen).
+  supplier?: string
+  // true = prijs per project aan te passen in de rekentool (rate_overrides).
+  variable?: boolean
 }
 
 export interface WerkbladThickness {
   mm: number
   surcharge: number
+  variable?: boolean
+}
+
+// Uitsparing met bewerkbare naam (migratie-sectie 98); id "kookplaat",
+// "spoelbak" en "kraan" voor de oorspronkelijke drie.
+export interface WerkbladCutout {
+  id: string
+  name: string
+  amount: number
+  variable?: boolean
+}
+
+export type WerkbladServiceKey = 'hoekverbinding' | 'inmeten' | 'montage' | 'transport'
+
+export interface WerkbladServiceSetting {
+  name?: string
+  variable?: boolean
 }
 
 export interface WerkbladCutoutPrices {
@@ -538,6 +580,9 @@ export interface WerkbladRates {
   // Extra onderdelen met vaste prijs (migratie-sectie 96), per werkblad-optie
   // aan te vinken in de Configurator. Null zolang de migratie niet gedraaid is.
   extras: WerkbladExtra[] | null
+  // Migratie-sectie 98 — null/leeg zolang die niet gedraaid is.
+  cutout_list: WerkbladCutout[] | null
+  service_settings: Partial<Record<WerkbladServiceKey, WerkbladServiceSetting>> | null
   updated_at: string
 }
 
@@ -551,11 +596,8 @@ export interface WerkbladExtra {
   variable?: boolean
 }
 
-export interface WerkbladPartCutouts {
-  kookplaat: boolean
-  spoelbak: boolean
-  kraan: boolean
-}
+// Aangevinkte uitsparingen per deel, op id van WerkbladCutout.
+export type WerkbladPartCutouts = Record<string, boolean>
 
 export interface WerkbladPart {
   id: string
@@ -573,6 +615,9 @@ export interface WerkbladCalcInputs {
   marge_percentage: number
   btw_enabled: boolean
   btw_percentage: number
+  // Per project ingevulde prijzen voor variabele tarieven: "material:<id>",
+  // "cutout:<id>", "thickness:<mm>" of een dienst ("transport", ...).
+  rate_overrides?: Record<string, number>
 }
 
 export interface CostBreakdownItem {

@@ -27,6 +27,7 @@ export function NumberInput({
   placeholder,
   min,
   disabled,
+  'aria-label': ariaLabel,
 }: {
   value: number
   onChange: (value: number) => void
@@ -40,6 +41,7 @@ export function NumberInput({
   placeholder?: string
   min?: number
   disabled?: boolean
+  'aria-label'?: string
 }) {
   const [text, setText] = useState(() => formatForEdit(value))
   const [focused, setFocused] = useState(false)
@@ -84,6 +86,7 @@ export function NumberInput({
     <input
       type="text"
       inputMode="decimal"
+      aria-label={ariaLabel}
       value={text}
       placeholder={placeholder}
       disabled={disabled}

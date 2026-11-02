@@ -2649,3 +2649,35 @@ ALTER TABLE finka_configurator_scenarios
 
 ALTER TABLE finka_werkblad_rates
   ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- =========================================================
+-- 97. Euroline-tarieven: eigen namen en vast/variabel per tarief.
+--
+--    rate_settings: per vast tarief (kolomnaam, bv. "levering_verhuislift")
+--    { name?, variable? } — een eigen naam in plaats van de standaardnaam en
+--    of de prijs per project aan te passen is (dan is de kolomwaarde het
+--    voorstel). Eigen tarieven (custom_rates) hebben dezelfde vlag in hun
+--    eigen lijst. Per project ingevulde bedragen staan in de Configurator-
+--    optie (euroline_inputs.rate_overrides). Bestaande tabel → geen GRANT.
+-- =========================================================
+
+ALTER TABLE finka_euroline_rates
+  ADD COLUMN IF NOT EXISTS rate_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- =========================================================
+-- 98. Werkbladprijzen: bewerkbare namen, eigen uitsparingen, vast/variabel.
+--
+--    cutout_list: uitsparingen als lijst { id, name, amount, variable? } —
+--    vervangt het vaste trio in cutouts (kookplaat/spoelbak/kraan), dat bij
+--    opslaan wel bijgewerkt blijft voor oudere code. Leeg = afgeleid uit
+--    cutouts. service_settings: per dienst (hoekverbinding, inmeten,
+--    montage, transport) { name?, variable? }. Materialen en diktes dragen
+--    hun eigen supplier/variable in de bestaande JSON-lijsten. Per project
+--    aangepaste bedragen staan in de rekentool-invoer
+--    (werkblad_calc_inputs / calc_inputs.rate_overrides). Bestaande tabel →
+--    geen nieuwe GRANT.
+-- =========================================================
+
+ALTER TABLE finka_werkblad_rates
+  ADD COLUMN IF NOT EXISTS cutout_list JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS service_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
