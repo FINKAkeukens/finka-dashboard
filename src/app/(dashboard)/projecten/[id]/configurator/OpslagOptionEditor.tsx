@@ -8,6 +8,8 @@ import { formatPrice } from '@/lib/appliance-utils'
 import {
   computeEurolineTotals,
   DEFAULT_EUROLINE_INPUTS,
+  EUROLINE_CUSTOM_RATE_CATEGORIES,
+  EUROLINE_OWN_COST_KEYS,
   eurolineTotaalExclBtw,
 } from '@/lib/euroline-calc'
 import { ConfiguratorOption, EurolineCustomRateCategory, EurolineInputs, EurolineRates, OpslagOptionData } from '@/lib/types'
@@ -62,6 +64,11 @@ export default function OpslagOptionEditor({
         </label>
       ))
   }
+
+  // Eigen tarieven in kostenrijen die deze optie zelf niet vult
+  // (Keukenkastjes, Apparatuur, ...) — eigen blok onderaan.
+  const otherCustomRates = (rates.custom_rates ?? []).filter((r) => !EUROLINE_OWN_COST_KEYS.includes(r.category))
+  const otherCustomTotal = Object.values(totals.extra).reduce((sum, n) => sum + (n ?? 0), 0)
 
   return (
     <div className="space-y-4">
@@ -204,6 +211,7 @@ export default function OpslagOptionEditor({
             </label>
             <span className="text-xs text-[#9A948D] whitespace-nowrap">→ {formatPrice(totals.inmeten)}</span>
           </div>
+          {customRateCheckboxes('inmeten')}
           <p className="text-[10px] text-[#9A948D]">Vult de kostenrij &quot;Inmeten&quot; in de offerte — uitgevinkt blijft die op €0.</p>
         </div>
 
@@ -230,6 +238,29 @@ export default function OpslagOptionEditor({
           )}
         </div>
       </div>
+
+      {otherCustomRates.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Eigen tarieven in andere kostenrijen</Label>
+          <div className="flex items-center gap-4 flex-wrap">
+            {otherCustomRates.map((r) => (
+              <label key={r.id} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+                <Checkbox
+                  checked={selectedCustom.has(r.id)}
+                  onCheckedChange={(v) => {
+                    const ids = (inputs.custom_rate_ids ?? []).filter((id) => id !== r.id)
+                    updateInput({ custom_rate_ids: v === true ? [...ids, r.id] : ids })
+                  }}
+                />
+                {r.name || 'Naamloos tarief'} (+€{(Number(r.amount) || 0).toFixed(2)})
+                <span className="text-[#9A948D]">· {EUROLINE_CUSTOM_RATE_CATEGORIES[r.category]}</span>
+              </label>
+            ))}
+            <span className="text-xs text-[#9A948D] whitespace-nowrap ml-auto">→ {formatPrice(otherCustomTotal)}</span>
+          </div>
+          <p className="text-[10px] text-[#9A948D]">Telt bij toepassen op de offerte op bij de genoemde kostenrij.</p>
+        </div>
+      )}
 
       <div className="flex items-center justify-between border-t border-[#DDD8D2] pt-3">
         <a href="/instellingen/euroline" target="_blank" rel="noreferrer" className="text-xs text-[#C9A96E] hover:underline">

@@ -1,4 +1,4 @@
-import { EurolineCustomRateCategory, EurolineInputs, EurolineRates } from './types'
+import { CostCategoryKey, EurolineCustomRateCategory, EurolineInputs, EurolineRates } from './types'
 
 function round2(n: number) {
   return Math.round(n * 100) / 100
@@ -33,12 +33,21 @@ export const DEFAULT_EUROLINE_RATES: EurolineRates = {
   updated_at: '',
 }
 
+// Kostenrijen die je bij een eigen tarief kunt kiezen, in de volgorde en met
+// de namen van de offerte (DEFAULT_COST_BREAKDOWN).
 export const EUROLINE_CUSTOM_RATE_CATEGORIES: Record<EurolineCustomRateCategory, string> = {
+  maatwerk: 'Maatwerk',
+  inmeten: 'Inmeten',
   opslag: 'Opslag',
   levering: 'Levering',
   installatie: 'Installatie',
   service: 'Service',
 }
+
+// Kostenrijen die de Euroline-optie zelf vult. Eigen tarieven in een andere
+// rij komen in EurolineTotals.extra en worden bij toepassen opgeteld bij wat
+// het onderdeel van die rij invult (applyEurolineExtra).
+export const EUROLINE_OWN_COST_KEYS: CostCategoryKey[] = ['opslag', 'levering', 'installatie', 'service', 'inmeten']
 
 // Som van de per project aangevinkte eigen tarieven in één kostenrij. Een
 // tarief dat in de instellingen verwijderd is telt niet meer mee, ook al
@@ -118,6 +127,9 @@ export interface EurolineTotals {
   brandstoftoeslag_grondslag: number
   // Alleen montage (m1 × tarief), zonder eigen tarieven in Installatie.
   montage: number
+  // Aangevinkte eigen tarieven in kostenrijen buiten de Euroline-optie
+  // (Keukenkastjes, Apparatuur, ...), per rij.
+  extra: Partial<Record<CostCategoryKey, number>>
 }
 
 export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRates): EurolineTotals {
@@ -177,14 +189,22 @@ export function computeEurolineTotals(inputs: EurolineInputs, rates: EurolineRat
   // in dezelfde optie omdat hij in de kostprijs-opbouw naast opslag/levering/
   // installatie/service staat. Uitgevinkt (of een oudere optie zonder dit
   // veld) levert 0 op, zodat de kostenrij Inmeten dan leeg blijft.
-  const inmeten = round2(inputs.inmeten ? rates.inmeten_tarief : 0)
+  const inmeten = round2((inputs.inmeten ? rates.inmeten_tarief : 0) + eurolineCustomRateTotal(inputs, rates, 'inmeten'))
 
-  return { opslag, levering, installatie, service, inmeten, brandstoftoeslag, brandstoftoeslag_grondslag, montage }
+  const extra: Partial<Record<CostCategoryKey, number>> = {}
+  for (const key of Object.keys(EUROLINE_CUSTOM_RATE_CATEGORIES) as EurolineCustomRateCategory[]) {
+    if (EUROLINE_OWN_COST_KEYS.includes(key)) continue
+    const amount = eurolineCustomRateTotal(inputs, rates, key)
+    if (amount) extra[key] = amount
+  }
+
+  return { opslag, levering, installatie, service, inmeten, brandstoftoeslag, brandstoftoeslag_grondslag, montage, extra }
 }
 
 // Klantvriendelijke samenvatting — som van de posten zoals die in de
 // kostprijs-opbouw (Opslag/Levering/Installatie/Service/Inmeten) terechtkomen.
 // `brandstoftoeslag` hoort hier bewust NIET bij: die zit al in `levering`.
 export function eurolineTotaalExclBtw(totals: EurolineTotals): number {
-  return round2(totals.opslag + totals.levering + totals.installatie + totals.service + totals.inmeten)
+  const extra = Object.values(totals.extra).reduce((sum, n) => sum + (n ?? 0), 0)
+  return round2(totals.opslag + totals.levering + totals.installatie + totals.service + totals.inmeten + extra)
 }

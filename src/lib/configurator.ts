@@ -79,6 +79,29 @@ export function patchCostRow(rows: CostBreakdownItem[], key: CostCategoryKey, we
   return withDefaultCostRows(rows).map((r) => (r.key === key ? { ...r, werkelijke_kosten, werkelijke_kosten_source: 'in' as const } : r))
 }
 
+// Eigen Euroline-tarieven in een rij die verder door een ander onderdeel
+// gevuld wordt (bv. Keukenkastjes). Is die rij bij dit toepassen al opnieuw
+// gezet (basePatched), dan komt het tarief er bovenop; anders wordt eerst
+// het eerder toegevoegde bedrag (euroline_extra) eraf gehaald, zodat vaker
+// toepassen niet stapelt.
+export function applyEurolineExtra(
+  rows: CostBreakdownItem[],
+  key: CostCategoryKey,
+  extra: number,
+  basePatched: boolean,
+): CostBreakdownItem[] {
+  return rows.map((r) => {
+    if (r.key !== key || (!extra && !r.euroline_extra)) return r
+    const base = basePatched ? r.werkelijke_kosten : r.werkelijke_kosten - (r.euroline_extra ?? 0)
+    return {
+      ...r,
+      werkelijke_kosten: Math.round((base + extra) * 100) / 100,
+      werkelijke_kosten_source: 'in' as const,
+      euroline_extra: extra || undefined,
+    }
+  })
+}
+
 // Vervangt de regels van deze klantversie-categorie volledig — zelfde
 // "eerste match, vervang of maak aan"-gedrag als replaceSectionLines in
 // QuoteEditor, maar als pure functie zodat "Toepassen op Offerte" 'm kan

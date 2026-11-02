@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import WerkbladCalculator from '@/components/WerkbladCalculator'
 import { NumberInput } from '@/components/ui/number-input'
-import { computeWerkbladTotals, defaultWerkbladCalcInputs, werkbladSummaryLines } from '@/lib/werkblad-calc'
+import { computeWerkbladTotals, defaultWerkbladCalcInputs, formatEUR, werkbladExtraAmount, werkbladExtrasTotal, werkbladSummaryLines } from '@/lib/werkblad-calc'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ConfiguratorOption, OfferAttachment, WerkbladCalcInputs, WerkbladOptionData, WerkbladRates } from '@/lib/types'
 import { Calculator, FileText, Upload, X } from 'lucide-react'
 
@@ -16,6 +17,9 @@ function readData(data: ConfiguratorOption['data']): WerkbladOptionData {
     attachments: d?.attachments ?? [],
     summary_lines: d?.summary_lines ?? [],
     calc_inputs: d?.calc_inputs?.parts?.length ? d.calc_inputs : null,
+    extra_ids: d?.extra_ids ?? [],
+    extras_total: d?.extras_total ?? 0,
+    extra_amounts: d?.extra_amounts ?? {},
   }
 }
 
@@ -52,6 +56,23 @@ export default function WerkbladOptionEditor({
   const supabase = createClient()
 
   const calcInputs: WerkbladCalcInputs = data.calc_inputs ?? defaultWerkbladCalcInputs(wbRates)
+  // cost_total = basisprijs + aangevinkte extra onderdelen; het kostprijsveld
+  // toont/bewerkt alleen de basisprijs.
+  const extrasTotal = data.extras_total ?? 0
+  const baseCost = Math.round((option.cost_total - extrasTotal) * 100) / 100
+  const extraIds = data.extra_ids ?? []
+
+  function updateExtras(ids: string[], amounts: Record<string, number>) {
+    const total = werkbladExtrasTotal(ids, wbRates, amounts)
+    onChange({
+      data: { ...data, extra_ids: ids, extra_amounts: amounts, extras_total: total },
+      cost_total: Math.round((baseCost + total) * 100) / 100,
+    })
+  }
+
+  function toggleExtra(id: string, on: boolean) {
+    updateExtras(extraIds.filter((x) => x !== id).concat(on ? [id] : []), data.extra_amounts ?? {})
+  }
 
   function updateCalcInputs(v: WerkbladCalcInputs) {
     onChange({ data: { ...data, calc_inputs: v } })
@@ -61,7 +82,7 @@ export default function WerkbladOptionEditor({
     const totals = computeWerkbladTotals(calcInputs, wbRates)
     onChange({
       data: { ...data, calc_inputs: calcInputs, summary_lines: werkbladSummaryLines(totals) },
-      cost_total: totals.kostprijs,
+      cost_total: totals.kostprijs + extrasTotal,
     })
     setCalcOpen(false)
   }
@@ -99,7 +120,7 @@ export default function WerkbladOptionEditor({
             summary_lines: body.summary?.length ? (body.summary as string[]) : data.summary_lines,
           },
         }
-        if (typeof body.totaalExclBtw === 'number') patch.cost_total = body.totaalExclBtw
+        if (typeof body.totaalExclBtw === 'number') patch.cost_total = body.totaalExclBtw + extrasTotal
         onChange(patch)
         if (body.summaryError) {
           setUploadError(`Bijlage geüpload, maar AI-verwerking mislukte: ${body.summaryError}`)
@@ -114,7 +135,7 @@ export default function WerkbladOptionEditor({
   }
 
   function removeAttachment(url: string) {
-    onChange({ data: { ...data, attachments: data.attachments.filter((a) => a.url !== url), summary_lines: [] }, cost_total: 0 })
+    onChange({ data: { ...data, attachments: data.attachments.filter((a) => a.url !== url), summary_lines: [] }, cost_total: extrasTotal })
   }
 
   function updateSummaryLine(index: number, value: string) {
@@ -133,10 +154,10 @@ export default function WerkbladOptionEditor({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-1">
-          <label className="text-xs text-[#6B6560]">Kostprijs (excl. btw)</label>
+          <label className="text-xs text-[#6B6560]">{extrasTotal ? 'Kostprijs werkblad (excl. btw, zonder extra onderdelen)' : 'Kostprijs (excl. btw)'}</label>
           <NumberInput
-            value={option.cost_total}
-            onChange={(cost_total) => onChange({ cost_total })}
+            value={baseCost}
+            onChange={(v) => onChange({ cost_total: Math.round((v + extrasTotal) * 100) / 100 })}
             className="w-40 px-3 py-1.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
           />
         </div>
@@ -163,6 +184,39 @@ export default function WerkbladOptionEditor({
       </div>
 
       {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+
+      {(wbRates.extras ?? []).length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-[#6B6560]">Extra onderdelen</label>
+          <div className="flex items-center gap-4 flex-wrap">
+            {(wbRates.extras ?? []).map((x) => {
+              const checked = extraIds.includes(x.id)
+              return (
+                <div key={x.id} className="flex items-center gap-1.5 text-xs text-[#1C1B19]">
+                  <label className="flex items-center gap-1.5">
+                    <Checkbox checked={checked} onCheckedChange={(v) => toggleExtra(x.id, v === true)} />
+                    {x.name || 'Naamloos onderdeel'}
+                    {!(x.variable && checked) && <> (+{formatEUR(werkbladExtraAmount(x, data.extra_amounts))})</>}
+                  </label>
+                  {/* Variabel onderdeel: bedrag per project, voorstel uit de instellingen. */}
+                  {x.variable && checked && (
+                    <NumberInput
+                      value={werkbladExtraAmount(x, data.extra_amounts)}
+                      onChange={(v) => updateExtras(extraIds, { ...(data.extra_amounts ?? {}), [x.id]: v })}
+                      className="h-7 w-24 text-xs"
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {extrasTotal > 0 && (
+            <p className="text-xs text-[#6B6560]">
+              {formatEUR(baseCost)} + extra onderdelen {formatEUR(extrasTotal)} = <span className="font-medium text-[#1C1B19]">{formatEUR(option.cost_total)}</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {data.attachments.length > 0 && (
         <div className="space-y-1.5">

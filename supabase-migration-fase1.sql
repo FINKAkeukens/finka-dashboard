@@ -2637,3 +2637,15 @@ ALTER TABLE finka_configurator_options ADD CONSTRAINT finka_configurator_options
 
 ALTER TABLE finka_configurator_scenarios
   ADD COLUMN IF NOT EXISTS maatwerk_option_id UUID REFERENCES finka_configurator_options(id) ON DELETE SET NULL;
+
+-- =========================================================
+-- 96. Extra werkblad-onderdelen.
+--
+--    extras: zelf toegevoegde onderdelen met vaste prijs onder Instellingen →
+--    Werkbladprijzen, als lijst { id, name, amount }. Per werkblad-optie in
+--    de Configurator aan te vinken (data.extra_ids); de prijzen tellen dan op
+--    bij de kostprijs van die optie. Bestaande tabel → geen nieuwe GRANT.
+-- =========================================================
+
+ALTER TABLE finka_werkblad_rates
+  ADD COLUMN IF NOT EXISTS extras JSONB NOT NULL DEFAULT '[]'::jsonb;

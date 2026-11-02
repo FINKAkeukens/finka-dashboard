@@ -1,4 +1,4 @@
-import { WerkbladCalcInputs, WerkbladPart, WerkbladRates } from './types'
+import { WerkbladCalcInputs, WerkbladExtra, WerkbladPart, WerkbladRates } from './types'
 
 export function uid() {
   return Math.random().toString(36).slice(2, 9)
@@ -34,7 +34,25 @@ export const DEFAULT_WERKBLAD_RATES: WerkbladRates = {
   inmeten: 0,
   montage: 0,
   transport: 0,
+  extras: [],
   updated_at: '',
+}
+
+// Bedrag van één extra onderdeel in een project: bij een variabel onderdeel
+// het per project ingevulde bedrag (anders het voorstel uit de instellingen),
+// bij een vast onderdeel altijd het tarief.
+export function werkbladExtraAmount(extra: WerkbladExtra, amounts: Record<string, number> | undefined): number {
+  if (extra.variable && amounts && typeof amounts[extra.id] === 'number') return Number(amounts[extra.id]) || 0
+  return Number(extra.amount) || 0
+}
+
+// Som van de aangevinkte extra onderdelen; een onderdeel dat in de
+// instellingen verwijderd is telt niet meer mee.
+export function werkbladExtrasTotal(extraIds: string[], rates: WerkbladRates, amounts?: Record<string, number>): number {
+  const selected = new Set(extraIds)
+  return round2((rates.extras ?? [])
+    .filter((e) => selected.has(e.id))
+    .reduce((sum, e) => sum + werkbladExtraAmount(e, amounts), 0))
 }
 
 export function defaultWerkbladCalcInputs(rates: WerkbladRates): WerkbladCalcInputs {

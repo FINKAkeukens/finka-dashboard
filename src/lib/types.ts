@@ -470,7 +470,8 @@ export interface EurolineRates {
   updated_at: string
 }
 
-export type EurolineCustomRateCategory = 'opslag' | 'levering' | 'installatie' | 'service'
+// Kostenrijen waar een eigen tarief in kan — zie EUROLINE_CUSTOM_RATE_CATEGORIES.
+export type EurolineCustomRateCategory = Extract<CostCategoryKey, 'maatwerk' | 'inmeten' | 'opslag' | 'levering' | 'installatie' | 'service'>
 
 export interface EurolineCustomRate {
   id: string
@@ -534,7 +535,20 @@ export interface WerkbladRates {
   inmeten: number
   montage: number
   transport: number
+  // Extra onderdelen met vaste prijs (migratie-sectie 96), per werkblad-optie
+  // aan te vinken in de Configurator. Null zolang de migratie niet gedraaid is.
+  extras: WerkbladExtra[] | null
   updated_at: string
+}
+
+export interface WerkbladExtra {
+  id: string
+  name: string
+  // Bij een variabel onderdeel: het voorstel waarmee een project begint.
+  amount: number
+  // true = per project aan te passen (WerkbladOptionData.extra_amounts);
+  // false/ontbreekt = vast tarief.
+  variable?: boolean
 }
 
 export interface WerkbladPartCutouts {
@@ -568,6 +582,11 @@ export interface CostBreakdownItem {
   werkelijke_kosten_source: FieldSource
   marge_percentage: number
   marge_percentage_source: FieldSource
+  // Deel van werkelijke_kosten dat uit eigen Euroline-tarieven komt (bij rijen
+  // die verder door een ander onderdeel gevuld worden, bv. Keukenkastjes) —
+  // zodat opnieuw toepassen het oude bedrag eerst aftrekt i.p.v. stapelt.
+  // Zie applyEurolineExtra.
+  euroline_extra?: number
 }
 
 export interface QuoteDiscount {
@@ -679,6 +698,13 @@ export interface WerkbladOptionData {
   attachments: OfferAttachment[]
   summary_lines: string[]
   calc_inputs: WerkbladCalcInputs | null
+  // Aangevinkte extra onderdelen (WerkbladRates.extras, op id) en het bedrag
+  // dat daarvoor in cost_total zit — cost_total = basisprijs (PDF, rekentool
+  // of handmatig) + extras_total. Ontbreekt bij oudere opties → [] / 0.
+  extra_ids?: string[]
+  extras_total?: number
+  // Per project ingevuld bedrag voor variabele onderdelen (op id).
+  extra_amounts?: Record<string, number>
 }
 
 export interface ApparatuurOptionItem {

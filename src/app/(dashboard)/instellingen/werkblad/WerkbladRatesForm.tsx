@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Plus, Trash2 } from 'lucide-react'
-import { WerkbladMaterial, WerkbladRates, WerkbladThickness } from '@/lib/types'
+import { NumberInput } from '@/components/ui/number-input'
+import { WerkbladExtra, WerkbladMaterial, WerkbladRates, WerkbladThickness } from '@/lib/types'
 import { uid } from '@/lib/werkblad-calc'
 
 const CUTOUT_LABELS: Record<'kookplaat' | 'spoelbak' | 'kraan', string> = {
@@ -26,6 +27,7 @@ export default function WerkbladRatesForm({ rates }: { rates: WerkbladRates | nu
   const [inmeten, setInmeten] = useState(rates?.inmeten ?? 0)
   const [montage, setMontage] = useState(rates?.montage ?? 0)
   const [transport, setTransport] = useState(rates?.transport ?? 0)
+  const [extras, setExtras] = useState<WerkbladExtra[]>(rates?.extras ?? [])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -67,6 +69,7 @@ export default function WerkbladRatesForm({ rates }: { rates: WerkbladRates | nu
         inmeten,
         montage,
         transport,
+        extras: extras.map((e) => ({ ...e, name: e.name.trim() })),
         updated_at: new Date().toISOString(),
       })
       .eq('id', rates!.id)
@@ -156,6 +159,54 @@ export default function WerkbladRatesForm({ rates }: { rates: WerkbladRates | nu
             <Input className="h-9" type="number" value={transport} onChange={(e) => setTransport(Number(e.target.value))} />
           </div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-[#DDD8D2] p-6 space-y-3">
+        <div>
+          <h2 className="text-sm font-medium text-[#1C1B19]">Extra onderdelen (vaste prijs, ex btw)</h2>
+          <p className="text-xs text-[#6B6560] mt-1">
+            Per werkblad-optie aan te vinken in de Configurator; de prijs telt dan op bij de kostprijs van die optie.
+            Bij &quot;Per project aanpasbaar&quot; is de prijs hier het voorstel, dat je per project kunt wijzigen.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {extras.map((x) => (
+            <div key={x.id} className="flex items-center gap-2">
+              <Input
+                className="h-9 flex-1"
+                value={x.name}
+                placeholder="Bijv. Achterwand, vensterbank, extra uitsparing"
+                onChange={(e) => setExtras((prev) => prev.map((p) => (p.id === x.id ? { ...p, name: e.target.value } : p)))}
+              />
+              <NumberInput
+                className="h-9 w-28"
+                value={Number(x.amount) || 0}
+                onChange={(amount) => setExtras((prev) => prev.map((p) => (p.id === x.id ? { ...p, amount } : p)))}
+              />
+              <select
+                value={x.variable ? 'variabel' : 'vast'}
+                onChange={(e) => setExtras((prev) => prev.map((p) => (p.id === x.id ? { ...p, variable: e.target.value === 'variabel' } : p)))}
+                title="Vast tarief of per project aan te passen"
+                className="h-9 px-2 text-xs bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+              >
+                <option value="vast">Vast tarief</option>
+                <option value="variabel">Per project aanpasbaar</option>
+              </select>
+              <button
+                onClick={() => {
+                  if (confirm(`Onderdeel "${x.name || 'naamloos'}" verwijderen?`)) setExtras((prev) => prev.filter((p) => p.id !== x.id))
+                }}
+                title="Onderdeel verwijderen"
+              >
+                <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setExtras((prev) => [...prev, { id: uid(), name: '', amount: 0 }])}>
+          <Plus size={13} className="mr-1.5" />
+          Onderdeel
+        </Button>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

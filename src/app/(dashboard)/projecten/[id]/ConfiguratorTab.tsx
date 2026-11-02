@@ -22,8 +22,8 @@ import {
   WerkbladRates,
 } from '@/lib/types'
 import { DEFAULT_WERKBLAD_RATES } from '@/lib/werkblad-calc'
-import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, DEFAULT_EUROLINE_RATES } from '@/lib/euroline-calc'
-import { applianceCustomerText, patchCostRow, replaceCategoryLines, withDefaultCostRows } from '@/lib/configurator'
+import { computeEurolineTotals, DEFAULT_EUROLINE_INPUTS, DEFAULT_EUROLINE_RATES, EUROLINE_CUSTOM_RATE_CATEGORIES, EUROLINE_OWN_COST_KEYS } from '@/lib/euroline-calc'
+import { applianceCustomerText, applyEurolineExtra, patchCostRow, replaceCategoryLines, withDefaultCostRows } from '@/lib/configurator'
 import { ACCESSOIRE_APPLIANCE_TYPES } from '@/lib/appliance-utils'
 import KastenOptionEditor from './configurator/KastenOptionEditor'
 import WerkbladOptionEditor from './configurator/WerkbladOptionEditor'
@@ -226,6 +226,10 @@ export default function ConfiguratorTab({
       const apparatuur = options.find((o) => o.id === scenario.apparatuur_option_id)
       const accessoires = options.find((o) => o.id === scenario.accessoires_option_id)
 
+      // Eigen Euroline-tarieven in rijen van andere onderdelen — pas aan het
+      // eind optellen, ná de eigen waarde van die rij (zie applyEurolineExtra).
+      let eurolineExtra: Partial<Record<CostCategoryKey, number>> | null = null
+
       if (kasten) {
         const d = kasten.data as KastenOptionData
         costBreakdown = patchCostRow(costBreakdown, 'keukenkastjes', kasten.cost_total)
@@ -255,6 +259,7 @@ export default function ConfiguratorTab({
         costBreakdown = patchCostRow(costBreakdown, 'installatie', totals.installatie)
         costBreakdown = patchCostRow(costBreakdown, 'service', totals.service)
         costBreakdown = patchCostRow(costBreakdown, 'inmeten', totals.inmeten)
+        eurolineExtra = totals.extra
       }
       // Apparatuur en accessoires werken identiek (zelfde datavorm), maar elk
       // met een eigen kostenrij, klantsectie en offerteregel-type — zo wist de
@@ -285,6 +290,19 @@ export default function ConfiguratorTab({
           .filter((text): text is string => !!text)
         customerSections = replaceCategoryLines(customerSections, sectionSpec.category, sectionSpec.title, [...itemLines, ...(d.summary_lines ?? [])])
         itemsToReplace.push({ itemType: sectionSpec.itemType, items })
+      }
+
+      if (eurolineExtra) {
+        const patchedKeys = new Set<CostCategoryKey>([
+          ...(kasten ? ['keukenkastjes' as const] : []),
+          ...(werkblad ? ['werkblad' as const] : []),
+          ...(maatwerk ? ['maatwerk' as const] : []),
+          ...itemSections.filter((s) => s.option).map((s) => s.costKey),
+        ])
+        for (const key of Object.keys(EUROLINE_CUSTOM_RATE_CATEGORIES) as CostCategoryKey[]) {
+          if (EUROLINE_OWN_COST_KEYS.includes(key)) continue
+          costBreakdown = applyEurolineExtra(costBreakdown, key, eurolineExtra[key] ?? 0, patchedKeys.has(key))
+        }
       }
 
       const { error: updError } = await supabase
