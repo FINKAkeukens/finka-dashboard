@@ -539,14 +539,14 @@ export default function DraaiboekForm({
                         dagen
                       </label>
                       <select
-                        aria-label="Wacht op (standaard)"
+                        aria-label="Toegewezen aan (standaard)"
                         value={step.default_assignee ?? ''}
                         onChange={(e) => saveStep(step.id, { default_assignee: e.target.value || null })}
                         className={inputClass}
                       >
-                        <option value="">Wacht op: —</option>
+                        <option value="">Toegewezen aan: —</option>
                         {assigneeNames(assignees, step.default_assignee).map((a) => (
-                          <option key={a} value={a}>Wacht op: {a}</option>
+                          <option key={a} value={a}>Toegewezen aan: {a}</option>
                         ))}
                       </select>
                       <select
@@ -639,7 +639,7 @@ export default function DraaiboekForm({
         <div>
           <h2 className="text-base font-semibold text-[#1C1B19]">Personen en partijen</h2>
           <p className="text-[13px] text-[#6B6560] mt-1">
-            Keuzelijst voor “Wacht op”: op wie een stap wacht. FINKA betekent dat jullie zelf aan zet zijn. Verbergen in plaats van verwijderen houdt bestaande keuzes intact.
+            Keuzelijst voor “Toegewezen aan”: wie een stap oppakt. FINKA betekent dat jullie zelf aan zet zijn. Verbergen in plaats van verwijderen houdt bestaande keuzes intact.
           </p>
         </div>
         <div>

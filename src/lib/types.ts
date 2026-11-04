@@ -41,8 +41,10 @@ export interface Supplier {
 }
 
 // Stalen onder Gereedschap → Samples — migratie-sectie 91.
-export type SampleCategory = 'front' | 'werkblad' | 'greep' | 'kleur' | 'anders'
-export type SampleSize = 'XL' | 'L' | 'M' | 'S'
+// Sleutel uit de soortenlijst in Sample instellingen (standaard front,
+// werkblad, greep, kleur, anders) en maat uit de matenlijst daar.
+export type SampleCategory = string
+export type SampleSize = string
 
 export interface Sample {
   id: string
@@ -58,7 +60,8 @@ export interface Sample {
   color: string | null
   finish: string | null
   size: SampleSize | null
-  // Vaste keuze uit SAMPLE_MATERIALS of zelf ingevuld via "Anders".
+  // Keuze uit de materialenlijst (Sample instellingen) of zelf ingevuld via
+  // "Anders" — dat komt daarna vanzelf in die lijst.
   material: string | null
   // Uitvoering — alleen bij materiaal Fineer.
   veneer_execution: string | null

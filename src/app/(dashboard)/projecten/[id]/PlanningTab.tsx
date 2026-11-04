@@ -200,14 +200,14 @@ export default function PlanningTab({
               ))}
             </select>
             <select
-              aria-label="Wacht op"
+              aria-label="Toegewezen aan"
               value={m.assigned_to ?? ''}
               onChange={(e) => update(m.id, { assigned_to: e.target.value || null })}
               className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
-              <option value="">Wacht op: niemand</option>
+              <option value="">Toegewezen aan: niemand</option>
               {assigneeNames(assignees, m.assigned_to).map((a) => (
-                <option key={a} value={a}>Wacht op: {a}</option>
+                <option key={a} value={a}>Toegewezen aan: {a}</option>
               ))}
             </select>
             <Input
@@ -247,14 +247,14 @@ export default function PlanningTab({
               ))}
             </select>
             <select
-              aria-label="Wacht op"
+              aria-label="Toegewezen aan"
               value={m.assigned_to ?? ''}
               onChange={(e) => update(m.id, { assigned_to: e.target.value || null })}
               className="h-9 px-2.5 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
-              <option value="">Wacht op: niemand</option>
+              <option value="">Toegewezen aan: niemand</option>
               {assigneeNames(assignees, m.assigned_to).map((a) => (
-                <option key={a} value={a}>Wacht op: {a}</option>
+                <option key={a} value={a}>Toegewezen aan: {a}</option>
               ))}
             </select>
             <Input

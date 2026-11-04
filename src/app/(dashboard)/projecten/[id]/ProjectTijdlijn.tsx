@@ -441,6 +441,22 @@ export default function ProjectTijdlijn({
               </span>
             )}
           </button>
+          {/* Altijd zichtbaar voor ons: staat deze taak in het klantenportaal?
+              Nieuwe taken zijn standaard verborgen (migratie, default false). */}
+          <button
+            type="button"
+            onClick={() => saveItem(item.id, { visible_to_customer: !item.visible_to_customer })}
+            aria-pressed={item.visible_to_customer}
+            aria-label={item.visible_to_customer ? 'Zichtbaar voor klant, klik om te verbergen' : 'Verborgen voor klant, klik om zichtbaar te maken'}
+            title={item.visible_to_customer ? 'Zichtbaar voor klant, klik om te verbergen' : 'Verborgen voor klant, klik om zichtbaar te maken'}
+            className={`w-[22px] h-[22px] rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+              item.visible_to_customer
+                ? 'bg-[#FBF7EF] border-[#C9A96E] text-[#8A6A2E]'
+                : 'bg-white border-[#DDD8D2] text-[#C7C2BB] hover:text-[#8A6A2E] hover:border-[#C9A96E]'
+            }`}
+          >
+            {item.visible_to_customer ? <Eye size={13} /> : <EyeOff size={13} />}
+          </button>
           <span className="hidden sm:block w-20 text-right text-xs text-[#6B6560] mt-0.5 truncate">{item.assigned_to ?? ''}</span>
           {opts.locked ? (
             <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => release(step)}>
@@ -476,14 +492,14 @@ export default function ProjectTijdlijn({
               onChange={(e) => saveDate(step, e.target.value || null)}
             />
             <select
-              aria-label="Wacht op"
+              aria-label="Toegewezen aan"
               value={item.assigned_to ?? ''}
               onChange={(e) => saveItem(item.id, { assigned_to: e.target.value || null })}
               className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
             >
-              <option value="">Wacht op: niemand</option>
+              <option value="">Toegewezen aan: niemand</option>
               {assigneeNames(assignees, item.assigned_to).map((a) => (
-                <option key={a} value={a}>Wacht op: {a}</option>
+                <option key={a} value={a}>Toegewezen aan: {a}</option>
               ))}
             </select>
             <Input
@@ -502,14 +518,6 @@ export default function ProjectTijdlijn({
                 {item.nvt ? 'Wel van toepassing' : 'N.v.t.'}
               </Button>
             )}
-            <button
-              type="button"
-              onClick={() => saveItem(item.id, { visible_to_customer: !item.visible_to_customer })}
-              className="inline-flex items-center gap-1.5 h-8 px-2 text-xs text-[#6B6560] hover:text-[#1C1B19]"
-            >
-              {item.visible_to_customer ? <Eye size={14} /> : <EyeOff size={14} className="text-[#C9A96E]" />}
-              {item.visible_to_customer ? 'Zichtbaar voor klant' : 'Verborgen voor klant'}
-            </button>
             <button type="button" onClick={() => removeStep(step)} title="Taak verwijderen" aria-label="Taak verwijderen" className="p-1.5">
               <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
             </button>
@@ -642,14 +650,14 @@ export default function ProjectTijdlijn({
           </select>
           <Input type="date" aria-label="Datum" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-8 w-40" />
           <select
-            aria-label="Wacht op"
+            aria-label="Toegewezen aan"
             value={newAssignee}
             onChange={(e) => setNewAssignee(e.target.value)}
             className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
           >
-            <option value="">Wacht op: niemand</option>
+            <option value="">Toegewezen aan: niemand</option>
             {assigneeNames(assignees).map((a) => (
-              <option key={a} value={a}>Wacht op: {a}</option>
+              <option key={a} value={a}>Toegewezen aan: {a}</option>
             ))}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-[#1C1B19] px-1">

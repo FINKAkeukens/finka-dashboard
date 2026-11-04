@@ -8,12 +8,15 @@ import { Sample } from '@/lib/types'
 import {
   AVAILABILITY_COLORS,
   AVAILABILITY_LABELS,
-  SAMPLE_CATEGORY_LABELS,
   SampleAvailability,
   formatDate,
+  normalizeSampleSettings,
   sampleAvailability,
+  sampleCategoryLabel,
+  sampleFieldLabel,
 } from '@/lib/samples'
 import { LOAN_SELECT, LoanWithProject, loanBorrower } from './loan-borrower'
+import ProjectLoanDeadlines, { ProjectLoanGroup } from './ProjectLoanDeadlines'
 
 type SampleRow = Sample & { supplier: { name: string } | null; loans: LoanWithProject[] }
 
@@ -32,10 +35,14 @@ export default async function SamplesPage({
   const { q, status = 'alle' } = await searchParams
   const supabase = await createClient()
 
-  const { data } = await supabase
-    .from('finka_samples')
-    .select(`*, supplier:finka_suppliers(name), loans:finka_sample_loans(${LOAN_SELECT})`)
-    .order('name', { ascending: true })
+  const [{ data }, { data: settingsRow }] = await Promise.all([
+    supabase
+      .from('finka_samples')
+      .select(`*, supplier:finka_suppliers(name), loans:finka_sample_loans(${LOAN_SELECT})`)
+      .order('name', { ascending: true }),
+    supabase.from('finka_sample_settings').select('*').maybeSingle(),
+  ])
+  const settings = normalizeSampleSettings(settingsRow)
 
   const rows = ((data ?? []) as SampleRow[]).map((s) => {
     const openLoan = s.loans.find((l) => !l.returned_at) ?? null
@@ -48,6 +55,29 @@ export default async function SamplesPage({
     // "Te laat terug" ligt ook uit — telt mee bij Uitgeleend.
     if (r.availability === 'te-laat') counts.set('uitgeleend', (counts.get('uitgeleend') ?? 0) + 1)
   }
+
+  // Openstaande uitleningen per project, voor het aanpassen van de
+  // terugbrengdatum in één keer.
+  const groupMap = new Map<string, ProjectLoanGroup>()
+  for (const r of rows) {
+    const loan = r.openLoan
+    if (!loan?.project_id) continue
+    const g = groupMap.get(loan.project_id) ?? {
+      projectId: loan.project_id,
+      name: loanBorrower(loan),
+      loanIds: [],
+      sampleNames: [],
+      dueDate: loan.due_date,
+      mixedDates: false,
+    }
+    if (g.loanIds.length && g.dueDate !== loan.due_date) g.mixedDates = true
+    g.loanIds.push(loan.id)
+    g.sampleNames.push(r.name)
+    groupMap.set(loan.project_id, g)
+  }
+  const projectGroups = [...groupMap.values()]
+    .map((g) => (g.mixedDates ? { ...g, dueDate: null } : g))
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
 
   const search = q?.toLowerCase()
   const filtered = rows.filter((r) => {
@@ -109,6 +139,8 @@ export default async function SamplesPage({
         />
       </form>
 
+      <ProjectLoanDeadlines groups={projectGroups} />
+
       <div className="bg-white rounded-xl border border-[#DDD8D2] overflow-hidden">
         {!filtered.length ? (
           <div className="py-16 text-center">
@@ -133,7 +165,7 @@ export default async function SamplesPage({
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-[#1C1B19] truncate">{r.name}</p>
                     <p className="text-xs text-[#6B6560] truncate">
-                      {[SAMPLE_CATEGORY_LABELS[r.category], r.model, r.size && `Maat ${r.size}`, r.price_group && `PG ${r.price_group}`, r.material, r.veneer_execution, r.supplier?.name, r.code, r.color, r.finish].filter(Boolean).join(' · ')}
+                      {[sampleCategoryLabel(settings, r.category), r.model, r.size && `${sampleFieldLabel(settings, 'size')} ${r.size}`, r.price_group && `PG ${r.price_group}`, r.material, r.veneer_execution, r.supplier?.name, r.code, r.color, r.finish].filter(Boolean).join(' · ')}
                     </p>
                     {r.openLoan && (
                       <p className="text-xs text-[#6B6560] truncate mt-0.5">

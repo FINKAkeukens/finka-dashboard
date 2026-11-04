@@ -7,7 +7,7 @@ import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SampleCategory, SampleModel, Supplier } from '@/lib/types'
-import { SAMPLE_CATEGORY_LABELS } from '@/lib/samples'
+import { SampleCategoryOption } from '@/lib/samples'
 
 // Bronafbeelding uit de catalogus per leverancier + soort, om de lijst tegen
 // na te kijken. Op id i.p.v. naam: de leveranciersnaam kan veranderen.
@@ -23,11 +23,19 @@ const REFERENCE_IMAGES: { supplierId: string; category: SampleCategory; src: str
 const selectClass =
   'h-9 px-3 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]'
 
-export default function SampleModelsEditor({ models, suppliers }: { models: SampleModel[]; suppliers: Supplier[] }) {
+export default function SampleModelsEditor({
+  models,
+  suppliers,
+  categories,
+}: {
+  models: SampleModel[]
+  suppliers: Supplier[]
+  categories: SampleCategoryOption[]
+}) {
   const router = useRouter()
   const supabase = createClient()
   const [supplierId, setSupplierId] = useState(models[0]?.supplier_id ?? suppliers[0]?.id ?? '')
-  const [category, setCategory] = useState<SampleCategory>(models[0]?.category ?? 'front')
+  const [category, setCategory] = useState<SampleCategory>(models[0]?.category ?? categories[0]?.key ?? 'front')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -81,8 +89,8 @@ export default function SampleModelsEditor({ models, suppliers }: { models: Samp
           ))}
         </select>
         <select value={category} onChange={(e) => setCategory(e.target.value as SampleCategory)} className={selectClass}>
-          {Object.entries(SAMPLE_CATEGORY_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+          {categories.map((c) => (
+            <option key={c.key} value={c.key}>{c.label}</option>
           ))}
         </select>
       </div>
@@ -117,7 +125,6 @@ export default function SampleModelsEditor({ models, suppliers }: { models: Samp
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <p className="text-xs text-[#9A948D]">Wijzigingen worden opgeslagen zodra je uit een veld klikt.</p>
 
       {reference && (
         <details className="bg-white rounded-xl border border-[#DDD8D2]" open>

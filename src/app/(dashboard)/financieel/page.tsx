@@ -71,7 +71,7 @@ export default async function FinancieelPage() {
       .is('archived_at', null),
     supabase.from('finka_operating_expenses').select('expense_date, bedrag'),
     supabase.from('finka_financial_settings').select('*').limit(1).maybeSingle(),
-    supabase.from('finka_project_financials').select('project_id, begroot_bedrag, werkelijk_bedrag'),
+    supabase.from('finka_project_financials').select('project_id, begroot_bedrag, werkelijk_bedrag, betaald'),
   ])
 
   // Geannuleerde projecten tellen niet mee in de omzet/marge — de offerte
@@ -86,9 +86,13 @@ export default async function FinancieelPage() {
   // begrote bedrag. Een project zonder rijen (bv. geaccordeerd vóór dat
   // tabblad bestond) valt verderop terug op de kostprijs uit de offerte.
   const werkelijkByProject = new Map<string, number>()
-  for (const f of (financialsData ?? []) as { project_id: string; begroot_bedrag: number; werkelijk_bedrag: number | null }[]) {
+  // Hoeveel onderdelen van het Financieel-tabblad op "Betaald" staan.
+  const betaaldByProject = new Map<string, { betaald: number; totaal: number }>()
+  for (const f of (financialsData ?? []) as { project_id: string; begroot_bedrag: number; werkelijk_bedrag: number | null; betaald: boolean }[]) {
     const bedrag = Number(f.werkelijk_bedrag ?? f.begroot_bedrag ?? 0)
     werkelijkByProject.set(f.project_id, round2((werkelijkByProject.get(f.project_id) ?? 0) + bedrag))
+    const b = betaaldByProject.get(f.project_id) ?? { betaald: 0, totaal: 0 }
+    betaaldByProject.set(f.project_id, { betaald: b.betaald + (f.betaald ? 1 : 0), totaal: b.totaal + 1 })
   }
 
   const projects: ProjectFigures[] = rows
@@ -117,6 +121,7 @@ export default async function FinancieelPage() {
         margeExclBtw: omzetExclBtw - kostprijs,
         werkelijkeKosten,
         margeWerkelijk: omzetExclBtw - werkelijkeKosten,
+        betaald: betaaldByProject.get(r.project_id) ?? null,
       }
     })
     .sort((a, b) => (a.dateLabel < b.dateLabel ? 1 : -1))

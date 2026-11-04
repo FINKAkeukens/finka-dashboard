@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sample, SampleModel, Supplier } from '@/lib/types'
-import { AVAILABILITY_COLORS, AVAILABILITY_LABELS, SAMPLE_CATEGORY_LABELS, sampleAvailability, sampleMaterialOptions, VENEER_MATERIAL } from '@/lib/samples'
+import { AVAILABILITY_COLORS, AVAILABILITY_LABELS, normalizeSampleSettings, sampleAvailability, sampleCategoryLabel, sampleFieldLabel } from '@/lib/samples'
 import { LOAN_SELECT, LoanWithProject } from '../loan-borrower'
 import EditSampleForm from './EditSampleForm'
 import SampleLoans, { ProjectOption } from './SampleLoans'
@@ -27,7 +27,7 @@ export default async function SampleDetailPage({
 
   if (!sample) notFound()
 
-  const [{ data: loans }, { data: suppliers }, { data: projects }, { data: models }, { data: usedMaterials }] = await Promise.all([
+  const [{ data: loans }, { data: suppliers }, { data: projects }, { data: models }, { data: settingsRow }] = await Promise.all([
 
     supabase
       .from('finka_sample_loans')
@@ -42,9 +42,11 @@ export default async function SampleDetailPage({
       .is('archived_at', null)
       .order('created_at', { ascending: false }),
     supabase.from('finka_sample_models').select('*').order('name', { ascending: true }),
-    supabase.from('finka_samples').select('material').not('material', 'is', null),
+    supabase.from('finka_sample_settings').select('*').maybeSingle(),
   ])
 
+  const settings = normalizeSampleSettings(settingsRow)
+  const label = (key: Parameters<typeof sampleFieldLabel>[1]) => sampleFieldLabel(settings, key)
   const loanList = (loans ?? []) as LoanWithProject[]
   const availability = sampleAvailability(loanList.find((l) => !l.returned_at))
 
@@ -70,29 +72,29 @@ export default async function SampleDetailPage({
             </span>
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm mt-3">
-            <dt className="text-[#6B6560]">Soort</dt>
-            <dd className="text-[#1C1B19]">{SAMPLE_CATEGORY_LABELS[sample.category]}</dd>
-            <dt className="text-[#6B6560]">Leverancier</dt>
+            <dt className="text-[#6B6560]">{label('category')}</dt>
+            <dd className="text-[#1C1B19]">{sampleCategoryLabel(settings, sample.category)}</dd>
+            <dt className="text-[#6B6560]">{label('supplier_id')}</dt>
             <dd className="text-[#1C1B19]">{sample.supplier?.name ?? '—'}</dd>
-            <dt className="text-[#6B6560]">Model</dt>
+            <dt className="text-[#6B6560]">{label('model')}</dt>
             <dd className="text-[#1C1B19]">{sample.model || '—'}</dd>
-            <dt className="text-[#6B6560]">Code</dt>
+            <dt className="text-[#6B6560]">{label('code')}</dt>
             <dd className="text-[#1C1B19]">{sample.code || '—'}</dd>
-            <dt className="text-[#6B6560]">PG (prijsgroep)</dt>
+            <dt className="text-[#6B6560]">{label('price_group')}</dt>
             <dd className="text-[#1C1B19]">{sample.price_group || '—'}</dd>
-            <dt className="text-[#6B6560]">Materiaal</dt>
+            <dt className="text-[#6B6560]">{label('material')}</dt>
             <dd className="text-[#1C1B19]">{sample.material || '—'}</dd>
-            {sample.material === VENEER_MATERIAL && (
+            {(sample.material === settings.veneer_material || !!sample.veneer_execution) && (
               <>
-                <dt className="text-[#6B6560]">Uitvoering</dt>
+                <dt className="text-[#6B6560]">{label('veneer_execution')}</dt>
                 <dd className="text-[#1C1B19]">{sample.veneer_execution || '—'}</dd>
               </>
             )}
-            <dt className="text-[#6B6560]">Kleur</dt>
+            <dt className="text-[#6B6560]">{label('color')}</dt>
             <dd className="text-[#1C1B19]">{sample.color || '—'}</dd>
-            <dt className="text-[#6B6560]">Afwerking</dt>
+            <dt className="text-[#6B6560]">{label('finish')}</dt>
             <dd className="text-[#1C1B19]">{sample.finish || '—'}</dd>
-            <dt className="text-[#6B6560]">Maat</dt>
+            <dt className="text-[#6B6560]">{label('size')}</dt>
             <dd className="text-[#1C1B19]">{sample.size ?? '—'}</dd>
           </dl>
         </div>
@@ -100,7 +102,7 @@ export default async function SampleDetailPage({
 
       <div className="mb-8">
         <EditSampleForm sample={sample} suppliers={(suppliers ?? []) as Supplier[]} models={(models ?? []) as SampleModel[]}
-          materials={sampleMaterialOptions((usedMaterials ?? []).map((r) => r.material))}
+          settings={settings}
         />
       </div>
 

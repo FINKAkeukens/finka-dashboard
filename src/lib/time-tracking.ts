@@ -78,7 +78,7 @@ export function projectSubLabel(project: TimerProject | null) {
   return parts.join(' · ')
 }
 
-// Wie een timer kan aanzetten: de personen uit de "Wacht op"-lijst
+// Wie een timer kan aanzetten: de personen uit de "Toegewezen aan"-lijst
 // (finka_assignees), behalve de klant.
 export async function fetchTimerPeople(supabase: SupabaseClient) {
   const { data } = await supabase

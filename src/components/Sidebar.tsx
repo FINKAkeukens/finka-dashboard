@@ -107,7 +107,7 @@ const groups: NavGroup[] = [
       { href: '/instellingen/maatformulier', label: 'Ruimte gereed', icon: Ruler },
       { href: '/instellingen/teksten', label: 'Standaardteksten', icon: FileText },
       { href: '/instellingen/documenten', label: 'Standaarddocumenten', icon: FolderOpen },
-      { href: '/instellingen/sample-modellen', label: 'Sample-modellen', icon: SwatchBook },
+      { href: '/instellingen/sample-modellen', label: 'Sample instellingen', icon: SwatchBook },
     ],
   },
 ]

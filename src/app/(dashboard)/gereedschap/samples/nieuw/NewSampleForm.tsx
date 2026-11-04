@@ -6,16 +6,17 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { SampleModel, Supplier } from '@/lib/types'
-import SampleFields, { readSampleForm, uploadSamplePhoto } from '../SampleFields'
+import { SampleSettings } from '@/lib/samples'
+import SampleFields, { readSampleForm, rememberMaterial, uploadSamplePhoto } from '../SampleFields'
 
 export default function NewSampleForm({
   suppliers,
   models,
-  materials,
+  settings,
 }: {
   suppliers: Supplier[]
   models: SampleModel[]
-  materials: string[]
+  settings: SampleSettings
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -40,9 +41,10 @@ export default function NewSampleForm({
       photo = { photo_url: result.url, storage_path: result.path }
     }
 
+    const fields = readSampleForm(form, settings)
     const { data, error } = await supabase
       .from('finka_samples')
-      .insert({ ...readSampleForm(form), ...photo })
+      .insert({ ...fields, ...photo })
       .select()
       .single()
 
@@ -50,13 +52,14 @@ export default function NewSampleForm({
       setError('Er ging iets mis: ' + error.message)
       setLoading(false)
     } else {
+      await rememberMaterial(supabase, settings, fields.material)
       router.push(`/gereedschap/samples/${data.id}`)
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-[#DDD8D2] p-6 space-y-5">
-      <SampleFields suppliers={suppliers} models={models} materials={materials} />
+      <SampleFields suppliers={suppliers} models={models} settings={settings} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={loading}>

@@ -37,6 +37,7 @@ const BUCKET_COLORS: Record<PlanningBucket, string> = {
   laat: 'text-red-600',
   vandaag: 'text-[#8A6A2E]',
   week: 'text-[#1C1B19]',
+  volgende: 'text-[#1C1B19]',
   later: 'text-[#6B6560]',
   geen: 'text-[#6B6560]',
 }
@@ -62,6 +63,8 @@ export default function PlanningOverzicht({
   const today = startOfDay(new Date())
   const [allEntries, setAllEntries] = useState(initialEntries)
   const [person, setPerson] = useState(PERSON_ALL)
+  // Ophogen = datumvelden opnieuw opbouwen, zodat een open datumkiezer sluit
+  const [pickerReset, setPickerReset] = useState(0)
   const [projectFilter, setProjectFilter] = useState('')
   const [onlyPrio, setOnlyPrio] = useState(false)
   const [openUndated, setOpenUndated] = useState<Set<string>>(new Set())
@@ -306,6 +309,46 @@ export default function PlanningOverzicht({
     return { text: short, className: 'text-[#6B6560]' }
   }
 
+  // Klik op de datum opent meteen de datumkiezer; zonder showPicker (oudere
+  // browsers) klapt de rij open met het datumveld. Het onzichtbare veld krijgt
+  // geen focus, dus de browser sluit de kiezer niet zelf bij een klik ernaast:
+  // daarom bouwen we het veld bij de volgende klik op de pagina opnieuw op.
+  function dateButton(e: PlanningEntry, date: { text: string; className: string }, className: string) {
+    return (
+      <span className={`relative inline-block ${className}`}>
+        <button
+          type="button"
+          title="Datum aanpassen"
+          onClick={(ev) => {
+            const input = ev.currentTarget.nextElementSibling as HTMLInputElement | null
+            if (input?.showPicker) {
+              try {
+                input.showPicker()
+                setTimeout(() => {
+                  document.addEventListener('pointerdown', () => setPickerReset((n) => n + 1), { once: true })
+                }, 0)
+                return
+              } catch {}
+            }
+            setEditingKey(e.key)
+          }}
+          className={`hover:underline hover:text-[#8A6A2E] ${date.className}`}
+        >
+          {date.text}
+        </button>
+        <input
+          key={pickerReset}
+          type="date"
+          tabIndex={-1}
+          aria-hidden
+          value={e.date ?? ''}
+          onChange={(ev) => setDate(e, ev.target.value || null)}
+          className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+        />
+      </span>
+    )
+  }
+
   // compact = het smalle FINKA intern-vak: persoon en datum als één regel
   // onder de naam; persoon kiezen kan in het uitklapdeel.
   function renderRow(e: PlanningEntry, compact = false) {
@@ -355,10 +398,10 @@ export default function PlanningOverzicht({
                 <p className="text-[13px] text-[#6B6560] truncate">
                   {[e.assignee, e.notes].filter(Boolean).join(' · ')}
                   {e.date && (
-                    <span className={date.className}>
+                    <>
                       {e.assignee || e.notes ? ' · ' : ''}
-                      {date.text}
-                    </span>
+                      {dateButton(e, date, '')}
+                    </>
                   )}
                 </p>
               )
@@ -381,7 +424,7 @@ export default function PlanningOverzicht({
           {!compact && (
           <>
           <select
-            aria-label="Wacht op"
+            aria-label="Toegewezen aan"
             value={e.assignee ?? ''}
             onChange={(ev) => setAssignee(e, ev.target.value || null)}
             className="h-8 max-w-40 px-2 text-[13px] bg-[#FAF8F5] border border-[#DDD8D2] rounded-full focus:outline-none focus:border-[#1C1B19]"
@@ -391,7 +434,7 @@ export default function PlanningOverzicht({
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
-          <span className={`w-24 text-right text-[13px] shrink-0 ${date.className}`}>{date.text}</span>
+          {dateButton(e, date, 'w-24 text-right text-[13px] shrink-0')}
           </>
           )}
         </div>
@@ -415,7 +458,7 @@ export default function PlanningOverzicht({
             />
             {compact && (
               <select
-                aria-label="Wacht op"
+                aria-label="Toegewezen aan"
                 value={e.assignee ?? ''}
                 onChange={(ev) => setAssignee(e, ev.target.value || null)}
                 className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
@@ -463,12 +506,6 @@ export default function PlanningOverzicht({
     )
   }
 
-  function chip(active: boolean) {
-    return `h-8 px-3 text-[13px] rounded-full border transition-colors ${
-      active ? 'bg-[#1C1B19] text-white border-[#1C1B19]' : 'bg-white text-[#1C1B19] border-[#DDD8D2] hover:border-[#1C1B19]'
-    }`
-  }
-
   const undated = byBucket.get('geen') ?? []
   const undatedGroups = new Map<string, { title: string; entries: PlanningEntry[] }>()
   for (const e of undated) {
@@ -480,25 +517,39 @@ export default function PlanningOverzicht({
 
   return (
     <div className="max-w-7xl space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[#6B6560] mr-1">Wacht op</span>
-        <button type="button" className={chip(person === PERSON_ALL)} onClick={() => setPerson(PERSON_ALL)}>Iedereen</button>
-        {names.map((n) => (
-          <button key={n} type="button" className={chip(person === n)} onClick={() => setPerson(n)}>{n}</button>
-        ))}
-        <button type="button" className={chip(person === PERSON_NONE)} onClick={() => setPerson(PERSON_NONE)}>Niemand</button>
-        <span className="hidden sm:block w-px h-6 bg-[#DDD8D2] mx-1" />
-        <select
-          aria-label="Project"
-          value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          className="h-8 max-w-64 px-2 text-[13px] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
-        >
-          <option value="">Alle projecten</option>
-          {sortedProjects.map((p) => (
-            <option key={p.id} value={p.id}>{projectName(p)}</option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-end gap-2">
+        <Button size="sm" onClick={() => setAdding(true)}>
+          <Plus size={13} />
+          Taak
+        </Button>
+        <span className="hidden sm:block w-px h-6 bg-[#DDD8D2] mx-1 mb-1" />
+        <label className="flex flex-col gap-1 text-xs text-[#6B6560]">
+          Toegewezen aan
+          <select
+            value={person}
+            onChange={(e) => setPerson(e.target.value)}
+            className="h-8 w-44 px-2 text-[13px] text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+          >
+            <option value={PERSON_ALL}>Iedereen</option>
+            {names.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+            <option value={PERSON_NONE}>Niemand</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-[#6B6560]">
+          Project
+          <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="h-8 w-64 max-w-full px-2 text-[13px] text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
+          >
+            <option value="">Alle</option>
+            {sortedProjects.map((p) => (
+              <option key={p.id} value={p.id}>{projectName(p)}</option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           aria-pressed={onlyPrio}
@@ -509,10 +560,6 @@ export default function PlanningOverzicht({
         >
           ! Alleen prio
         </button>
-        <Button size="sm" className="ml-auto" onClick={() => setAdding(true)}>
-          <Plus size={13} />
-          Taak
-        </Button>
       </div>
 
       {adding && (
@@ -541,7 +588,7 @@ export default function PlanningOverzicht({
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-9" />
           </label>
           <label className="flex-[1_1_150px] flex flex-col gap-1 text-xs text-[#6B6560]">
-            Wacht op
+            Toegewezen aan
             <select
               value={newAssignee}
               onChange={(e) => setNewAssignee(e.target.value)}

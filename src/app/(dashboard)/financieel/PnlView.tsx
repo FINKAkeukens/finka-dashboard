@@ -2,11 +2,15 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatPrice } from '@/lib/appliance-utils'
 import { selectOnFocus } from '@/lib/utils'
 
 export interface ProjectFigures {
+  // Onderdelen op het Financieel-tabblad die op "Betaald" staan; null =
+  // project zonder onderdelen daar.
+  betaald: { betaald: number; totaal: number } | null
   quoteId: string
   projectId: string
   reference: string
@@ -146,35 +150,51 @@ export default function PnlView({
                         {formatPrice(monthEntry.total.omzetExclBtw)} omzet · {formatPrice(monthEntry.total.margeExclBtw)} marge begroot ({margePercentage(monthEntry.total)}%) · {formatPrice(monthEntry.total.margeWerkelijk)} werkelijk · {monthEntry.total.aantal} projecten
                       </span>
                     </div>
-                    <table className="w-full text-sm">
+                    {/* Vaste kolombreedtes (table-fixed + colgroup), zodat de
+                        kolommen in elke maand precies onder elkaar staan; de
+                        projectkolom (met de klant eronder) krijgt de rest. */}
+                    <div className="overflow-x-auto">
+                    <table className="w-full table-fixed text-sm min-w-[720px]">
+                      <colgroup>
+                        <col />
+                        <col className="w-[96px]" />
+                        <col className="w-[124px]" />
+                        <col className="w-[124px]" />
+                        <col className="w-[124px]" />
+                        <col className="w-[132px]" />
+                      </colgroup>
                       <thead>
                         <tr className="border-b border-[#DDD8D2]">
-                          <th className="text-left px-5 py-2 text-xs font-medium text-[#6B6560]">Project</th>
-                          <th className="text-left px-5 py-2 text-xs font-medium text-[#6B6560]">Klant</th>
-                          <th className="text-left px-5 py-2 text-xs font-medium text-[#6B6560] w-28">Akkoord op</th>
-                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Omzet (excl. btw)</th>
-                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Marge begroot</th>
-                          <th className="text-right px-5 py-2 text-xs font-medium text-[#6B6560] w-32">Marge werkelijk</th>
+                          <th className="text-left pl-5 pr-3 py-2 text-xs font-medium text-[#6B6560]">Project / klant</th>
+                          <th className="text-left px-3 py-2 text-xs font-medium text-[#6B6560]">Akkoord op</th>
+                          <th className="text-right px-3 py-2 text-xs font-medium text-[#6B6560]">Omzet (excl. btw)</th>
+                          <th className="text-right px-3 py-2 text-xs font-medium text-[#6B6560]">Marge begroot</th>
+                          <th className="text-right px-3 py-2 text-xs font-medium text-[#6B6560]">Marge werkelijk</th>
+                          <th className="text-left pl-3 pr-5 py-2 text-xs font-medium text-[#6B6560]">Betaald</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#DDD8D2]">
                         {monthEntry.projects.map((p) => (
                           <tr key={p.quoteId}>
-                            <td className="px-5 py-2.5">
+                            <td className="pl-5 pr-3 py-2.5">
                               <Link href={`/projecten/${p.projectId}`} className="text-[#1C1B19] hover:underline font-medium">
                                 {p.title}
                               </Link>
+                              <span className="block text-[13px] text-[#6B6560]">{p.customerName}</span>
                               <span className="block text-xs text-[#9A948D] font-mono">{p.reference}</span>
                             </td>
-                            <td className="px-5 py-2.5 text-[#6B6560]">{p.customerName}</td>
-                            <td className="px-5 py-2.5 text-[#6B6560]">{p.dateLabel}</td>
-                            <td className="px-5 py-2.5 text-right text-[#1C1B19]">{formatPrice(p.omzetExclBtw)}</td>
-                            <td className="px-5 py-2.5 text-right text-[#6B6560]">{formatPrice(p.margeExclBtw)}</td>
-                            <td className="px-5 py-2.5 text-right font-medium text-[#1C1B19]">{formatPrice(p.margeWerkelijk)}</td>
+                            <td className="px-3 py-2.5 text-[#6B6560]">{p.dateLabel}</td>
+                            <td className="px-3 py-2.5 text-right text-[#1C1B19] whitespace-nowrap">{formatPrice(p.omzetExclBtw)}</td>
+                            <td className="px-3 py-2.5 text-right text-[#6B6560] whitespace-nowrap">{formatPrice(p.margeExclBtw)}</td>
+                            <td className="px-3 py-2.5 text-right font-medium text-[#1C1B19] whitespace-nowrap">{formatPrice(p.margeWerkelijk)}</td>
+                            <td className="pl-3 pr-5 py-2.5">
+                              <BetaaldStatus projectId={p.projectId} betaald={p.betaald} />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 ))}
 
@@ -242,5 +262,24 @@ function Row({ label, value, muted, bold, border, accent }: { label: string; val
       <span className={bold ? 'font-medium text-[#1C1B19]' : 'text-[#6B6560]'}>{label}</span>
       <span className={`tabular-nums ${bold ? 'font-semibold' : ''} ${accent ? 'text-[#8A6A2E] text-base' : muted ? 'text-[#6B6560]' : 'text-[#1C1B19]'}`}>{value}</span>
     </div>
+  )
+}
+
+// Staan alle onderdelen op het Financieel-tabblad van het project op
+// "Betaald"? Groen vinkje als alles betaald is, anders hoeveel er nog open
+// staan; klikt door naar dat tabblad.
+function BetaaldStatus({ projectId, betaald }: { projectId: string; betaald: ProjectFigures['betaald'] }) {
+  if (!betaald || betaald.totaal === 0) return <span className="text-xs text-[#9A948D]">—</span>
+  const open = betaald.totaal - betaald.betaald
+  return (
+    <Link
+      href={`/projecten/${projectId}?tab=financieel`}
+      title={`${betaald.betaald} van ${betaald.totaal} onderdelen betaald`}
+      className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 whitespace-nowrap hover:underline ${
+        open === 0 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+      }`}
+    >
+      {open === 0 ? <><Check size={13} /> Betaald</> : <>{open} van {betaald.totaal} open</>}
+    </Link>
   )
 }

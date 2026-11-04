@@ -1,4 +1,4 @@
-import { differenceInCalendarDays } from 'date-fns'
+import { addWeeks, differenceInCalendarDays, endOfWeek } from 'date-fns'
 import { ChecklistItem, ChecklistTemplateItem, MilestoneStatus, ProjectMilestone } from './types'
 import { checklistItemLabel } from './checklist'
 import { buildSteps, stepDate } from './draaiboek'
@@ -38,18 +38,19 @@ export interface PlanningEntry {
   milestoneStatus: MilestoneStatus | null
 }
 
-export type PlanningBucket = 'prio' | 'laat' | 'vandaag' | 'week' | 'later' | 'geen'
+export type PlanningBucket = 'prio' | 'laat' | 'vandaag' | 'week' | 'volgende' | 'later' | 'geen'
 
 export const BUCKET_TITLES: Record<PlanningBucket, string> = {
   prio: 'Prio',
   laat: 'Te laat',
   vandaag: 'Vandaag en morgen',
   week: 'Deze week',
+  volgende: 'Volgende week',
   later: 'Later',
   geen: 'Zonder datum',
 }
 
-export const BUCKET_ORDER: PlanningBucket[] = ['prio', 'laat', 'vandaag', 'week', 'later', 'geen']
+export const BUCKET_ORDER: PlanningBucket[] = ['prio', 'laat', 'vandaag', 'week', 'volgende', 'later', 'geen']
 
 export function entryBucket(entry: PlanningEntry, today: Date): PlanningBucket {
   if (entry.priority) return 'prio'
@@ -63,7 +64,11 @@ export function dateBucket(entry: PlanningEntry, today: Date): Exclude<PlanningB
   const days = differenceInCalendarDays(new Date(entry.date), today)
   if (days < 0) return 'laat'
   if (days <= 1) return 'vandaag'
-  if (days <= 7) return 'week'
+  // Weken lopen van maandag t/m zondag: "deze week" eindigt zondag,
+  // "volgende week" is de maandag erna t/m die zondag.
+  const sunday = endOfWeek(today, { weekStartsOn: 1 })
+  if (days <= differenceInCalendarDays(sunday, today)) return 'week'
+  if (days <= differenceInCalendarDays(addWeeks(sunday, 1), today)) return 'volgende'
   return 'later'
 }
 

@@ -4,15 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { SampleModel, Supplier } from '@/lib/types'
-import { sampleMaterialOptions } from '@/lib/samples'
+import { normalizeSampleSettings } from '@/lib/samples'
 import NewSampleForm from './NewSampleForm'
 
 export default async function NieuweSamplePage() {
   const supabase = await createClient()
-  const [{ data: suppliers }, { data: models }, { data: usedMaterials }] = await Promise.all([
+  const [{ data: suppliers }, { data: models }, { data: settingsRow }] = await Promise.all([
     supabase.from('finka_suppliers').select('*').order('name', { ascending: true }),
     supabase.from('finka_sample_models').select('*').order('name', { ascending: true }),
-    supabase.from('finka_samples').select('material').not('material', 'is', null),
+    supabase.from('finka_sample_settings').select('*').maybeSingle(),
   ])
 
   return (
@@ -23,7 +23,7 @@ export default async function NieuweSamplePage() {
       </Link>
       <h1 className="text-2xl font-semibold text-[#1C1B19] mb-6">Nieuwe sample</h1>
       <NewSampleForm suppliers={(suppliers ?? []) as Supplier[]} models={(models ?? []) as SampleModel[]}
-        materials={sampleMaterialOptions((usedMaterials ?? []).map((r) => r.material))}
+        settings={normalizeSampleSettings(settingsRow)}
       />
     </div>
   )

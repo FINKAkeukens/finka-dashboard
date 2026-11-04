@@ -6,18 +6,19 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Sample, SampleModel, Supplier } from '@/lib/types'
 import { Edit, Trash2 } from 'lucide-react'
-import SampleFields, { readSampleForm, uploadSamplePhoto } from '../SampleFields'
+import { SampleSettings } from '@/lib/samples'
+import SampleFields, { readSampleForm, rememberMaterial, uploadSamplePhoto } from '../SampleFields'
 
 export default function EditSampleForm({
   sample,
   suppliers,
   models,
-  materials,
+  settings,
 }: {
   sample: Sample
   suppliers: Supplier[]
   models: SampleModel[]
-  materials: string[]
+  settings: SampleSettings
 }) {
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -43,12 +44,14 @@ export default function EditSampleForm({
       photo = { photo_url: result.url, storage_path: result.path }
     }
 
+    const fields = readSampleForm(form, settings)
     const { error } = await supabase
       .from('finka_samples')
-      .update({ ...readSampleForm(form), ...photo, updated_at: new Date().toISOString() })
+      .update({ ...fields, ...photo, updated_at: new Date().toISOString() })
       .eq('id', sample.id)
 
     if (error) { setError(error.message); setLoading(false); return }
+    await rememberMaterial(supabase, settings, fields.material)
     // Oude foto pas opruimen als de nieuwe goed is opgeslagen.
     if (photo && sample.storage_path) await supabase.storage.from('offer-images').remove([sample.storage_path])
     setLoading(false)
@@ -90,7 +93,7 @@ export default function EditSampleForm({
   return (
     <form onSubmit={handleSave} className="bg-white rounded-xl border border-[#DDD8D2] p-6 space-y-4">
       <h2 className="text-sm font-medium text-[#1C1B19] mb-4">Sample bewerken</h2>
-      <SampleFields sample={sample} suppliers={suppliers} models={models} materials={materials} />
+      <SampleFields sample={sample} suppliers={suppliers} models={models} settings={settings} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2 pt-1">
         <Button type="submit" size="sm" disabled={loading}>{loading ? 'Opslaan...' : 'Opslaan'}</Button>

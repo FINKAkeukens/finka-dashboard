@@ -2681,3 +2681,59 @@ ALTER TABLE finka_euroline_rates
 ALTER TABLE finka_werkblad_rates
   ADD COLUMN IF NOT EXISTS cutout_list JSONB NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS service_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- =========================================================
+-- 99. Sample instellingen: namen van velden en eigen keuzelijsten.
+--
+--    finka_sample_settings: één rij (id = 1) met
+--    - labels / placeholders: eigen naam en voorbeeldtekst per veld van het
+--      sampleformulier ({ veldsleutel: tekst }); ontbreekt = standaard.
+--    - categories: [{ key, label }] voor "Soort"; sizes / materials: lijsten
+--      met tekst. NULL = de standaardlijst uit de code.
+--    - veneer_material: materiaal waarbij het veld Uitvoering verschijnt.
+--    De vaste CHECKs op soort en maat vervallen, zodat eigen soorten en
+--    maten opgeslagen kunnen worden. Materialen worden gevuld met de vaste
+--    lijst plus wat al via "Anders" bij samples is ingevuld.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_sample_settings (
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  labels JSONB NOT NULL DEFAULT '{}'::jsonb,
+  placeholders JSONB NOT NULL DEFAULT '{}'::jsonb,
+  categories JSONB,
+  sizes JSONB,
+  materials JSONB,
+  veneer_material TEXT DEFAULT 'Fineer',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_sample_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_sample_settings;
+CREATE POLICY "Staff only" ON finka_sample_settings FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_sample_settings TO authenticated, service_role;
+
+INSERT INTO finka_sample_settings (id, materials)
+SELECT 1, jsonb_agg(m ORDER BY ord, m)
+FROM (
+  SELECT m, ord FROM unnest(ARRAY['Fineer', 'Houtlook', 'Lak', 'Hoogglanslak', 'Glas']) WITH ORDINALITY AS t(m, ord)
+  UNION
+  SELECT DISTINCT trim(material), 1000
+  FROM finka_samples
+  WHERE trim(coalesce(material, '')) <> ''
+    AND lower(trim(material)) NOT IN ('fineer', 'houtlook', 'lak', 'hoogglanslak', 'glas')
+) x
+ON CONFLICT (id) DO NOTHING;
+
+DO $$
+DECLARE c record;
+BEGIN
+  FOR c IN
+    SELECT conrelid::regclass AS tbl, conname
+    FROM pg_constraint
+    WHERE contype = 'c'
+      AND conrelid IN ('finka_samples'::regclass, 'finka_sample_models'::regclass)
+      AND (pg_get_constraintdef(oid) ILIKE '%category%' OR pg_get_constraintdef(oid) ILIKE '%size%')
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', c.tbl, c.conname);
+  END LOOP;
+END $$;
