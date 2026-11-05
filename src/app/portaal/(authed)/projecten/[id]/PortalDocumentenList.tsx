@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle2, FileText } from 'lucide-react'
+import { CheckCircle2, Download, FileText } from 'lucide-react'
 
 // Documenten die staff zichtbaar heeft gemaakt (zie het oogje op het
 // Documenten-tabblad). Zowel automatisch bewaarde offerte-PDF's als zelf
@@ -14,6 +14,7 @@ export interface PortalDocumentRow {
   id: string
   name: string
   url: string
+  downloadUrl: string
   date: string
   approval_required: boolean
   approved_at: string | null
@@ -25,6 +26,7 @@ export interface PortalStandardDocumentRow {
   id: string
   name: string
   url: string
+  downloadUrl: string
 }
 
 export default function PortalDocumentenList({
@@ -78,17 +80,21 @@ export default function PortalDocumentenList({
         ) : (
           <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
             {documents.map((d) => (
-              <div key={`${d.kind}-${d.id}`} className="flex items-center gap-2.5 px-5 py-3 text-sm">
-                <FileText size={14} className="text-[#6B6560] shrink-0" />
-                <a
-                  href={d.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 truncate text-[#1C1B19] hover:underline"
-                >
-                  {d.name}
-                </a>
-                <span className="text-xs text-[#9A948D] shrink-0">
+              // Op mobiel staat de naam op een eigen regel, datum/akkoord/
+              // download eronder — anders bleef er van de naam alleen "O…" over.
+              <div key={`${d.kind}-${d.id}`} className="flex flex-wrap sm:flex-nowrap items-center gap-x-2.5 gap-y-2 px-5 py-3 text-sm">
+                <div className="flex items-center gap-2.5 min-w-0 basis-full sm:basis-auto sm:flex-1">
+                  <FileText size={14} className="text-[#6B6560] shrink-0" />
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 truncate text-[#1C1B19] hover:underline"
+                  >
+                    {d.name}
+                  </a>
+                </div>
+                <span className="text-xs text-[#9A948D] shrink-0 pl-6 sm:pl-0">
                   {new Date(d.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
                 {d.approval_required && (
@@ -107,6 +113,9 @@ export default function PortalDocumentenList({
                     </button>
                   )
                 )}
+                <div className="ml-auto sm:ml-0">
+                  <DownloadLink href={d.downloadUrl} />
+                </div>
               </div>
             ))}
           </div>
@@ -128,11 +137,28 @@ export default function PortalDocumentenList({
                 >
                   {d.name}
                 </a>
+                <DownloadLink href={d.downloadUrl} />
               </div>
             ))}
           </div>
         </section>
       )}
     </div>
+  )
+}
+
+// Openen (klik op de naam) toont de PDF in de browser; deze knop slaat hem op
+// onder zijn eigen naam. Op mobiel alleen het icoon, anders past de rij niet.
+function DownloadLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      aria-label="Downloaden"
+      title="Downloaden"
+      className="flex items-center gap-1 text-xs px-2.5 sm:px-3 py-1.5 rounded-full border border-[#DDD8D2] text-[#1C1B19] hover:border-[#C9A96E] transition-colors shrink-0"
+    >
+      <Download size={12} />
+      <span className="hidden sm:inline">Downloaden</span>
+    </a>
   )
 }
