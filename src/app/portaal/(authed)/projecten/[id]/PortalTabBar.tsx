@@ -19,9 +19,13 @@ export default function PortalTabBar({
   // leeg tabblad met "er staat nog niets klaar" is voor de klant alleen maar
   // verwarrend. Daarna blijft 'ie staan tot staff het formulier verwijdert.
   hasMaatformulier,
+  // Keuzemodule (feedback per kast) staat aan voor dit project: eigen, brede
+  // pagina onder /ontwerp in plaats van een ?tab=.
+  hasOntwerp = false,
 }: {
   activeTab: string
   hasMaatformulier: boolean
+  hasOntwerp?: boolean
 }) {
   const pathname = usePathname()
   const visibleTabs = tabs.filter((tab) => tab.id !== 'maatformulier' || hasMaatformulier)
@@ -32,6 +36,14 @@ export default function PortalTabBar({
     // grijze basislijn is een inset-schaduw i.p.v. een border, omdat een
     // -mb-px-onderlijn binnen overflow-x-auto weggeknipt zou worden.
     <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shadow-[inset_0_-1px_0_#DDD8D2] mb-6">
+      {hasOntwerp && (
+        <Link
+          href={`${pathname}/ontwerp`}
+          className="shrink-0 px-1.5 min-[400px]:px-2.5 sm:px-4 py-2.5 text-[13px] sm:text-sm font-medium border-b-2 border-transparent whitespace-nowrap text-[#2F5D50] hover:text-[#1C1B19] transition-colors"
+        >
+          Jouw ontwerp
+        </Link>
+      )}
       {visibleTabs.map((tab) => (
         <Link
           key={tab.id}

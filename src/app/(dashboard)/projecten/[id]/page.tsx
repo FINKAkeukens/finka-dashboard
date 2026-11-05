@@ -21,6 +21,7 @@ import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
+import KeuzemoduleTab from './keuzemodule/KeuzemoduleTab'
 import { ProjectTimeSummary } from '@/components/ProjectTimer'
 import { Appliance, Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
 import { leadTimeDays, RETIRED_MILESTONE_KEY } from '@/lib/planning'
@@ -442,6 +443,8 @@ export default async function ProjectDetailPage({
           vooraanzichtUrls={vooraanzichtUrls}
           defaultTexts={aansluitschemaDefaultTexts}
         />
+      ) : tab === 'keuzemodule' ? (
+        <KeuzemoduleTab projectId={id} customerId={(project as Project).customer_id} actief={!!(project as Project).keuzemodule_actief} />
       ) : tab === 'notities' ? (
         <NotesPanel projectId={id} />
       ) : tab === 'documenten' ? (

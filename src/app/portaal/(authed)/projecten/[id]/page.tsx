@@ -186,7 +186,7 @@ export default async function PortalProjectPage({
         </div>
       )}
 
-      <PortalTabBar activeTab={tab} hasMaatformulier={hasMaatformulier} />
+      <PortalTabBar activeTab={tab} hasMaatformulier={hasMaatformulier} hasOntwerp={!!(project as Project).keuzemodule_actief} />
 
       {tab === 'checklist' ? (
         <div className="space-y-4">

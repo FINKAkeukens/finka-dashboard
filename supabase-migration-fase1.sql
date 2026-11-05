@@ -2771,3 +2771,124 @@ CREATE TABLE IF NOT EXISTS finka_google_calendar_token (
 ALTER TABLE finka_google_calendar_token ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE finka_google_calendar_token FROM anon, authenticated;
 GRANT ALL ON TABLE finka_google_calendar_token TO service_role;
+
+-- =========================================================
+-- 100. Keuzemodule klantportaal: feedback per kast.
+--
+--    finka_catalogi / finka_catalogus_items: de ingelezen Sachsenküchen-
+--    catalogus (SK130). Eén catalogus is actief; "Catalogus vernieuwen"
+--    (Instellingen → Catalogus) leest een nieuwe PDF in en maakt die actief.
+--    Items per soort: corpus, werkblad, greep, model, kast (prijzen = 8
+--    prijsgroepen), accessoire (prijzen = één prijs). Prijzen in brutopunten.
+--    Staalafbeeldingen staan in de publieke bucket 'catalogus'.
+--
+--    finka_projects.keuzemodule_actief: alleen projecten waar dit aan staat
+--    tonen de module in het klantportaal.
+--
+--    finka_keuzemodule: instellingen per project (voorstel uit Winner Flex,
+--    prijsgroep, plattegrond, huidige ronde).
+--    finka_keuzemodule_kasten: de kasten per project (positie, code, soort,
+--    pin op de plattegrond, wat al inbegrepen is).
+--    finka_keuzemodule_feedback: de keuzes van de klant per ronde; 'concept'
+--    tot de klant op "Feedback insturen" drukt.
+--    Alles staff-only; het portaal leest en schrijft via API-routes met de
+--    service-role (zelfde model als de rest van het portaal).
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_catalogi (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  titel TEXT NOT NULL,
+  bestandsnaam TEXT,
+  actief BOOLEAN NOT NULL DEFAULT false,
+  aantallen JSONB NOT NULL DEFAULT '{}'::jsonb,
+  waarschuwingen JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ingelezen_door TEXT,
+  ingelezen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS finka_catalogi_een_actief ON finka_catalogi (actief) WHERE actief;
+
+CREATE TABLE IF NOT EXISTS finka_catalogus_items (
+  id BIGSERIAL PRIMARY KEY,
+  catalogus_id UUID NOT NULL REFERENCES finka_catalogi(id) ON DELETE CASCADE,
+  soort TEXT NOT NULL CHECK (soort IN ('corpus', 'werkblad', 'greep', 'model', 'kast', 'accessoire')),
+  code TEXT NOT NULL,
+  naam TEXT,
+  prijzen JSONB,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  afbeelding_url TEXT
+);
+CREATE INDEX IF NOT EXISTS finka_catalogus_items_lookup ON finka_catalogus_items (catalogus_id, soort, code);
+
+ALTER TABLE finka_projects ADD COLUMN IF NOT EXISTS keuzemodule_actief BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS finka_keuzemodule (
+  project_id UUID PRIMARY KEY REFERENCES finka_projects(id) ON DELETE CASCADE,
+  bron_url TEXT,
+  bron_naam TEXT,
+  model TEXT,
+  prijsgroep INT CHECK (prijsgroep BETWEEN 1 AND 8),
+  voorstel JSONB NOT NULL DEFAULT '{}'::jsonb,
+  plattegrond_url TEXT,
+  ronde INT NOT NULL DEFAULT 1,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS finka_keuzemodule_kasten (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  positie TEXT NOT NULL,
+  code TEXT NOT NULL,
+  omschrijving TEXT,
+  soort TEXT NOT NULL DEFAULT 'overig' CHECK (soort IN ('lade', 'hoog', 'spoel', 'afval', 'apparaat', 'wand', 'overig')),
+  breedte INT,
+  wand TEXT,
+  pin_x REAL,
+  pin_y REAL,
+  inbegrepen TEXT[] NOT NULL DEFAULT '{}',
+  -- Overige gegevens per kast, bv. het voorgestelde apparaat bij een apparaatkast.
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  zichtbaar BOOLEAN NOT NULL DEFAULT true,
+  volgorde INT NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS finka_keuzemodule_kasten_project ON finka_keuzemodule_kasten (project_id, volgorde);
+
+CREATE TABLE IF NOT EXISTS finka_keuzemodule_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  ronde INT NOT NULL DEFAULT 1,
+  keuzes JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'concept' CHECK (status IN ('concept', 'ingestuurd')),
+  ingestuurd_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, ronde)
+);
+
+DO $$
+DECLARE t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['finka_catalogi', 'finka_catalogus_items', 'finka_keuzemodule', 'finka_keuzemodule_kasten', 'finka_keuzemodule_feedback']
+  LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS "Staff only" ON %I', t);
+    EXECUTE format('CREATE POLICY "Staff only" ON %I FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff())', t);
+    EXECUTE format('GRANT ALL ON TABLE %I TO authenticated, service_role', t);
+  END LOOP;
+END $$;
+GRANT USAGE, SELECT ON SEQUENCE finka_catalogus_items_id_seq TO authenticated, service_role;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('catalogus', 'catalogus', true, 5242880)
+ON CONFLICT (id) DO UPDATE SET public = true;
+DROP POLICY IF EXISTS "Staff kan catalogus uploaden" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan catalogus bijwerken" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan catalogus verwijderen" ON storage.objects;
+DROP POLICY IF EXISTS "Staff kan catalogus lezen" ON storage.objects;
+CREATE POLICY "Staff kan catalogus lezen" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'catalogus' AND is_staff());
+CREATE POLICY "Staff kan catalogus uploaden" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'catalogus' AND is_staff());
+CREATE POLICY "Staff kan catalogus bijwerken" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'catalogus' AND is_staff());
+CREATE POLICY "Staff kan catalogus verwijderen" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'catalogus' AND is_staff());
+
+-- Melding op het project als de klant in de keuzemodule iets doet.
+ALTER TABLE finka_portal_activity DROP CONSTRAINT IF EXISTS finka_portal_activity_type_check;
+ALTER TABLE finka_portal_activity ADD CONSTRAINT finka_portal_activity_type_check
+  CHECK (type IN ('vragenlijst','document_akkoord','maatformulier','keuzemodule'));
