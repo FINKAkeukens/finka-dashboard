@@ -9,6 +9,7 @@
 import type { PdfPage, PdfText } from '../catalogus/parse'
 import {
   type KastSoort,
+  type Uitvoering,
   extrasVoor,
   apparaatLabel,
   breedteVanCode,
@@ -32,6 +33,8 @@ export interface WinnerKast {
   naam: string
   omschrijving: string
   inbegrepen: string[]
+  // Houtuitvoering van de inzetten die al in het ontwerp zitten (…-6ES → ES).
+  uitvoering: Uitvoering | null
   // Bij apparaatkasten: wat voor apparaat erin komt.
   apparaat: string | null
 }
@@ -170,6 +173,9 @@ export function parseWinnerFlex(pages: PdfPage[]): WinnerUitdraai {
       naam: kastNaam(p.code, soort, breedte),
       omschrijving: kastOmschrijving(p.code, soort, [...p.regels.slice(1), ...(subsPer.get(p.positie) ?? []).flatMap((s) => s.regels)]),
       inbegrepen,
+      uitvoering: (subsPer.get(p.positie) ?? [])
+        .map((s) => s.code.match(/-\d?(EN|ES|QG)$/)?.[1] as Uitvoering | undefined)
+        .find((u) => !!u) ?? null,
       apparaat: soort === 'apparaat' ? apparaatLabel(p.code, p.regels) : null,
     })
   }

@@ -5,11 +5,12 @@
 import { GROEPEN, KEUKEN_RIJEN, UITVOERINGEN, splitLadeCode, type Uitvoering } from './klantlaag'
 import type { KastKeuze, Keuzes, Pakket, PakketExtra, PakketKast, Wijziging } from './types'
 
-// Houtuitvoering van een extra: de keuze voor deze kast als het artikel daarin
-// bestaat, anders de eerste (eiken naturel).
-export function uitvoeringVan(e: PakketExtra, x: KastKeuze): Uitvoering | null {
+// Houtuitvoering van een extra: de keuze van de klant, anders die van het
+// ontwerp, als het artikel daarin bestaat; anders de eerste (eiken naturel).
+export function uitvoeringVan(e: PakketExtra, x: KastKeuze, ontwerp: Uitvoering | null = null): Uitvoering | null {
   if (!e.uitvoeringen?.length) return null
-  return x.uitvoering && e.uitvoeringen.includes(x.uitvoering) ? x.uitvoering : e.uitvoeringen[0]
+  const wens = x.uitvoering ?? ontwerp
+  return wens && e.uitvoeringen.includes(wens) ? wens : e.uitvoeringen[0]
 }
 
 export function kastGewijzigd(k: PakketKast, keuzes: Keuzes): boolean {
@@ -46,7 +47,7 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
     }
     for (const e of k.extras) {
       if (!x.extras?.[e.key] || e.inOntwerp) continue
-      const u = uitvoeringVan(e, x)
+      const u = uitvoeringVan(e, x, k.uitvoering)
       // Bij een één-keuzegroep (bestekindeling) vervangt de keuze wat al in
       // het ontwerp zit: alleen het verschil telt.
       const vervangt = GROEPEN.find((g) => g.key === e.groep)?.keuze === 'een'

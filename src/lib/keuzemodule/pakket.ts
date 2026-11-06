@@ -10,6 +10,7 @@ import {
   splitLadeCode,
   type ExtraDef,
   type KastSoort,
+  type Uitvoering,
 } from './klantlaag'
 import type { Pakket, PakketExtra, PakketGreep, PakketKast, PakketWerkblad } from './types'
 import type { Plattegrond, Vak } from './plattegrond'
@@ -54,7 +55,7 @@ export interface KeuzemoduleKast {
   wand: string | null
   vak: Vak | null
   inbegrepen: string[]
-  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string }
+  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; uitvoering?: Uitvoering }
   zichtbaar: boolean
   volgorde: number
 }
@@ -178,6 +179,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
       inbegrepen: defs.filter((d) => k.inbegrepen.includes(d.key)).map((d) => ({ key: d.key, label: d.label })),
       apparaat: k.data?.apparaat ?? null,
       apparaatVoorstel: k.data?.apparaat_voorstel ?? null,
+      uitvoering: k.data?.uitvoering ?? null,
     }
   })
 

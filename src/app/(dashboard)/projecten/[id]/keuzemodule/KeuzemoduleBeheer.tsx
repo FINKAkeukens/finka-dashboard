@@ -119,7 +119,7 @@ export default function KeuzemoduleBeheer({
           wand: oud?.wand ?? null,
           vak: tekening ? tekening.vakken[k.positie] ?? null : oud?.vak ?? null,
           inbegrepen: k.inbegrepen,
-          data: { ...oud?.data, naam: oud?.code === k.code && oud.data?.naam ? oud.data.naam : k.naam, apparaat: k.apparaat ?? undefined },
+          data: { ...oud?.data, naam: oud?.code === k.code && oud.data?.naam ? oud.data.naam : k.naam, apparaat: k.apparaat ?? undefined, uitvoering: k.uitvoering ?? undefined },
           zichtbaar: oud?.zichtbaar ?? true,
           volgorde: i,
         }

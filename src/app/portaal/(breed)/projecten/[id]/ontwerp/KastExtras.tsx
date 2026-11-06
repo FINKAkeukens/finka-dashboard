@@ -50,7 +50,7 @@ export default function KastExtras({
   // Houtuitvoering: alleen tonen als er iets van hout gekozen is of in het ontwerp zit.
   const houten = k.extras.filter((e) => e.uitvoeringen && (ex[e.key] || e.inOntwerp))
   const beschikbaar = UITVOERINGEN.filter((u) => houten.some((e) => e.uitvoeringen!.includes(u.key)))
-  const huidigeU = houten.length ? uitvoeringVan(houten[0], st) : null
+  const huidigeU = houten.length ? uitvoeringVan(houten[0], st, k.uitvoering) : null
 
   return (
     <div className="flex flex-col gap-2.5">
