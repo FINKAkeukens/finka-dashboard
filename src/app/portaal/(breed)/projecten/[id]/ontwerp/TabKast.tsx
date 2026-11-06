@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import type { Keuzes, KastKeuze, Pakket, PakketKast } from '@/lib/keuzemodule/types'
 import { kastStatus } from '@/lib/keuzemodule/wijzigingen'
 import { STATUS_KEUZES, STATUS_LABELS } from '@/lib/keuzemodule/klantlaag'
 import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
-import { C, STATUS_KLEUR, Chip, Kaart, Vinkje, delta, euro } from './ui'
+import KastExtras from './KastExtras'
+import { C, STATUS_KLEUR, Kaart, delta } from './ui'
 
 const NEUTRAAL = { bg: '#FFFFFF', border: '#8A8780', ink: C.ink }
 
@@ -82,21 +82,10 @@ function KastPaneel({
   onVorige: () => void
   onVolgende: () => void
 }) {
-  const [alleExtras, setAlleExtras] = useState(false)
-  const [cat, setCat] = useState('Alles')
   const st = keuzes.kasten?.[k.id] ?? {}
   const huidig = kastStatus(k, keuzes)
   const voorstel = k.indelingen.find((i) => i.voorstel)
   const gekozenIndeling = st.indeling ?? voorstel?.key
-  const ex = st.extras ?? {}
-  const cats = ['Alles', ...new Set(k.extras.map((e) => e.cat))]
-  const zichtbaar = alleExtras
-    ? k.extras.filter((e) => cat === 'Alles' || e.cat === cat)
-    : (() => {
-        const gekozen = k.extras.filter((e) => ex[e.key])
-        const rest = k.extras.filter((e) => !ex[e.key])
-        return [...gekozen, ...rest].slice(0, Math.max(3, gekozen.length))
-      })()
 
   return (
     <Kaart className="p-6 flex flex-col gap-[22px]">
@@ -210,63 +199,7 @@ function KastPaneel({
         </div>
       )}
 
-      {(k.extras.length > 0 || k.inbegrepen.length > 0) && (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex justify-between items-baseline gap-2">
-            <div className="text-sm font-semibold">{alleExtras ? "Alle extra's voor deze kast" : "Extra's"}</div>
-            {!alleExtras && <div className="text-xs" style={{ color: C.zacht }}>aanbevolen voor deze kast</div>}
-          </div>
-          {k.inbegrepen.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <span className="text-[13px]" style={{ color: C.muted }}>Zit al in je ontwerp:</span>
-              {k.inbegrepen.map((i) => (
-                <span key={i.key} className="text-[13px] font-semibold px-2.5 py-1 rounded-[14px]" style={{ background: C.groenLicht, color: C.groenDonker }}>
-                  ✓ {i.label}
-                </span>
-              ))}
-            </div>
-          )}
-          {alleExtras && cats.length > 2 && (
-            <div role="group" aria-label="Soort extra" className="flex flex-wrap gap-1.5">
-              {cats.map((c) => <Chip key={c} aan={cat === c} onClick={() => setCat(c)}>{c}</Chip>)}
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            {zichtbaar.map((e) => {
-              const aan = !!ex[e.key]
-              return (
-                <button
-                  key={e.key}
-                  type="button"
-                  onClick={() => setKast(k.id, { extras: { ...ex, [e.key]: !aan } })}
-                  aria-pressed={aan}
-                  className="flex items-center gap-3 px-3.5 py-2.5 min-h-14 rounded-xl cursor-pointer text-left"
-                  style={{ background: aan ? C.groenLicht : '#FFFFFF', border: aan ? `2px solid ${C.groen}` : `1px solid ${C.lijnInput}`, color: C.ink }}
-                >
-                  <Vinkje aan={aan} />
-                  <span className="flex flex-col gap-0.5 flex-auto">
-                    <span className="text-sm font-semibold">{e.label}</span>
-                    <span className="text-[13px]" style={{ color: C.muted }}>{e.sub}</span>
-                  </span>
-                  <span className="text-[13px] font-semibold whitespace-nowrap" style={{ color: C.tekst }}>
-                    {e.prijs === null ? 'prijs volgt' : '+' + euro(e.prijs)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-          {k.extras.length > 3 && (
-            <button
-              type="button"
-              onClick={() => { setAlleExtras(!alleExtras); setCat('Alles') }}
-              className="self-start min-h-11 px-4 rounded-full text-sm font-semibold cursor-pointer bg-white"
-              style={{ border: `1px solid ${C.groen}`, color: C.groenDonker }}
-            >
-              {alleExtras ? 'Minder tonen' : `Alle extra's voor deze kast (${k.extras.length})`}
-            </button>
-          )}
-        </div>
-      )}
+      <KastExtras k={k} st={st} setKast={setKast} />
 
       <div className="flex flex-col gap-2">
         <label htmlFor="kast-notitie" className="text-sm font-semibold">Opmerking of vraag over deze kast</label>

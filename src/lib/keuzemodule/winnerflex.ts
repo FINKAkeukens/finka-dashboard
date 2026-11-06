@@ -9,7 +9,7 @@
 import type { PdfPage, PdfText } from '../catalogus/parse'
 import {
   type KastSoort,
-  EXTRAS,
+  extrasVoor,
   apparaatLabel,
   breedteVanCode,
   kastNaam,
@@ -158,7 +158,7 @@ export function parseWinnerFlex(pages: PdfPage[]): WinnerUitdraai {
     const soort = soortVanCode(p.code)
     if (soort === 'overig') continue
     const breedte = breedteVanCode(p.code)
-    const extras = EXTRAS[soort] ?? []
+    const extras = extrasVoor(p.code, soort)
     const inbegrepen = [...new Set(
       (subsPer.get(p.positie) ?? []).flatMap((s) => extras.filter((e) => e.herken?.test(s.code)).map((e) => e.key))
     )]

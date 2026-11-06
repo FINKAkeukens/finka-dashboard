@@ -2,10 +2,11 @@ import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/service'
 import { klantPrijs } from './prijzen'
 import {
-  EXTRAS,
+  extrasVoor,
   VARIANTEN,
   WAND_EXTRAS,
   codeVoorBreedte,
+  metBreedte,
   splitLadeCode,
   type ExtraDef,
   type KastSoort,
@@ -113,9 +114,9 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
     if (lade) for (const v of VARIANTEN) kastCodes.add(lade.basis + v.key)
   }
   const extraPatronen = (defs: ExtraDef[], breedte: number | null) =>
-    defs.flatMap((d) => (d.codes ?? []).map((c) => codeVoorBreedte(c, breedte)).filter((c): c is string => !!c))
+    defs.flatMap((d) => (d.codes ?? []).map((c) => codeVoorBreedte(c, breedte, d.uitvoeringen?.[0])).filter((c): c is string => !!c))
   const accCodes = new Set<string>([
-    ...kasten.flatMap((k) => extraPatronen(EXTRAS[k.soort] ?? [], k.breedte)),
+    ...kasten.flatMap((k) => extraPatronen(extrasVoor(k.code, k.soort), k.breedte)),
     ...extraPatronen(WAND_EXTRAS, null),
   ])
 
@@ -134,18 +135,21 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
   const accPrijs = new Map(((accItems ?? []) as CatItem[]).map((i) => [i.code, i.prijzen as number]))
 
   const extraVan = (d: ExtraDef, breedte: number | null): PakketExtra | null => {
-    if (d.codes === null) return { key: d.key, cat: d.cat, label: d.label, sub: d.sub, prijs: null }
+    if (d.vanaf && (!breedte || breedte < d.vanaf)) return null
+    const basis = { key: d.key, groep: d.groep, label: d.label, sub: d.sub, uitvoeringen: d.uitvoeringen ?? null }
+    if (d.codes === null) return { ...basis, prijs: null, code: null }
     for (const c of d.codes) {
-      const code = codeVoorBreedte(c, breedte)
+      // Alle houtuitvoeringen kosten hetzelfde; prijs opzoeken via de eerste.
+      const code = codeVoorBreedte(c, breedte, d.uitvoeringen?.[0])
       const p = code ? accPrijs.get(code) : undefined
-      if (typeof p === 'number') return { key: d.key, cat: d.cat, label: d.label, sub: d.sub, prijs: klantPrijs(p) }
+      if (typeof p === 'number') return { ...basis, prijs: klantPrijs(p), code: metBreedte(c, breedte) }
     }
     // Niet leverbaar in deze breedte: niet aanbieden.
     return null
   }
 
   const pakketKasten: PakketKast[] = kasten.map((k) => {
-    const defs = EXTRAS[k.soort] ?? []
+    const defs = extrasVoor(k.code, k.soort)
     const extras = defs.map((d) => extraVan(d, k.breedte)).filter((e): e is PakketExtra => !!e)
     const lade = k.soort === 'lade' ? splitLadeCode(k.code) : null
     let indelingen: PakketKast['indelingen'] = []
@@ -170,7 +174,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
       wand: k.wand,
       vak: k.vak,
       indelingen,
-      extras: extras.filter((e) => !k.inbegrepen.includes(e.key)),
+      extras: extras.map((e) => (k.inbegrepen.includes(e.key) ? { ...e, inOntwerp: true } : e)),
       inbegrepen: defs.filter((d) => k.inbegrepen.includes(d.key)).map((d) => ({ key: d.key, label: d.label })),
       apparaat: k.data?.apparaat ?? null,
       apparaatVoorstel: k.data?.apparaat_voorstel ?? null,

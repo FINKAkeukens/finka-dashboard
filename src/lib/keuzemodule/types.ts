@@ -3,7 +3,7 @@
 // wat de klant voor dít project mag zien, met klantprijzen (indicatie incl.
 // btw) — nooit brutopunten of de rest van de catalogus.
 
-import type { KastSoort, KastStatus } from './klantlaag'
+import type { KastSoort, KastStatus, Uitvoering } from './klantlaag'
 import type { Plattegrond, Vak } from './plattegrond'
 
 export interface PakketIndeling {
@@ -17,10 +17,15 @@ export interface PakketIndeling {
 
 export interface PakketExtra {
   key: string
-  cat: string
+  groep: string
   label: string
   sub: string
   prijs: number | null
+  // Sachsen-bestelnummer voor de ontwerper; {u} = gekozen houtuitvoering.
+  code: string | null
+  uitvoeringen: Uitvoering[] | null
+  // Zit al in het ontwerp (subpositie in Winner Flex).
+  inOntwerp?: boolean
 }
 
 export interface PakketKast {
@@ -85,6 +90,8 @@ export interface KastKeuze {
   status?: KastStatus
   indeling?: string
   extras?: Record<string, boolean>
+  // Houtuitvoering voor alle houten inzetten in deze kast.
+  uitvoering?: Uitvoering
   push?: boolean
   note?: string
 }

@@ -2,14 +2,21 @@
 // door het portaal ("Wijzigingen"-tabblad) en het dashboard (feedback-
 // overzicht met codes voor Winner Flex), zodat beide precies hetzelfde tonen.
 
-import { KEUKEN_RIJEN, splitLadeCode } from './klantlaag'
-import type { Keuzes, Pakket, PakketKast, Wijziging } from './types'
+import { GROEPEN, KEUKEN_RIJEN, UITVOERINGEN, splitLadeCode, type Uitvoering } from './klantlaag'
+import type { KastKeuze, Keuzes, Pakket, PakketExtra, PakketKast, Wijziging } from './types'
+
+// Houtuitvoering van een extra: de keuze voor deze kast als het artikel daarin
+// bestaat, anders de eerste (eiken naturel).
+export function uitvoeringVan(e: PakketExtra, x: KastKeuze): Uitvoering | null {
+  if (!e.uitvoeringen?.length) return null
+  return x.uitvoering && e.uitvoeringen.includes(x.uitvoering) ? x.uitvoering : e.uitvoeringen[0]
+}
 
 export function kastGewijzigd(k: PakketKast, keuzes: Keuzes): boolean {
   const x = keuzes.kasten?.[k.id] ?? {}
   const voorstel = k.indelingen.find((i) => i.voorstel)?.key
   const indeling = !!x.indeling && x.indeling !== voorstel
-  const extras = Object.values(x.extras ?? {}).some(Boolean)
+  const extras = k.extras.some((e) => x.extras?.[e.key] && !e.inOntwerp)
   return indeling || extras || !!x.push
 }
 
@@ -38,10 +45,17 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
       if (lade) codes.push(lade.basis + (gekozen.key === 'DEUR' ? '' : gekozen.key))
     }
     for (const e of k.extras) {
-      if (!x.extras?.[e.key]) continue
-      delen.push(e.label)
+      if (!x.extras?.[e.key] || e.inOntwerp) continue
+      const u = uitvoeringVan(e, x)
+      // Bij een één-keuzegroep (bestekindeling) vervangt de keuze wat al in
+      // het ontwerp zit: alleen het verschil telt.
+      const vervangt = GROEPEN.find((g) => g.key === e.groep)?.keuze === 'een'
+        ? k.extras.find((o) => o.groep === e.groep && o.inOntwerp)
+        : undefined
+      delen.push(e.label + (u ? ` (${UITVOERINGEN.find((v) => v.key === u)!.label.toLowerCase()})` : '') + (vervangt ? ` in plaats van ${vervangt.label.toLowerCase()}` : ''))
+      if (e.code) codes.push(e.code.replace('{u}', u ?? ''))
       if (e.prijs === null) prijsVolgt = true
-      else som += e.prijs
+      else som += e.prijs - (vervangt?.prijs ?? 0)
     }
     if (x.push) {
       delen.push('Push-to-open')
@@ -102,7 +116,7 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
 
   for (const e of pakket.wand) {
     if (!keuzes.wand?.[e.key]) continue
-    out.push({ tag: 'Extra', titel: e.label, tekst: e.sub, bedrag: e.prijs, prijsVolgt: e.prijs === null, soort: 'wijziging', codes: [] })
+    out.push({ tag: 'Extra', titel: e.label, tekst: e.sub, bedrag: e.prijs, prijsVolgt: e.prijs === null, soort: 'wijziging', codes: e.code ? [e.code] : [] })
   }
 
   const wb = keuzes.werkblad

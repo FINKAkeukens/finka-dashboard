@@ -63,63 +63,163 @@ export function splitLadeCode(code: string): { basis: string; variant: string } 
 }
 
 // ---------- extra's per kast ----------
+//
+// Alle toebehoren uit de catalogus die in een kast passen, in een paar
+// groepen zodat de klant niet een lange lijst krijgt: per groep één regel
+// met een samenvatting, open te klappen. Codepatronen: {b} = kastbreedte in
+// drie cijfers (080), {u} = houtuitvoering (EN eiken naturel, ES essen
+// zwart, QG OrganiQ grijs). Diepte-index -6 = standaard corpusdiepte 555 mm
+// (-4 = 340 mm bij wandkasten).
+
+export type Uitvoering = 'EN' | 'ES' | 'QG'
+
+export const UITVOERINGEN: { key: Uitvoering; label: string; kleur: string }[] = [
+  { key: 'EN', label: 'Eiken naturel', kleur: '#C9A274' },
+  { key: 'ES', label: 'Essen zwart', kleur: '#2B2A28' },
+  { key: 'QG', label: 'OrganiQ grijs', kleur: '#6E6E6B' },
+]
+
+export interface OptieGroep {
+  key: string
+  label: string
+  sub: string
+  // 'een' = hooguit één keuze (bv. één bestekindeling per lade)
+  keuze: 'een' | 'meer'
+}
+
+export const GROEPEN: OptieGroep[] = [
+  { key: 'bestek', label: 'Bestekindeling', sub: 'Voor de bovenste lade', keuze: 'een' },
+  { key: 'inzet', label: 'Losse inzetten', sub: 'Foliehouder, messenblok, kruiden', keuze: 'meer' },
+  { key: 'korf', label: 'Indeling van de grote lades', sub: 'Pannen, potten en voorraad', keuze: 'meer' },
+  { key: 'binnen', label: 'Binnenin de kast', sub: 'Extra lades en planken', keuze: 'meer' },
+  { key: 'schoon', label: 'Schoonmaak en afval', sub: 'Onder de spoelbak', keuze: 'meer' },
+  { key: 'handig', label: 'Handig', sub: 'Antislip, verlichting en meer', keuze: 'meer' },
+]
 
 export interface ExtraDef {
   key: string
-  cat: string
+  groep: string
   label: string
   sub: string
   // Catalogusartikel(en); eerste die bestaat telt. null = altijd "prijs volgt".
   codes: string[] | null
+  // Houtuitvoeringen waarin het artikel bestaat (code bevat {u}).
+  uitvoeringen?: Uitvoering[]
+  // Alleen vanaf deze kastbreedte (cm).
+  vanaf?: number
   // Herkent hetzelfde artikel in een Winner Flex-subpositie (al inbegrepen).
   herken?: RegExp
 }
 
-export const EXTRAS: Partial<Record<KastSoort, ExtraDef[]>> = {
-  lade: [
-    { key: 'besteh', cat: 'Lade-indeling', label: 'Houten bestekset', sub: 'Massief eiken of zwart essen', codes: ['BEHSET{b}'], herken: /^BEHSET/ },
-    { key: 'bestekf', cat: 'Lade-indeling', label: 'Bestekset hout of composiet', sub: 'Modulair, ook in grijs composiet', codes: ['BEFSET{b}-6EN', 'BEFSET{b}-6QG'], herken: /^BEFSET/ },
-    { key: 'bestekk', cat: 'Lade-indeling', label: 'Bestekbak kunststof', sub: 'Nachtgrijs, eenvoudig schoon te maken', codes: ['BE{b}-6AS'], herken: /^BE\d{3}-/ },
-    { key: 'folie', cat: 'Lade-indeling', label: 'Foliesnijder', sub: 'Voor huishoudfolie en aluminiumfolie, hout', codes: ['BEHFE02-EN'], herken: /^BE[HF]FE02/ },
-    { key: 'messen', cat: 'Lade-indeling', label: 'Messenblok in de lade', sub: 'Massief hout', codes: ['BEHFE03-EN'], herken: /^BE[HF]FE03/ },
-    { key: 'kruiden', cat: 'Lade-indeling', label: 'Kruidenrekje in de lade', sub: 'Potjes liggen schuin en leesbaar, hout', codes: ['BEHFE04-EN'], herken: /^BE[HF]FE04/ },
-    { key: 'univ', cat: 'Lade-indeling', label: 'Universele inzet', sub: 'Tweedelig, voor losse spullen', codes: ['BEHFE01-EN'], herken: /^BE[HF]FE01/ },
-    { key: 'orga', cat: 'Lade-indeling', label: 'Losse bakjes', sub: 'Orga-container, massief hout', codes: ['MOC04-EN'], herken: /^MOC/ },
-    { key: 'smart', cat: 'Potten en voorraad', label: 'Verdeelsysteem met schotjes', sub: 'Houdt pannen, deksels en potten op hun plek', codes: ['FADA{b}'], herken: /^FADA/ },
-    { key: 'pantry', cat: 'Potten en voorraad', label: 'Voorraadbak met glazen deksel', sub: 'Pantry-box voor brood, groente of fruit', codes: ['APB-{b}'], herken: /^APB/ },
-    { key: 'antislip', cat: 'Lade-indeling', label: 'Antislipmatten', sub: 'Per lade, voedselveilig', codes: ['RM{b}-6A', 'RM{b}-4A'], herken: /^RM\d/ },
-    { key: 'licht', cat: 'Verlichting', label: 'Verlichting in de lades', sub: 'LED gaat aan als je de lade opent', codes: null },
-  ],
-  hoog: [
-    { key: 'krat', cat: 'Potten en voorraad', label: 'Uittrekbaar voorraadkrat', sub: 'Massief hout, voor aardappels en uien', codes: ['MVB01-EN'], herken: /^MVB/ },
-    { key: 'plank', cat: 'Planken', label: 'Extra legplank', sub: 'In de kleur van de binnenkant', codes: ['EB{b}-4'], herken: /^EB\d/ },
-    { key: 'glas', cat: 'Planken', label: 'Glazen legplank', sub: 'Helder glas, 8 mm', codes: ['EBGL{b}-4'], herken: /^EBGL/ },
-    { key: 'flesrek', cat: 'Potten en voorraad', label: 'Flessenrek', sub: 'Massief hout', codes: ['MFE01-EN'], herken: /^MFE/ },
-    { key: 'licht', cat: 'Verlichting', label: 'Verlichting binnenin', sub: 'LED gaat aan als je de deur opent', codes: null },
-  ],
-  spoel: [
-    { key: 'paz', cat: 'Schoonmaak', label: 'Uittrekbare schoonmaakhouder', sub: 'Korf met handvat en bakjes', codes: ['PAZ4'], herken: /^PAZ/ },
-    { key: 'licht', cat: 'Verlichting', label: 'Verlichting binnenin', sub: 'LED gaat aan als je de deur opent', codes: null },
-  ],
-  afval: [
-    { key: 'licht', cat: 'Verlichting', label: 'Verlichting in de lade', sub: 'LED gaat aan als je de lade opent', codes: null },
-  ],
+const HOUT: Uitvoering[] = ['EN', 'ES']
+const HOUT_QG: Uitvoering[] = ['EN', 'ES', 'QG']
+
+const LICHT = (sub: string): ExtraDef => ({ key: 'licht', groep: 'handig', label: 'Verlichting', sub, codes: null })
+
+const LADEKAST: ExtraDef[] = [
+  { key: 'bestekk', groep: 'bestek', label: 'Kunststof, nachtgrijs', sub: 'Licht en makkelijk schoon te maken', codes: ['BE{b}-6A'], herken: /^BE\d{3}-\dA$/ },
+  { key: 'bestekkm', groep: 'bestek', label: 'Kunststof met messeninzet', sub: 'Zwart transparant', codes: ['BE{b}-6NKA'], herken: /^BE\d{3}-\dNKA$/ },
+  { key: 'bestekm', groep: 'bestek', label: 'Metalen segmentinzet', sub: 'Antraciet, past bij de lade', codes: ['BEASE'], vanaf: 40, herken: /^BEASE/ },
+  { key: 'besteh', groep: 'bestek', label: 'Massief houten set', sub: 'Vaste indeling, eiken of zwart essen', codes: ['BEHSET{b}-6{u}'], uitvoeringen: HOUT, herken: /^BEHSET/ },
+  { key: 'bestekf', groep: 'bestek', label: 'Modulaire set', sub: 'Zelf in te delen, hout of OrganiQ', codes: ['BEFSET{b}-6{u}'], uitvoeringen: HOUT_QG, herken: /^BEFSET/ },
+  { key: 'folie', groep: 'inzet', label: 'Foliehouder', sub: 'Huishoud- en aluminiumfolie met afscheurrand', codes: ['BEFFE02-{u}', 'BEHFE02-{u}'], uitvoeringen: HOUT_QG, herken: /^BE[HF]FE02/ },
+  { key: 'messen', groep: 'inzet', label: 'Messenblok', sub: 'Messen liggen veilig in de lade', codes: ['BEFFE03-{u}', 'BEHFE03-{u}'], uitvoeringen: HOUT_QG, herken: /^BE[HF]FE03/ },
+  { key: 'kruiden', groep: 'inzet', label: 'Kruidenhouder', sub: 'Potjes liggen schuin en leesbaar', codes: ['BEFFE04-{u}', 'BEHFE04-{u}'], uitvoeringen: HOUT_QG, herken: /^BE[HF]FE04/ },
+  { key: 'univ', groep: 'inzet', label: 'Universele inzet', sub: 'Vakverdeling voor losse spullen', codes: ['BEFFE01-{u}', 'BEHFE01-{u}'], uitvoeringen: HOUT_QG, herken: /^BE[HF]FE01/ },
+  { key: 'orga4', groep: 'inzet', label: 'Klein opbergbakje', sub: 'Orga-Container 4, massief hout', codes: ['MOC04-{u}'], uitvoeringen: HOUT, herken: /^MOC04/ },
+  { key: 'smart', groep: 'korf', label: 'Verdeelsysteem met schotjes', sub: 'Pannen, deksels en potten blijven op hun plek', codes: ['FADA{b}'], herken: /^FADA/ },
+  { key: 'orga1', groep: 'korf', label: 'Opbergbak', sub: 'Orga-Container 1, massief hout', codes: ['MOC01-{u}'], uitvoeringen: HOUT, herken: /^MOC01/ },
+  { key: 'orga3', groep: 'korf', label: 'Lange opbergbak', sub: 'Orga-Container 3, hout of OrganiQ', codes: ['MOC03-{u}'], uitvoeringen: HOUT_QG, herken: /^MOC03/ },
+  { key: 'frame', groep: 'korf', label: 'Verstelbaar kader', sub: 'Orga-frame, kunststof', codes: ['KOR2'], herken: /^KOR2/ },
+  { key: 'flessen', groep: 'korf', label: 'Flessenkorf', sub: 'Voor 8 flessen, staand in de lade', codes: ['KORBFLT'], herken: /^KORBFLT/ },
+  { key: 'brood', groep: 'korf', label: 'Flessen- en stokbroodhouder', sub: 'Met broodzak', codes: ['KORBBT'], herken: /^KORBBT/ },
+  { key: 'pantry', groep: 'korf', label: 'Voorraadbak met glazen deksel', sub: 'Pantry-box voor brood, groente of fruit', codes: ['APB-{b}'], herken: /^APB/ },
+  { key: 'antislip', groep: 'handig', label: 'Antislipmatten', sub: 'In alle lades, voedselveilig', codes: ['RM{b}-6A'], herken: /^RM\d/ },
+  { key: 'snijder', groep: 'handig', label: 'Allessnijder', sub: 'Snijmachine die uit de lade komt', codes: ['RAS3', 'RAS2'], vanaf: 45, herken: /^RAS/ },
+  LICHT('LED gaat aan als je de lade opent'),
+]
+
+const BINNENIN: ExtraDef[] = [
+  { key: 'binnenk', groep: 'binnen', label: 'Extra binnenlade', sub: 'Lage lade achter de deur', codes: ['MPZIK{b}-6'], herken: /^(MPZIK|IK)\d/ },
+  { key: 'binnena', groep: 'binnen', label: 'Extra binnenkorflade', sub: 'Hoge lade achter de deur', codes: ['MPZIA{b}-6'], herken: /^(MPZIA|IA)\d/ },
+  { key: 'plank', groep: 'binnen', label: 'Extra legplank', sub: 'In de kleur van de binnenkant', codes: ['MPEB{b}-6'], herken: /^(MP)?EB\d/ },
+  { key: 'glas', groep: 'binnen', label: 'Glazen legplank', sub: 'Helder glas, 8 mm', codes: ['MPEBGL{b}-6'], herken: /EBGL/ },
+  { key: 'plateau', groep: 'binnen', label: 'Uittrekbaar plateau', sub: 'Bijvoorbeeld voor een keukenmachine', codes: ['TBA{b}-6'], herken: /^TBA/ },
+]
+
+const DEURKAST: ExtraDef[] = [
+  ...BINNENIN,
+  LICHT('LED gaat aan als je de deur opent'),
+]
+
+const HOGEKAST: ExtraDef[] = [
+  ...BINNENIN,
+  { key: 'krat', groep: 'binnen', label: 'Uittrekbaar voorraadkrat', sub: 'Massief eiken, voor aardappels en uien', codes: ['MVB01-EN'], herken: /^MVB/ },
+  { key: 'flesrek', groep: 'binnen', label: 'Flessenrek', sub: 'Massief eiken', codes: ['MFE01-EN'], herken: /^MFE/ },
+  LICHT('LED gaat aan als je de deur opent'),
+]
+
+const SPOELKAST: ExtraDef[] = [
+  { key: 'paz', groep: 'schoon', label: 'Uittrekbare schoonmaakhouder', sub: 'Korf met handvat en bakjes', codes: ['PAZ4'], herken: /^PAZ/ },
+  { key: 'bodem', groep: 'schoon', label: 'Beschermende bodem', sub: 'Kunststof bak tegen lekkage', codes: ['EB-SPB{b}'], herken: /SPB/ },
+  { key: 'handdoek', groep: 'schoon', label: 'Uittrekbare handdoekhouder', sub: 'Tweedelig, antraciet', codes: ['HTHC2'], herken: /^HTHC/ },
+  { key: 'afval2', groep: 'schoon', label: 'Afvalbak, 2 vakken', sub: '12 + 18 liter, trekt mee uit met de deur', codes: ['AE34'], vanaf: 50, herken: /^AE34/ },
+  { key: 'afval1', groep: 'schoon', label: 'Afvalbak, 2 × 15 liter', sub: 'Volledig uittrekbaar', codes: ['AE32'], vanaf: 30, herken: /^AE32/ },
+  { key: 'afvaldeur', groep: 'schoon', label: 'Afvalbak aan de deur', sub: '15 liter, deksel gaat vanzelf open', codes: ['AE15'], herken: /^AE15/ },
+  LICHT('LED gaat aan als je de deur opent'),
+]
+
+const KOOKPLAATKAST: ExtraDef[] = [
+  { key: 'smart', groep: 'korf', label: 'Verdeelsysteem met schotjes', sub: 'Pannen, deksels en potten blijven op hun plek', codes: ['FADA{b}'], herken: /^FADA/ },
+  { key: 'orga3', groep: 'korf', label: 'Lange opbergbak', sub: 'Orga-Container 3, hout of OrganiQ', codes: ['MOC03-{u}'], uitvoeringen: HOUT_QG, herken: /^MOC03/ },
+  { key: 'hitte', groep: 'handig', label: 'Hittebeschermingsbodem', sub: 'In de bovenste lade, onder de kookplaat', codes: ['HSE{b}'], herken: /^HSE/ },
+  { key: 'antislip', groep: 'handig', label: 'Antislipmatten', sub: 'In alle lades, voedselveilig', codes: ['RM{b}-6A'], herken: /^RM\d/ },
+]
+
+const WANDKAST: ExtraDef[] = [
+  { key: 'plank', groep: 'binnen', label: 'Extra legplank', sub: 'In de kleur van de binnenkant', codes: ['MPEB{b}-4'], herken: /^(MP)?EB\d/ },
+  { key: 'glas', groep: 'binnen', label: 'Glazen legplank', sub: 'Helder glas, 8 mm', codes: ['MPEBGL{b}-4'], herken: /EBGL/ },
+  LICHT('LED binnenin of eronder'),
+]
+
+const AFVALKAST: ExtraDef[] = [LICHT('LED gaat aan als je de lade opent')]
+
+// Welke toebehoren passen in deze kast?
+export function extrasVoor(code: string, soort: KastSoort): ExtraDef[] {
+  const c = code.toUpperCase()
+  switch (soort) {
+    case 'lade': {
+      const lade = splitLadeCode(c)
+      return lade && lade.variant ? LADEKAST : DEURKAST
+    }
+    case 'hoog': return HOGEKAST
+    case 'spoel': return SPOELKAST
+    case 'afval': return AFVALKAST
+    case 'wand': return WANDKAST
+    case 'apparaat': return /^D?UK/.test(c) ? KOOKPLAATKAST : []
+    default: return []
+  }
 }
 
 // Extra's aan de wand en verlichting: niet aan één kast gebonden.
 export const WAND_EXTRAS: ExtraDef[] = [
-  { key: 'reling', cat: 'Wand', label: 'Reling aan de wand, 90 cm', sub: 'Linero MosaiQ', codes: ['NMQPL090'] },
-  { key: 'nisreling', cat: 'Wand', label: 'Verlichte nisreling, 120 cm', sub: 'Met LED, glazen plank en verschuifbare houders', codes: ['NRB01L-120ED', 'NRB01L-120SW'] },
-  { key: 'bovenlicht', cat: 'Verlichting', label: 'Verlichting onder de bovenkast', sub: 'LED warm wit, 120 cm', codes: ['LA5M-120'] },
-  { key: 'plintlicht', cat: 'Verlichting', label: 'Plintverlichting', sub: 'LED-strip warm wit', codes: ['LS15M-L'] },
-  { key: 'stopcontact', cat: 'Wand', label: 'Inbouwstopcontact in het werkblad', sub: 'Komt omhoog als je erop drukt', codes: ['STD01-ED'] },
-  { key: 'qi', cat: 'Wand', label: 'Draadloze telefoonoplader', sub: 'Onzichtbaar ingebouwd', codes: null },
+  { key: 'reling', groep: 'Wand', label: 'Reling aan de wand, 90 cm', sub: 'Linero MosaiQ', codes: ['NMQPL090'] },
+  { key: 'nisreling', groep: 'Wand', label: 'Verlichte nisreling, 120 cm', sub: 'Met LED, glazen plank en verschuifbare houders', codes: ['NRB01L-120ED', 'NRB01L-120SW'] },
+  { key: 'bovenlicht', groep: 'Verlichting', label: 'Verlichting onder de bovenkast', sub: 'LED warm wit, 120 cm', codes: ['LA5M-120'] },
+  { key: 'plintlicht', groep: 'Verlichting', label: 'Plintverlichting', sub: 'LED-strip warm wit', codes: ['LS15M-L'] },
+  { key: 'stopcontact', groep: 'Wand', label: 'Inbouwstopcontact in het werkblad', sub: 'Komt omhoog als je erop drukt', codes: ['STD01-ED'] },
+  { key: 'qi', groep: 'Wand', label: 'Draadloze telefoonoplader', sub: 'Onzichtbaar ingebouwd', codes: null },
 ]
 
-export function codeVoorBreedte(patroon: string, breedte: number | null): string | null {
+// Vult {b} in; {u} blijft staan.
+export function metBreedte(patroon: string, breedte: number | null): string | null {
   if (!patroon.includes('{b}')) return patroon
   if (!breedte) return null
   return patroon.replace('{b}', String(Math.round(breedte)).padStart(3, '0'))
+}
+
+export function codeVoorBreedte(patroon: string, breedte: number | null, uitvoering: Uitvoering = 'EN'): string | null {
+  return metBreedte(patroon.replace('{u}', uitvoering), breedte)
 }
 
 // ---------- naam en omschrijving voor de klant ----------
@@ -156,7 +256,8 @@ const VERTALING: [RegExp, string][] = [
   [/(\d+) pull-outs?/i, '$1 lade(s)'],
   [/(\d+) drawers?/i, '$1 lade(s)'],
   [/(\d+) appliance doors?(, doweled)?/i, '$1 apparaatdeur(en)'],
-  [/(\d+) compensation flap/i, '$1 klep'],
+  [/(\d+) compensation flap/i, ''],
+  [/(\d+) flap doors?/i, '$1 klepdeur(en)'],
   [/(\d+) flaps?/i, '$1 klep(pen)'],
   [/(\d+) doors?(, doweled)?/i, '$1 deur(en)'],
   [/(\d+) shel(f|ves)/i, '$1 plank(en)'],
@@ -181,7 +282,20 @@ export function kastOmschrijving(code: string, soort: KastSoort, regels: string[
     const tekst = r.replace(v[0], v[1]).replace(/^1 (\w+)\((en|s|pen)\)/, '1 $1').replace(/\((en|s|pen)\)/g, (_, s) => s)
     if (tekst.trim()) delen.push(tekst.trim())
   }
-  return delen.join(', ')
+  // "1 lade, 1 lade" → "2 lades": gelijke onderdelen optellen.
+  const telling = new Map<string, number>()
+  const los: string[] = []
+  for (const d of delen) {
+    const m = d.match(/^(\d+) (.+)$/)
+    if (!m) { los.push(d); continue }
+    const enkel = m[2].replace(/(en|s)$/, '').replace(/^(lade|plank|deur|klep|klepdeur|apparaatdeur|binnenlade)$/, '$1')
+    telling.set(enkel, (telling.get(enkel) ?? 0) + Number(m[1]))
+  }
+  const meervoud: Record<string, string> = { lade: 'lades', binnenlade: 'binnenlades', plank: 'planken', deur: 'deuren', klep: 'kleppen', klepdeur: 'klepdeuren', apparaatdeur: 'apparaatdeuren' }
+  return [
+    ...[...telling].map(([w, n]) => `${n} ${n === 1 ? w : meervoud[w] ?? w}`),
+    ...los,
+  ].join(', ')
 }
 
 // ---------- apparatuur ----------

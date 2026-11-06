@@ -351,7 +351,7 @@ function parseKasten(pages: PdfPage[]): CatalogusKast[] {
 // diepte-index zoals BEHSET080 / BEHSET080-6EN), eventueel een uitvoerings-
 // code, en de prijs als laatste getal. De omschrijving is de eerste regel van
 // het tekstblok links ervan.
-const ACC_CODE = /^[A-Z][A-Z0-9]{2,}[0-9A-Z.\-/]*$/
+const ACC_CODE = /^[A-Z][A-Z0-9-]{2,}[0-9A-Z.\-/]*$/
 
 function splitGeplakt(s: string): string[] {
   // "BEHSET090BEHSET090-6EN" → ["BEHSET090", "BEHSET090-6EN"]
@@ -368,8 +368,12 @@ function parseAccessoires(pages: PdfPage[]): CatalogusAccessoire[] {
     if (!out.has(code)) out.set(code, { code, naam, prijs })
   }
   for (const page of pages) {
-    const bestelKop = page.texts.find((t) => /^Bestelnr/.test(t.s.trim()))
-    if (!bestelKop) continue
+    // Een pagina kan meerdere tabellen hebben, elk met een eigen kop
+    // "Bestelnr." (en een eigen kolompositie); per regel telt de kop erboven.
+    const koppen = page.texts.filter((t) => /^Bestelnr/.test(t.s.trim())).sort((a, b) => a.y - b.y)
+    if (!koppen.length) continue
+    const bestelKop = koppen[0]
+    const kopX = (y: number) => (koppen.filter((k) => k.y <= y + 2).pop() ?? bestelKop).x
     // Omschrijvingsblokken: tekst links van de bestelnummers; een nieuw blok
     // begint na een witregel.
     const omschr = page.texts
@@ -387,15 +391,49 @@ function parseAccessoires(pages: PdfPage[]): CatalogusAccessoire[] {
     }
     const naamBij = (y: number) => blokken.filter((b) => b.y <= y + 3).pop()?.titel ?? ''
 
+    // Dieptetabellen: "IK | 060 | -4 127 | -5 133 | -6 134 | -7 187" — het
+    // bestelnummer is voorvoegsel + breedte + diepte-index, elke index met
+    // een eigen prijs. "-6xx" = per uitvoering (EN eiken, ES essen zwart,
+    // QG OrganiQ grijs als die op de pagina staat).
+    const uitvoeringen = ['EN', 'ES', ...(page.texts.some((t) => /\bQG\b/.test(t.s)) ? ['QG'] : [])]
+    const gezien = new Set<number>()
+    for (const r of rows(tokens(page.texts))) {
+      const it = r.items.filter((t) => t.x > kopX(r.y) - 10)
+      if (it.length < 3) continue
+      let voor: string | null = null
+      let breedte: string | null = null
+      let i = 0
+      const los = it[0].s.match(/^([A-Z][A-Z-]{0,9}?)(\d{3}(?:STD)?)$/)
+      if (los) { voor = los[1]; breedte = los[2]; i = 1 }
+      else if (/^[A-Z][A-Z-]{0,9}$/.test(it[0].s) && it[1]) {
+        const m = it[1].s.match(/^(\d{3}(?:STD)?)/)
+        if (m) { voor = it[0].s; breedte = m[1]; i = 2 }
+      }
+      if (!voor || !breedte) continue
+      let gevonden = false
+      for (; i < it.length - 1; i++) {
+        const suf = it[i].s.match(/^-(\d)([A-Za-z]*)$/)
+        if (!suf || !isInt(it[i + 1].s)) continue
+        const prijs = Number(it[i + 1].s)
+        const varianten = suf[2] === 'xx' ? uitvoeringen.map((u) => `-${suf[1]}${u}`) : [it[i].s]
+        for (const v of varianten) add(`${voor}${breedte}${v}`, naamBij(r.y) || voor, prijs)
+        gevonden = true
+        i++
+      }
+      if (gevonden) gezien.add(Math.round(r.y))
+    }
+
     const codeToks = tokens(page.texts)
       .flatMap((t) => splitGeplakt(t.s).map((s, i, arr) => ({ ...t, s, x: t.x + (i * t.w) / arr.length })))
-      .filter((t) => ACC_CODE.test(t.s) && /\d/.test(t.s) && t.x > bestelKop.x - 60 && t.x < bestelKop.x + 120)
-    const gezien = new Set<number>()
+      .filter((t) => ACC_CODE.test(t.s) && t.x > kopX(t.y) - 60 && t.x < kopX(t.y) + 120)
     for (const code of codeToks.sort((a, b) => a.y - b.y || a.x - b.x)) {
       const rij = Math.round(code.y)
-      if (gezien.has(rij)) continue
+      if (gezien.has(rij) || gezien.has(rij - 1) || gezien.has(rij + 1)) continue
       const regel = tokens(lineOf(page.texts, code))
       const opRegel = codeToks.filter((c) => Math.abs(c.y - code.y) <= 3)
+      // Code zonder cijfers (KORBFLT, BEASE) alleen als artikel- en
+      // bestelnummer gelijk zijn; anders is het tekst uit de omschrijving.
+      if (!/\d/.test(code.s) && opRegel.filter((c) => c.s === code.s).length < 2) continue
       const prijs = regel.filter((t) => isInt(t.s) && t.x > Math.max(...opRegel.map((c) => c.x + c.w))).pop()
       if (!prijs) continue
       gezien.add(rij)
