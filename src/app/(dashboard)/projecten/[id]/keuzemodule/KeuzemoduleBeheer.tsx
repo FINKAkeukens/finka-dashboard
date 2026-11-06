@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, FileDown, MapPin, RefreshCw } from 'lucide-react'
+import { Check, Eye, FileDown, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 import type { KeuzemoduleInstelling, KeuzemoduleKast } from '@/lib/keuzemodule/pakket'
 import type { Wijziging } from '@/lib/keuzemodule/types'
 import { KAST_SOORT_LABELS, type KastSoort } from '@/lib/keuzemodule/klantlaag'
+import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
 
 export interface UitdraaiBron {
   url: string
@@ -47,8 +48,12 @@ export default function KeuzemoduleBeheer({
   const supabase = createClient()
   const [fout, setFout] = useState('')
   const [bezig, setBezig] = useState('')
-  const [bron, setBron] = useState(bronnen[0]?.url ?? '')
-  const [pinVoor, setPinVoor] = useState<string | null>(null)
+  // Bron = url van een bijlage bij de Kasten-opties, of een gekozen bestand.
+  // Tekening '' = het bovenaanzicht in de artikel-PDF zelf proberen.
+  const [bron, setBron] = useState<string | File>(bronnen[0]?.url ?? '')
+  const [tekenBron, setTekenBron] = useState<string | File>('')
+  const [melding, setMelding] = useState('')
+  const [selId, setSelId] = useState<string | null>(null)
   const [voorstel, setVoorstel] = useState(instelling?.voorstel ?? {})
   const [pg, setPg] = useState<number | null>(instelling?.prijsgroep ?? null)
   const [lokaleKasten, setLokaleKasten] = useState(kasten)
@@ -63,22 +68,17 @@ export default function KeuzemoduleBeheer({
     else router.refresh()
   }
 
-  async function inlezen(bestand: Blob | string, naam: string) {
+  const naamVan = (b: string | File) => (typeof b === 'string' ? bronnen.find((x) => x.url === b)?.naam ?? 'uitdraai' : b.name)
+
+  async function inlezen() {
+    if (!bron) return
     setFout('')
+    setMelding('')
     setBezig('Uitdraai lezen…')
     try {
       const { leesUitdraai } = await import('@/lib/keuzemodule/winnerflex-browser')
-      const { uitdraai, plattegrond } = await leesUitdraai(bestand)
+      const { uitdraai, tekening } = await leesUitdraai(bron, tekenBron || null)
       if (!uitdraai.kasten.length) throw new Error('Geen kasten gevonden in deze uitdraai. Is het een Winner Flex-offerte of -order?')
-
-      let plattegrondUrl = instelling?.plattegrond_url ?? null
-      if (plattegrond) {
-        setBezig('Plattegrond opslaan…')
-        const pad = `${projectId}/keuzemodule/plattegrond-${crypto.randomUUID()}.png`
-        const { error } = await supabase.storage.from('offer-images').upload(pad, plattegrond, { contentType: 'image/png' })
-        if (error) throw new Error('Plattegrond uploaden mislukt: ' + error.message)
-        plattegrondUrl = supabase.storage.from('offer-images').getPublicUrl(pad).data.publicUrl
-      }
 
       setBezig('Kasten opslaan…')
       const v = uitdraai.voorstel
@@ -90,20 +90,21 @@ export default function KeuzemoduleBeheer({
       const prijsgroep = (v.model && modellen[v.model]) || instelling?.prijsgroep || null
       const { error: insError } = await supabase.from('finka_keuzemodule').upsert({
         project_id: projectId,
-        bron_url: typeof bestand === 'string' ? bestand : null,
-        bron_naam: naam,
+        bron_url: typeof bron === 'string' ? bron : null,
+        bron_naam: tekenBron ? `${naamVan(bron)} + ${naamVan(tekenBron)}` : naamVan(bron),
         model: v.model,
         prijsgroep,
         voorstel: nieuwVoorstel,
-        plattegrond_url: plattegrondUrl,
+        // Geen tekening gevonden: de vorige plattegrond blijft staan.
+        plattegrond: tekening?.plattegrond ?? instelling?.plattegrond ?? null,
         ronde: huidigeRonde,
         updated_at: new Date().toISOString(),
       })
       if (insError) throw new Error(insError.message)
 
-      // Kasten per positie bijwerken i.p.v. vervangen: pins, wand en
-      // gemaakte aanpassingen blijven staan, en ingestuurde feedback blijft
-      // aan dezelfde kast hangen.
+      // Kasten per positie bijwerken i.p.v. vervangen: wand en gemaakte
+      // aanpassingen blijven staan, en ingestuurde feedback blijft aan
+      // dezelfde kast hangen.
       const bestaand = new Map(kasten.map((k) => [k.positie, k]))
       const rows = uitdraai.kasten.map((k, i) => {
         const oud = bestaand.get(k.positie)
@@ -116,8 +117,7 @@ export default function KeuzemoduleBeheer({
           soort: k.soort,
           breedte: k.breedte,
           wand: oud?.wand ?? null,
-          pin_x: oud?.pin_x ?? null,
-          pin_y: oud?.pin_y ?? null,
+          vak: tekening ? tekening.vakken[k.positie] ?? null : oud?.vak ?? null,
           inbegrepen: k.inbegrepen,
           data: { ...oud?.data, naam: oud?.code === k.code && oud.data?.naam ? oud.data.naam : k.naam, apparaat: k.apparaat ?? undefined },
           zichtbaar: oud?.zichtbaar ?? true,
@@ -139,6 +139,14 @@ export default function KeuzemoduleBeheer({
         const { error } = await supabase.from('finka_keuzemodule_kasten').delete().in('id', weg)
         if (error) throw new Error(error.message)
       }
+
+      const missend = uitdraai.kasten.filter((k) => !tekening?.vakken[k.positie]).map((k) => k.positie)
+      setMelding(
+        !tekening
+          ? `${uitdraai.kasten.length} kasten ingelezen. Geen bovenaanzicht met positienummers gevonden${instelling?.plattegrond ? '; de vorige plattegrond blijft staan' : ''}.`
+          : `${uitdraai.kasten.length} kasten ingelezen, ${uitdraai.kasten.length - missend.length} op de plattegrond.` +
+              (missend.length ? ` Niet op de tekening: ${missend.join(', ')} (de klant ziet die als knop onder de plattegrond).` : '')
+      )
       router.refresh()
     } catch (e) {
       setFout(e instanceof Error ? e.message : String(e))
@@ -172,19 +180,8 @@ export default function KeuzemoduleBeheer({
     else router.refresh()
   }
 
-  function plaatsPin(e: React.MouseEvent<HTMLDivElement>) {
-    if (!pinVoor) return
-    const r = e.currentTarget.getBoundingClientRect()
-    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
-    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
-    bewaarKast(pinVoor, { pin_x: x, pin_y: y })
-    // Door naar de volgende kast zonder pin.
-    const zonder = lokaleKasten.filter((k) => k.zichtbaar && k.soort !== 'overig' && k.id !== pinVoor && k.pin_x === null)
-    setPinVoor(zonder[0]?.id ?? null)
-  }
-
   const codelijst = useMemo(() => [...new Set((laatste?.wijzigingen ?? []).flatMap((w) => w.codes))], [laatste])
-  const zichtbareKasten = lokaleKasten.filter((k) => k.zichtbaar && k.soort !== 'overig')
+  const opTekening = lokaleKasten.filter((k) => k.zichtbaar && k.vak)
   const wanden = [...new Set(lokaleKasten.map((k) => k.wand).filter(Boolean))] as string[]
 
   return (
@@ -202,7 +199,7 @@ export default function KeuzemoduleBeheer({
           <p className="text-sm text-[#6B6560] mt-0.5">
             {actief
               ? `Aan: de klant ziet "Jouw ontwerp" in het portaal (ronde ${huidigeRonde}).`
-              : 'Uit: de klant ziet niets. Zet aan zodra het ontwerp en de pins klaarstaan.'}
+              : 'Uit: de klant ziet niets. Zet aan zodra het ontwerp klaarstaat.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -218,27 +215,32 @@ export default function KeuzemoduleBeheer({
       <section className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-3">
         <h2 className="text-sm font-medium text-[#1C1B19]">Ontwerp inlezen uit Winner Flex</h2>
         <p className="text-sm text-[#6B6560]">
-          Kasten, model, binnenkleur, greep en het bovenaanzicht komen uit de uitdraai. Opnieuw inlezen werkt kasten
-          per positie bij; pins en aanpassingen blijven staan.
+          Kasten, model, binnenkleur en greep komen uit de artikellijst; de getekende plattegrond uit het bovenaanzicht
+          met positienummers. Opnieuw inlezen werkt kasten per positie bij; wand en aanpassingen blijven staan.
           {instelling?.bron_naam ? ` Laatst ingelezen: ${instelling.bron_naam}.` : ''}
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {bronnen.length > 0 && (
-            <>
-              <select value={bron} onChange={(e) => setBron(e.target.value)} className={`${veld} max-w-md`}>
-                {bronnen.map((b) => <option key={b.url} value={b.url}>{b.naam}</option>)}
-              </select>
-              <Button size="sm" disabled={!!bezig || !bron} onClick={() => inlezen(bron, bronnen.find((b) => b.url === bron)?.naam ?? 'uitdraai')}>
-                <RefreshCw size={13} className="mr-1.5" />Inlezen
-              </Button>
-              <span className="text-xs text-[#9A948D]">of</span>
-            </>
-          )}
-          <label className="text-sm text-[#1C1B19] underline underline-offset-2 cursor-pointer">
-            andere PDF kiezen
-            <input type="file" accept="application/pdf" className="hidden" disabled={!!bezig} onChange={(e) => { const f = e.target.files?.[0]; if (f) inlezen(f, f.name) }} />
-          </label>
+        <div className="grid sm:grid-cols-2 gap-3 text-sm">
+          <BronKiezer
+            label="Artikellijst (offerte of order)"
+            waarde={bron}
+            onChange={setBron}
+            bronnen={bronnen}
+            leeg={bronnen.length ? null : 'Kies een PDF…'}
+            disabled={!!bezig}
+          />
+          <BronKiezer
+            label="Bovenaanzicht met positienummers"
+            waarde={tekenBron}
+            onChange={setTekenBron}
+            bronnen={bronnen}
+            leeg="Zit in de artikellijst-PDF"
+            disabled={!!bezig}
+          />
         </div>
+        <Button size="sm" disabled={!!bezig || !bron} onClick={inlezen}>
+          <RefreshCw size={13} className="mr-1.5" />Inlezen
+        </Button>
+        {melding && <p className="text-sm text-[#2F5D50]">{melding}</p>}
         {bezig && <p className="text-sm text-[#6B6560]">{bezig}</p>}
         {fout && <p className="text-sm text-red-600">{fout}</p>}
       </section>
@@ -306,9 +308,7 @@ export default function KeuzemoduleBeheer({
         <section className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-medium text-[#1C1B19]">Kasten en plattegrond</h2>
-            <p className="text-xs text-[#6B6560]">
-              Kies &quot;Pin&quot; bij een kast en klik daarna op de plattegrond. Na elke pin gaat het door naar de volgende kast zonder pin.
-            </p>
+            <p className="text-xs text-[#6B6560]">Klik op een kast in de tekening om hem in de lijst te vinden.</p>
           </div>
           <div className="grid lg:grid-cols-[1fr_minmax(0,1.1fr)] gap-5 items-start">
             <div className="overflow-x-auto">
@@ -320,12 +320,12 @@ export default function KeuzemoduleBeheer({
                     <th className="py-1.5 pr-2">Kast</th>
                     <th className="py-1.5 pr-2">Wand</th>
                     <th className="py-1.5 pr-2">Tonen</th>
-                    <th className="py-1.5">Pin</th>
+                    <th className="py-1.5">Tekening</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EAE6DD]">
                   {lokaleKasten.map((k) => (
-                    <tr key={k.id} className={`align-top ${pinVoor === k.id ? 'bg-[#EEF4F1]' : ''}`}>
+                    <tr key={k.id} id={`kast-${k.id}`} className={`align-top ${selId === k.id ? 'bg-[#EEF4F1]' : ''}`}>
                       <td className="py-2 pr-2 font-medium">{k.positie}</td>
                       <td className="py-2 pr-2 space-y-1 min-w-[220px]">
                         <input className={veld} defaultValue={k.data?.naam ?? ''} onBlur={(e) => e.target.value !== (k.data?.naam ?? '') && bewaarKast(k.id, { data: { ...k.data, naam: e.target.value } })} />
@@ -341,13 +341,8 @@ export default function KeuzemoduleBeheer({
                       <td className="py-2 pr-2">
                         <input type="checkbox" checked={k.zichtbaar} onChange={(e) => bewaarKast(k.id, { zichtbaar: e.target.checked })} aria-label={`Kast ${k.positie} tonen`} />
                       </td>
-                      <td className="py-2 whitespace-nowrap">
-                        <button type="button" onClick={() => setPinVoor(pinVoor === k.id ? null : k.id)} className={`text-xs px-2 py-1 rounded-full border ${pinVoor === k.id ? 'border-[#2F5D50] bg-[#2F5D50] text-white' : 'border-[#DDD8D2]'}`}>
-                          <MapPin size={11} className="inline mr-0.5" />{k.pin_x !== null ? 'Verplaats' : 'Pin'}
-                        </button>
-                        {k.pin_x !== null && (
-                          <button type="button" onClick={() => bewaarKast(k.id, { pin_x: null, pin_y: null })} className="text-xs text-[#9A948D] ml-1.5 hover:text-red-600">weg</button>
-                        )}
+                      <td className="py-2 text-xs">
+                        {k.vak ? <Check size={14} className="text-[#2F5D50]" aria-label="Op de tekening" /> : <span className="text-[#9A948D]">niet gevonden</span>}
                       </td>
                     </tr>
                   ))}
@@ -355,28 +350,24 @@ export default function KeuzemoduleBeheer({
               </table>
             </div>
             <div>
-              {instelling?.plattegrond_url ? (
-                <div className={`relative ${pinVoor ? 'cursor-crosshair' : ''}`} onClick={plaatsPin}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={instelling.plattegrond_url} alt="Plattegrond" className="block w-full h-auto rounded-lg border border-[#DDD8D2] select-none" draggable={false} />
-                  {zichtbareKasten.filter((k) => k.pin_x !== null).map((k) => (
-                    <span
-                      key={k.id}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 min-w-7 h-7 px-1 rounded-full text-xs font-bold flex items-center justify-center pointer-events-none ${pinVoor === k.id ? 'bg-[#2F5D50] text-white' : 'bg-white text-[#1C1B19] border-2 border-[#1C1B19]'}`}
-                      style={{ left: `${(k.pin_x ?? 0) * 100}%`, top: `${(k.pin_y ?? 0) * 100}%` }}
-                    >
-                      {k.positie}
-                    </span>
-                  ))}
-                  {pinVoor && (
-                    <div className="absolute top-2 left-2 text-xs bg-[#2F5D50] text-white px-2 py-1 rounded">
-                      Klik waar kast {lokaleKasten.find((k) => k.id === pinVoor)?.positie} staat
-                    </div>
-                  )}
+              {instelling?.plattegrond && opTekening.length > 0 ? (
+                <div className="rounded-lg border border-[#DDD8D2] overflow-hidden">
+                  <PlattegrondTekening
+                    plattegrond={instelling.plattegrond}
+                    titel="Plattegrond"
+                    kasten={opTekening.map((k) => ({ id: k.id, positie: k.positie, vak: k.vak!, label: `Kast ${k.positie}, ${k.data?.naam ?? k.code}` }))}
+                    kleur={(t) => (t.id === selId ? { bg: '#EEF4F1', border: '#2F5D50', ink: '#1E1D1B' } : { bg: '#FFFFFF', border: '#8A8780', ink: '#1E1D1B' })}
+                    selId={selId}
+                    onKies={(id) => {
+                      setSelId(id)
+                      document.getElementById(`kast-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                    }}
+                  />
                 </div>
               ) : (
                 <p className="text-sm text-[#6B6560]">
-                  Geen bovenaanzicht in de uitdraai gevonden. De klant ziet de kasten dan als lijst per wand.
+                  Nog geen plattegrond. Lees een bovenaanzicht met positienummers in; tot die tijd ziet de klant de
+                  kasten als knoppen per wand.
                 </p>
               )}
             </div>
@@ -428,6 +419,40 @@ export default function KeuzemoduleBeheer({
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+// Kiest een PDF: een bijlage bij de Kasten-opties van de offerte, of een
+// bestand van de computer.
+function BronKiezer({
+  label, waarde, onChange, bronnen, leeg, disabled,
+}: {
+  label: string
+  waarde: string | File
+  onChange: (v: string | File) => void
+  bronnen: UitdraaiBron[]
+  leeg: string | null
+  disabled: boolean
+}) {
+  const bestand = typeof waarde === 'string' ? null : waarde
+  return (
+    <div className="space-y-1">
+      <span className="text-xs text-[#6B6560]">{label}</span>
+      <select
+        className={veld}
+        disabled={disabled}
+        value={typeof waarde === 'string' ? waarde : '__bestand'}
+        onChange={(e) => e.target.value !== '__bestand' && onChange(e.target.value)}
+      >
+        {leeg !== null && <option value="">{leeg}</option>}
+        {bronnen.map((b) => <option key={b.url} value={b.url}>{b.naam}</option>)}
+        {bestand && <option value="__bestand">{bestand.name}</option>}
+      </select>
+      <label className="inline-block text-xs text-[#1C1B19] underline underline-offset-2 cursor-pointer">
+        andere PDF kiezen
+        <input type="file" accept="application/pdf" className="hidden" disabled={disabled} onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange(f) }} />
+      </label>
     </div>
   )
 }

@@ -11,10 +11,11 @@ import {
   type KastSoort,
 } from './klantlaag'
 import type { Pakket, PakketExtra, PakketGreep, PakketKast, PakketWerkblad } from './types'
+import type { Plattegrond, Vak } from './plattegrond'
 
 // Stelt per project samen wat het portaal mag tonen. Draait alleen op de
 // server (service-role): de catalogus en de brutoprijzen blijven hier, de
-// klant krijgt uitsluitend de opties voor zijn eigen keuken met een
+// klant krijgt uitsluitend de opties voor de eigen keuken met een
 // klantprijs. Een handvol gerichte queries op (catalogus_id, soort, code),
 // dus ook met een catalogus van duizenden regels snel.
 
@@ -37,7 +38,7 @@ export interface KeuzemoduleInstelling {
     wangen?: string | null
     werkblad?: { code?: string | null; dikte?: number | null; tekst?: string | null } | null
   }
-  plattegrond_url: string | null
+  plattegrond: Plattegrond | null
   ronde: number
 }
 
@@ -50,8 +51,7 @@ export interface KeuzemoduleKast {
   soort: KastSoort
   breedte: number | null
   wand: string | null
-  pin_x: number | null
-  pin_y: number | null
+  vak: Vak | null
   inbegrepen: string[]
   data: { naam?: string; apparaat?: string; apparaat_voorstel?: string }
   zichtbaar: boolean
@@ -168,7 +168,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
       omschrijving: k.omschrijving ?? '',
       soort: k.soort,
       wand: k.wand,
-      pin: k.pin_x !== null && k.pin_y !== null ? { x: k.pin_x, y: k.pin_y } : null,
+      vak: k.vak,
       indelingen,
       extras: extras.filter((e) => !k.inbegrepen.includes(e.key)),
       inbegrepen: defs.filter((d) => k.inbegrepen.includes(d.key)).map((d) => ({ key: d.key, label: d.label })),
@@ -207,7 +207,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
 
   return {
     ronde: instelling.ronde,
-    plattegrond: instelling.plattegrond_url,
+    plattegrond: instelling.plattegrond,
     kasten: pakketKasten,
     keuken: {
       front: v.front ?? null,

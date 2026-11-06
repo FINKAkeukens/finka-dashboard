@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Keuzes, KastKeuze, Pakket, PakketKast } from '@/lib/keuzemodule/types'
 import { kastStatus } from '@/lib/keuzemodule/wijzigingen'
 import { STATUS_KEUZES, STATUS_LABELS } from '@/lib/keuzemodule/klantlaag'
+import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
 import { C, STATUS_KLEUR, Chip, Kaart, Vinkje, delta, euro } from './ui'
 
 const NEUTRAAL = { bg: '#FFFFFF', border: '#8A8780', ink: C.ink }
@@ -16,67 +17,58 @@ function Plattegrond({
   selId: string | null
   setSelId: (id: string) => void
 }) {
-  const metPin = pakket.kasten.filter((k) => k.pin)
-  if (!pakket.plattegrond || !metPin.length) {
-    // Geen plattegrond (of nog geen pins): kasten als lijst per wand.
-    const wanden = [...new Set(pakket.kasten.map((k) => k.wand ?? ''))]
-    return (
-      <div className="flex flex-col gap-4">
-        {wanden.map((w) => (
-          <div key={w} className="flex flex-col gap-2">
-            {w && <div className="text-[13px] font-semibold" style={{ color: C.muted }}>{w}</div>}
-            <div className="flex flex-wrap gap-2">
-              {pakket.kasten.filter((k) => (k.wand ?? '') === w).map((k) => {
-                const st = kastStatus(k, keuzes)
-                const c = st ? STATUS_KLEUR[st] : NEUTRAAL
-                const sel = k.id === selId
-                return (
-                  <button
-                    key={k.id}
-                    type="button"
-                    onClick={() => setSelId(k.id)}
-                    className="min-h-11 px-3 rounded-lg text-sm font-semibold cursor-pointer"
-                    style={{ background: c.bg, color: c.ink, border: sel ? `3px solid ${C.ink}` : `1.5px solid ${c.border}` }}
-                  >
-                    {k.positie} · {k.naam}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    )
+  const kleurVan = (k: PakketKast) => {
+    const st = kastStatus(k, keuzes)
+    return st ? STATUS_KLEUR[st] : NEUTRAAL
   }
+  const label = (k: PakketKast) => {
+    const st = kastStatus(k, keuzes)
+    return `Kast ${k.positie}, ${k.naam}${st ? ', ' + STATUS_LABELS[st] : ', nog niet bekeken'}`
+  }
+  const opTekening = pakket.plattegrond ? pakket.kasten.filter((k) => k.vak) : []
+  // Kasten die niet op de tekening staan (of geen tekening): als knoppen,
+  // gegroepeerd per wand.
+  const los = pakket.kasten.filter((k) => !opTekening.includes(k))
+  const wanden = [...new Set(los.map((k) => k.wand ?? ''))]
+  const perId = new Map(pakket.kasten.map((k) => [k.id, k]))
+
   return (
-    <div className="relative w-full">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={pakket.plattegrond} alt="Plattegrond van je keuken" className="block w-full h-auto rounded-md" />
-      {metPin.map((k) => {
-        const st = kastStatus(k, keuzes)
-        const c = st ? STATUS_KLEUR[st] : NEUTRAAL
-        const sel = k.id === selId
-        return (
-          <button
-            key={k.id}
-            type="button"
-            onClick={() => setSelId(k.id)}
-            aria-label={`Kast ${k.positie}, ${k.naam}${st ? ', ' + STATUS_LABELS[st] : ', nog niet bekeken'}`}
-            className="absolute -translate-x-1/2 -translate-y-1/2 min-w-9 h-9 px-1.5 rounded-full text-[13px] font-bold cursor-pointer flex items-center justify-center"
-            style={{
-              left: `${k.pin!.x * 100}%`,
-              top: `${k.pin!.y * 100}%`,
-              background: c.bg,
-              color: c.ink,
-              border: sel ? `3px solid ${C.ink}` : `2px solid ${c.border}`,
-              boxShadow: sel ? '0 0 0 4px rgba(47,93,80,0.3)' : '0 1px 3px rgba(0,0,0,0.2)',
-              zIndex: sel ? 3 : 2,
-            }}
-          >
-            {k.positie}
-          </button>
-        )
-      })}
+    <div className="flex flex-col gap-4">
+      {pakket.plattegrond && opTekening.length > 0 && (
+        <PlattegrondTekening
+          plattegrond={pakket.plattegrond}
+          kasten={opTekening.map((k) => ({ id: k.id, positie: k.positie, vak: k.vak!, label: label(k) }))}
+          kleur={(t) => kleurVan(perId.get(t.id)!)}
+          selId={selId}
+          onKies={setSelId}
+        />
+      )}
+      {wanden.map((w) => (
+        <div key={w} className="flex flex-col gap-2">
+          {(w || opTekening.length > 0) && (
+            <div className="text-[13px] font-semibold" style={{ color: C.muted }}>{w || 'Overige kasten'}</div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {los.filter((k) => (k.wand ?? '') === w).map((k) => {
+              const c = kleurVan(k)
+              const sel = k.id === selId
+              return (
+                <button
+                  key={k.id}
+                  type="button"
+                  onClick={() => setSelId(k.id)}
+                  aria-label={label(k)}
+                  aria-pressed={sel}
+                  className="min-h-11 px-3 rounded-lg text-sm font-semibold cursor-pointer"
+                  style={{ background: c.bg, color: c.ink, border: sel ? `3px solid ${C.ink}` : `1.5px solid ${c.border}` }}
+                >
+                  {k.positie} · {k.naam}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -336,6 +328,8 @@ export default function TabKast({
     }
   }
 
+  const getekend = !!pakket.plattegrond && pakket.kasten.some((k) => k.vak)
+
   return (
     <div className="flex flex-wrap gap-7 items-start">
       <Kaart className="p-5 pb-4 min-w-0" style={{ flex: '1 1 560px' }}>
@@ -347,10 +341,22 @@ export default function TabKast({
         <div className="flex flex-wrap gap-4 mt-3.5 text-[13px]" style={{ color: C.tekst }}>
           {([['nog bekijken', NEUTRAAL], ['akkoord', STATUS_KLEUR.akkoord], ['wijzigen', STATUS_KLEUR.wijzig], ['vraag', STATUS_KLEUR.vraag]] as const).map(([label, c]) => (
             <span key={label} className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="inline-block w-4 h-4 rounded-full" style={{ background: c.bg, border: `1.5px solid ${c.border}` }} />
+              <span aria-hidden="true" className="inline-block w-4 h-4 rounded-[3px]" style={{ background: c.bg, border: `1.5px solid ${c.border}` }} />
               {label}
             </span>
           ))}
+          {getekend && (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="inline-block w-4 h-[3px]" style={{ background: C.ink }} />
+              voorkant van de kast
+            </span>
+          )}
+          {getekend && pakket.kasten.some((k) => k.vak?.wand) && (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="inline-block w-4 h-4 rounded-[3px]" style={{ border: '1.5px dashed #8A8780' }} />
+              bovenkast
+            </span>
+          )}
         </div>
         {wanden.length > 0 && (
           <div className="mt-[18px] pt-3.5 flex flex-col gap-2" style={{ borderTop: '1px solid #E9E5DD' }}>

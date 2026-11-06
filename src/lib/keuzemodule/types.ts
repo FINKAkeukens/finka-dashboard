@@ -4,6 +4,7 @@
 // btw) — nooit brutopunten of de rest van de catalogus.
 
 import type { KastSoort, KastStatus } from './klantlaag'
+import type { Plattegrond, Vak } from './plattegrond'
 
 export interface PakketIndeling {
   key: string
@@ -30,8 +31,8 @@ export interface PakketKast {
   omschrijving: string
   soort: KastSoort
   wand: string | null
-  // Positie op de plattegrond als fractie (0–1) van breedte en hoogte.
-  pin: { x: number; y: number } | null
+  // Vak op de getekende plattegrond (null = niet op de tekening gevonden).
+  vak: Vak | null
   indelingen: PakketIndeling[]
   extras: PakketExtra[]
   inbegrepen: { key: string; label: string }[]
@@ -61,7 +62,7 @@ export interface PakketWerkblad extends PakketDecor {
 
 export interface Pakket {
   ronde: number
-  plattegrond: string | null
+  plattegrond: Plattegrond | null
   kasten: PakketKast[]
   keuken: {
     front: string | null

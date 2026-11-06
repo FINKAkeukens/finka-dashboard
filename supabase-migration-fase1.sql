@@ -2828,7 +2828,8 @@ CREATE TABLE IF NOT EXISTS finka_keuzemodule (
   model TEXT,
   prijsgroep INT CHECK (prijsgroep BETWEEN 1 AND 8),
   voorstel JSONB NOT NULL DEFAULT '{}'::jsonb,
-  plattegrond_url TEXT,
+  -- getekende plattegrond: kader + muren (uit het Winner Flex-bovenaanzicht)
+  plattegrond JSONB,
   ronde INT NOT NULL DEFAULT 1,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -2842,8 +2843,8 @@ CREATE TABLE IF NOT EXISTS finka_keuzemodule_kasten (
   soort TEXT NOT NULL DEFAULT 'overig' CHECK (soort IN ('lade', 'hoog', 'spoel', 'afval', 'apparaat', 'wand', 'overig')),
   breedte INT,
   wand TEXT,
-  pin_x REAL,
-  pin_y REAL,
+  -- vak op de plattegrond {x,y,w,h,lx,ly,front,wand}
+  vak JSONB,
   inbegrepen TEXT[] NOT NULL DEFAULT '{}',
   -- Overige gegevens per kast, bv. het voorgestelde apparaat bij een apparaatkast.
   data JSONB NOT NULL DEFAULT '{}'::jsonb,
