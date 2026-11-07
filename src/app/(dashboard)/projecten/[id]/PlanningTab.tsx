@@ -1,5 +1,6 @@
 'use client'
 
+import { syncAgenda } from '@/lib/google-calendar-client'
 import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -97,6 +98,10 @@ export default function PlanningTab({
     const toUpdate = milestones.filter((m) => !m.isNew)
 
     if (toDelete.length) {
+      // Eerst uit Google Agenda, anders blijft het event daar staan.
+      for (const id of toDelete) {
+        if (initialMilestones.find((m) => m.id === id)?.google_event_id) await syncAgenda(id, 'remove')
+      }
       const { error: delError } = await supabase.from('finka_project_milestones').delete().in('id', toDelete)
       if (delError) {
         setError(delError.message)
@@ -129,6 +134,12 @@ export default function PlanningTab({
         setSaving(false)
         return
       }
+    }
+
+    for (const m of toUpdate) {
+      if (!m.in_google_calendar) continue
+      const result = await syncAgenda(m.id)
+      if (!result.ok) setError(`Google Agenda: ${result.error ?? 'onbekende fout'}`)
     }
 
     // Vervangt tijdelijke id's door de echte, door Supabase gegenereerde id's.

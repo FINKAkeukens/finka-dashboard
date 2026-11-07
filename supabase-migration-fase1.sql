@@ -2737,3 +2737,37 @@ BEGIN
     EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', c.tbl, c.conname);
   END LOOP;
 END $$;
+
+-- =========================================================
+-- 100. Afspraken in Google Agenda (contact@finkakeukens.nl).
+--
+--    finka_project_milestones krijgt een begin- en eindtijd en de
+--    koppeling met Google Agenda: in_google_calendar (deze afspraak hoort in
+--    de agenda), with_meet (Google Meet-link erbij), invite_customer
+--    (uitnodiging naar het e-mailadres van de klant), plus wat Google
+--    teruggeeft: google_event_id, meet_link en de laatste fout.
+--    finka_google_calendar_token: de koppeling met het Google-account (één
+--    rij). Bewust zonder policy voor authenticated: alleen de server
+--    (service role) leest en schrijft het token. Zie src/lib/google-calendar.ts.
+-- =========================================================
+
+ALTER TABLE finka_project_milestones
+  ADD COLUMN IF NOT EXISTS start_time TIME,
+  ADD COLUMN IF NOT EXISTS end_time TIME,
+  ADD COLUMN IF NOT EXISTS in_google_calendar BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS with_meet BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS invite_customer BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS google_event_id TEXT,
+  ADD COLUMN IF NOT EXISTS meet_link TEXT,
+  ADD COLUMN IF NOT EXISTS google_sync_error TEXT;
+
+CREATE TABLE IF NOT EXISTS finka_google_calendar_token (
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  refresh_token TEXT NOT NULL,
+  account_email TEXT,
+  calendar_id TEXT NOT NULL DEFAULT 'primary',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_google_calendar_token ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE finka_google_calendar_token FROM anon, authenticated;
+GRANT ALL ON TABLE finka_google_calendar_token TO service_role;

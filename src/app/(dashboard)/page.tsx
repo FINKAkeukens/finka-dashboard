@@ -229,6 +229,7 @@ export default async function DashboardPage() {
     title: p.title,
     referenceNumber: p.reference_number,
     customerName: p.customer ? `${p.customer.first_name} ${p.customer.last_name}` : '—',
+    customerEmail: null,
     phaseLabel: null,
   }))
   const topPlanning = buildPlanningEntries({

@@ -1085,6 +1085,15 @@ export interface ProjectMilestone {
   assigned_to: MilestoneAssignee | null
   // Prio: bovenaan /planning, ongeacht de datum.
   priority: boolean
+  // Tijden ("10:00:00") en de koppeling met Google Agenda — migratie 100.
+  start_time?: string | null
+  end_time?: string | null
+  in_google_calendar?: boolean
+  with_meet?: boolean
+  invite_customer?: boolean
+  google_event_id?: string | null
+  meet_link?: string | null
+  google_sync_error?: string | null
   created_at: string
   updated_at: string
 }

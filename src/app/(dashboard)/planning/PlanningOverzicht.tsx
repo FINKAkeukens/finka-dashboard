@@ -4,14 +4,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { Plus, Trash2, X } from 'lucide-react'
+import { CalendarPlus, ListChecks, Plus, Trash2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Assignee, ChecklistItem, ChecklistTemplateItem, MilestoneStatus, ProjectMilestone } from '@/lib/types'
 import { MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, RETIRED_MILESTONE_KEY, assigneeNames } from '@/lib/planning'
 import { refreshUnlocks } from '@/lib/draaiboek'
-import { INTERN_BORDER, INTERN_TEXT, INTERN_TINT } from '@/lib/intern'
 import {
   BUCKET_ORDER,
   BUCKET_TITLES,
@@ -23,6 +22,9 @@ import {
   entryBucket,
   milestoneEntry,
 } from '@/lib/planning-overzicht'
+import { syncAgenda } from '@/lib/google-calendar-client'
+import AfsprakenAgenda from './AfsprakenAgenda'
+import AfspraakEditor, { AfspraakValues } from './AfspraakEditor'
 
 // /planning — één lijst over alle lopende projecten: prio bovenaan, dan op
 // urgentie. Alles slaat direct op, net als de Planning-tab per project;
@@ -51,6 +53,8 @@ export default function PlanningOverzicht({
   initialEntries,
   templates,
   assignees,
+  calendarAccount,
+  agendaMessage,
 }: {
   projects: PlanningProjectInfo[]
   // Al op de server samengesteld (zie page.tsx) — na een wijziging laden we
@@ -58,6 +62,10 @@ export default function PlanningOverzicht({
   initialEntries: PlanningEntry[]
   templates: ChecklistTemplateItem[]
   assignees: Assignee[]
+  // Google-account waar afspraken in komen; null = nog niet gekoppeld.
+  calendarAccount: string | null
+  // Melding na het koppelen van Google Agenda (?agenda=… in de URL).
+  agendaMessage: { text: string; error: boolean } | null
 }) {
   const supabase = createClient()
   const today = startOfDay(new Date())
@@ -81,6 +89,10 @@ export default function PlanningOverzicht({
   const [newPriority, setNewPriority] = useState(false)
   const [creating, setCreating] = useState(false)
 
+  // Afspraak-editor: 'new', de key van een afspraak, of dicht.
+  const [afspraakKey, setAfspraakKey] = useState<string | null>(null)
+  const [savingAfspraak, setSavingAfspraak] = useState(false)
+
   const names = assigneeNames(assignees)
   const sortedProjects = [...projects].sort((a, b) => a.referenceNumber.localeCompare(b.referenceNumber))
 
@@ -89,11 +101,11 @@ export default function PlanningOverzicht({
   const matchesPerson = (e: PlanningEntry) =>
     (!onlyPrio || e.priority) &&
     (person === PERSON_ALL || (person === PERSON_NONE ? !e.assignee : e.assignee === person))
-  const entries = allEntries.filter((e) => e.project && matchesPerson(e) && (!projectFilter || e.project.id === projectFilter))
-  // Prio bovenaan, dan op datum (zonder datum achteraan).
-  const generalEntries = allEntries
-    .filter((e) => !e.project && matchesPerson(e))
-    .sort((a, b) => (a.priority !== b.priority ? (a.priority ? -1 : 1) : compareEntries(a, b)))
+  const inProjectFilter = (e: PlanningEntry) => !!e.project && matchesPerson(e) && (!projectFilter || e.project.id === projectFilter)
+  // Afspraken staan in de weekagenda, de rest in de takenlijst.
+  const afspraken = allEntries.filter((e) => e.isAfspraak && inProjectFilter(e))
+  const entries = allEntries.filter((e) => !e.isAfspraak && inProjectFilter(e))
+  const editingAfspraak = afspraakKey && afspraakKey !== 'new' ? allEntries.find((e) => e.key === afspraakKey) ?? null : null
   const byBucket = new Map<PlanningBucket, PlanningEntry[]>()
   for (const e of entries) {
     const b = entryBucket(e, today)
@@ -295,6 +307,139 @@ export default function PlanningOverzicht({
       await reloadProject(project)
     }
     resetNewTask()
+  }
+
+  // --- Afspraken --------------------------------------------------------------
+
+  // Na opslaan: naar Google Agenda (de server kijkt zelf of dat moet) en
+  // het project opnieuw opbouwen, zodat Meet-link en fouten zichtbaar zijn.
+  async function pushToAgenda(milestoneId: string, project: PlanningProjectInfo, wasInGoogle: boolean, inGoogle: boolean) {
+    if (inGoogle || wasInGoogle) {
+      const result = await syncAgenda(milestoneId)
+      if (!result.ok) setError(`Google Agenda: ${result.error ?? 'onbekende fout'}`)
+      else if (inGoogle) flash(result.meet_link ? 'In Google Agenda gezet, met Meet-link.' : 'In Google Agenda gezet.')
+    }
+    await reloadProject(project)
+  }
+
+  async function saveAfspraak(v: AfspraakValues) {
+    const project = projects.find((p) => p.id === v.projectId)
+    if (!project) return
+    setSavingAfspraak(true)
+    setError('')
+    const nowIso = new Date().toISOString()
+    const fields = {
+      date: v.date || null,
+      start_time: v.startTime || null,
+      end_time: v.endTime || null,
+      assigned_to: v.assignee || null,
+      notes: v.notes.trim() || null,
+      in_google_calendar: v.inGoogle,
+      with_meet: v.inGoogle && v.withMeet,
+      invite_customer: v.inGoogle && v.inviteCustomer,
+      updated_at: nowIso,
+    }
+
+    let milestoneId: string | null = null
+    let wasInGoogle = false
+    if (editingAfspraak?.milestoneId) {
+      milestoneId = editingAfspraak.milestoneId
+      wasInGoogle = !!editingAfspraak.agenda?.inGoogle
+      // Bij een draaiboekstap is de naam die van de stap.
+      const labelChanged = v.label.trim() && v.label.trim() !== editingAfspraak.label
+      if (labelChanged && editingAfspraak.itemId) {
+        await supabase.from('finka_checklist_items').update({ label: v.label.trim(), updated_at: nowIso }).eq('id', editingAfspraak.itemId)
+      }
+      const { error: updError } = await supabase
+        .from('finka_project_milestones')
+        .update({ ...fields, ...(labelChanged && !editingAfspraak.itemId ? { label: v.label.trim() } : {}) })
+        .eq('id', milestoneId)
+      if (updError) {
+        setError(`Opslaan mislukt: ${updError.message}`)
+        setSavingAfspraak(false)
+        return
+      }
+    } else {
+      // Een vaste afspraak (Meting, Levering, …) bestaat al per project:
+      // die rij krijgt de datum. "Anders" wordt een eigen afspraak.
+      if (v.milestoneKey !== 'custom') {
+        const { data: existing } = await supabase
+          .from('finka_project_milestones')
+          .select('id, status, in_google_calendar')
+          .eq('project_id', project.id)
+          .eq('milestone_key', v.milestoneKey)
+          .maybeSingle()
+        if (existing) {
+          milestoneId = existing.id
+          wasInGoogle = !!existing.in_google_calendar
+          const { error: updError } = await supabase
+            .from('finka_project_milestones')
+            .update({ ...fields, status: existing.status === 'klaar' ? 'gepland' : existing.status })
+            .eq('id', existing.id)
+          if (updError) {
+            setError(`Opslaan mislukt: ${updError.message}`)
+            setSavingAfspraak(false)
+            return
+          }
+        }
+      }
+      if (!milestoneId) {
+        const { data: last } = await supabase
+          .from('finka_project_milestones')
+          .select('sort_order')
+          .eq('project_id', project.id)
+          .order('sort_order', { ascending: false })
+          .limit(1)
+        const { data, error: insError } = await supabase
+          .from('finka_project_milestones')
+          .insert({
+            ...fields,
+            project_id: project.id,
+            milestone_key: v.milestoneKey,
+            label: v.milestoneKey === 'custom' ? v.label.trim() : null,
+            status: 'gepland',
+            priority: false,
+            sort_order: (last?.[0]?.sort_order ?? -1) + 1,
+          })
+          .select('id')
+          .single()
+        if (insError) {
+          setError(`Aanmaken mislukt: ${insError.message}`)
+          setSavingAfspraak(false)
+          return
+        }
+        milestoneId = data.id
+      }
+    }
+
+    await pushToAgenda(milestoneId!, project, wasInGoogle, v.inGoogle)
+    setSavingAfspraak(false)
+    setAfspraakKey(null)
+  }
+
+  async function finishAfspraak(e: PlanningEntry) {
+    setAfspraakKey(null)
+    await setDone(e, true)
+  }
+
+  // Alleen eigen afspraken ("Anders") kunnen weg; vaste afspraken horen bij
+  // elk project. Eerst het event uit Google Agenda halen.
+  async function deleteAfspraak(e: PlanningEntry) {
+    if (!e.milestoneId || !e.project || !confirm(`Afspraak "${e.label}" verwijderen?${e.agenda?.inGoogle ? ' Hij gaat ook uit Google Agenda.' : ''}`)) return
+    setSavingAfspraak(true)
+    if (e.agenda?.inGoogle) {
+      const result = await syncAgenda(e.milestoneId, 'remove')
+      if (!result.ok) {
+        setError(`Google Agenda: ${result.error ?? 'onbekende fout'}`)
+        setSavingAfspraak(false)
+        return
+      }
+    }
+    const { error: delError } = await supabase.from('finka_project_milestones').delete().eq('id', e.milestoneId)
+    if (delError) setError(`Verwijderen mislukt: ${delError.message}`)
+    await reloadProject(e.project)
+    setSavingAfspraak(false)
+    setAfspraakKey(null)
   }
 
   // --- Weergave -------------------------------------------------------------
@@ -518,11 +663,6 @@ export default function PlanningOverzicht({
   return (
     <div className="max-w-7xl space-y-5">
       <div className="flex flex-wrap items-end gap-2">
-        <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus size={13} />
-          Taak
-        </Button>
-        <span className="hidden sm:block w-px h-6 bg-[#DDD8D2] mx-1 mb-1" />
         <label className="flex flex-col gap-1 text-xs text-[#6B6560]">
           Toegewezen aan
           <select
@@ -560,6 +700,48 @@ export default function PlanningOverzicht({
         >
           ! Alleen prio
         </button>
+        <Button size="sm" variant="outline" className="ml-auto border-[#C9A96E] bg-[#FBF7EF] text-[#6E5322] hover:bg-[#F6EFE2]" onClick={() => setAfspraakKey('new')}>
+          <CalendarPlus size={13} />
+          Afspraak
+        </Button>
+      </div>
+
+      {agendaMessage && (
+        <p className={`text-sm rounded-lg px-4 py-2.5 border ${agendaMessage.error ? 'text-red-600 bg-red-50 border-red-100' : 'text-[#5E4A20] bg-[#F6EFE2] border-[#EADBC0]'}`}>
+          {agendaMessage.text}
+        </p>
+      )}
+
+      {afspraakKey && (afspraakKey === 'new' || editingAfspraak) && (
+        <AfspraakEditor
+          key={afspraakKey}
+          entry={editingAfspraak}
+          projects={sortedProjects}
+          names={names}
+          calendarAccount={calendarAccount}
+          saving={savingAfspraak}
+          onSave={saveAfspraak}
+          onCancel={() => setAfspraakKey(null)}
+          onDone={editingAfspraak ? () => finishAfspraak(editingAfspraak) : undefined}
+          onDelete={editingAfspraak && !editingAfspraak.itemId && editingAfspraak.agenda?.custom ? () => deleteAfspraak(editingAfspraak) : undefined}
+        />
+      )}
+
+      <AfsprakenAgenda
+        afspraken={afspraken}
+        today={today}
+        calendarAccount={calendarAccount}
+        selectedKey={afspraakKey}
+        onOpen={(e) => setAfspraakKey(e.key)}
+      />
+
+      <div className="flex items-center gap-2.5 pt-2">
+        <ListChecks size={18} className="text-[#1C1B19]" aria-hidden />
+        <h2 className="text-[15px] font-semibold text-[#1C1B19]">Taken</h2>
+        <Button size="sm" className="ml-auto" onClick={() => setAdding(true)}>
+          <Plus size={13} />
+          Taak
+        </Button>
       </div>
 
       {adding && (
@@ -577,7 +759,6 @@ export default function PlanningOverzicht({
               className="h-9 px-2 text-sm text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
             >
               <option value="">— Kies —</option>
-              <option value={GENERAL}>FINKA intern</option>
               {sortedProjects.map((p) => (
                 <option key={p.id} value={p.id}>{projectName(p)}</option>
               ))}
@@ -626,10 +807,7 @@ export default function PlanningOverzicht({
         </p>
       )}
 
-      {/* Op de computer projecttaken links en algemene taken rechts; op de
-          telefoon onder elkaar. */}
-      <div className="flex flex-col xl:flex-row gap-6 items-start">
-      <div className="w-full flex-1 min-w-0 space-y-5">
+      <div className="space-y-5">
       {entries.length === 0 && (
         <div className="bg-white rounded-xl border border-dashed border-[#DDD8D2] py-14 text-center">
           <p className="text-sm text-[#6B6560]">Geen projecttaken voor dit filter.</p>
@@ -681,33 +859,6 @@ export default function PlanningOverzicht({
           </div>
         </section>
       )}
-      </div>
-
-      {/* To do's van FINKA intern: los van de projectplanning, in de
-          eigen accentkleur van die pagina. */}
-      <aside className={`w-full xl:w-[380px] shrink-0 rounded-2xl border ${INTERN_BORDER} bg-white overflow-hidden`}>
-        <div className={`flex items-center justify-between gap-2 px-4 py-3 ${INTERN_TINT} border-b ${INTERN_BORDER}`}>
-          <h2 className={`text-xs font-semibold uppercase tracking-wider ${INTERN_TEXT}`}>
-            FINKA intern <span className="font-normal text-[#6B6560]">({generalEntries.length})</span>
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => { setNewTarget(GENERAL); setAdding(true) }}
-              className={`inline-flex items-center gap-1 text-[13px] ${INTERN_TEXT} hover:text-[#1C1B19]`}
-            >
-              <Plus size={13} />
-              To do
-            </button>
-            <Link href="/intern" className="text-[13px] text-[#6B6560] hover:text-[#1C1B19]">Openen</Link>
-          </div>
-        </div>
-        {generalEntries.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-[#6B6560]">Geen to do&apos;s voor dit filter.</p>
-        ) : (
-          <div>{generalEntries.map((e) => renderRow(e, true))}</div>
-        )}
-      </aside>
       </div>
     </div>
   )

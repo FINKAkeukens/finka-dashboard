@@ -7,9 +7,25 @@ import { phaseLabelForStatus } from '@/lib/draaiboek'
 import { PLANNING_ITEM_COLUMNS, PlanningProjectInfo, buildPlanningEntries } from '@/lib/planning-overzicht'
 import { fetchAll } from '@/lib/supabase/fetch-all'
 import { RETIRED_MILESTONE_KEY } from '@/lib/planning'
+import { calendarConnection } from '@/lib/google-calendar'
 import PlanningOverzicht from './PlanningOverzicht'
 
-export default async function PlanningOverviewPage() {
+const AGENDA_ERRORS: Record<string, string> = {
+  no_refresh_token: 'Google gaf geen blijvende toegang terug. Probeer het koppelen opnieuw.',
+  oauth_failed: 'Koppelen met Google Agenda is mislukt. Probeer het opnieuw.',
+}
+
+export default async function PlanningOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ agenda?: string; agenda_fout?: string }>
+}) {
+  const { agenda, agenda_fout } = await searchParams
+  const agendaMessage = agenda_fout
+    ? { text: AGENDA_ERRORS[agenda_fout] ?? `Koppelen met Google Agenda is mislukt: ${agenda_fout}`, error: true }
+    : agenda === 'gekoppeld'
+      ? { text: 'Google Agenda is gekoppeld. Nieuwe afspraken kunnen nu in de agenda.', error: false }
+      : null
   const supabase = await createClient()
 
   // Alles wat niet van de project-id's afhangt in één rondje; de stappen en
@@ -23,7 +39,7 @@ export default async function PlanningOverviewPage() {
   ] = await Promise.all([
     supabase
       .from('finka_projects')
-      .select('*, customer:finka_customers(id, first_name, last_name), status:finka_project_statuses(id, label, color)')
+      .select('*, customer:finka_customers(id, first_name, last_name, email), status:finka_project_statuses(id, label, color)')
       .is('archived_at', null)
       .order('created_at', { ascending: false }),
     // Algemene taken — niet aan een project gekoppeld.
@@ -55,11 +71,16 @@ export default async function PlanningOverviewPage() {
     milestones = msData.sort((a, b) => a.sort_order - b.sort_order)
   }
 
+  // Met welk Google-account de afspraken in de agenda komen (null = nog niet
+  // gekoppeld). Bestaat de tabel nog niet (migratie 100), dan ook null.
+  const calendar = await calendarConnection().catch(() => null)
+
   const planningProjects: PlanningProjectInfo[] = projects.map((p) => ({
     id: p.id,
     title: p.title,
     referenceNumber: p.reference_number,
     customerName: p.customer ? `${p.customer.first_name} ${p.customer.last_name}` : '—',
+    customerEmail: (p.customer as { email?: string | null } | null)?.email ?? null,
     phaseLabel: phaseLabelForStatus(categories, p.status_id, p.status?.label ?? null) ?? categories[0]?.label ?? null,
   }))
 
@@ -76,6 +97,8 @@ export default async function PlanningOverviewPage() {
         initialEntries={buildPlanningEntries({ projects: planningProjects, items, templates, milestones, generalTasks })}
         templates={templates}
         assignees={(assigneesData ?? []) as Assignee[]}
+        calendarAccount={calendar ? calendar.account_email ?? 'gekoppeld' : null}
+        agendaMessage={agendaMessage}
       />
     </div>
   )

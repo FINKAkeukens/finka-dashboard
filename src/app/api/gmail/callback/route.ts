@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTokensFromCode } from '@/lib/gmail'
+import { saveCalendarTokens } from '@/lib/google-calendar'
 import { createClient } from '@supabase/supabase-js'
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')
   if (!code) {
     return NextResponse.redirect(new URL('/apparatuur/inbox?error=no_code', request.url))
+  }
+
+  // Zelfde redirect-URI voor de Google Agenda-koppeling (planning), herkenbaar
+  // aan state=calendar — zie src/lib/google-calendar.ts.
+  if (request.nextUrl.searchParams.get('state') === 'calendar') {
+    try {
+      const result = await saveCalendarTokens(code)
+      const query = result.error ? `agenda_fout=${encodeURIComponent(result.error)}` : 'agenda=gekoppeld'
+      return NextResponse.redirect(new URL(`/planning?${query}`, request.url))
+    } catch (err) {
+      console.error('Google Agenda OAuth error:', err)
+      return NextResponse.redirect(new URL('/planning?agenda_fout=oauth_failed', request.url))
+    }
   }
 
   try {

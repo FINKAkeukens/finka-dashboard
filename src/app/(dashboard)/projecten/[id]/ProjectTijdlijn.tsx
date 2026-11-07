@@ -1,5 +1,6 @@
 'use client'
 
+import { syncAgenda } from '@/lib/google-calendar-client'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -261,6 +262,11 @@ export default function ProjectTijdlijn({
     if (updError) {
       setError(updError.message)
       return
+    }
+    // Staat de afspraak in Google Agenda, dan gaat de wijziging mee.
+    if (milestones.find((m) => m.id === id)?.in_google_calendar) {
+      const result = await syncAgenda(id)
+      if (!result.ok) setError(`Google Agenda: ${result.error ?? 'onbekende fout'}`)
     }
     // Projectkop (doorlooptijd) en de afspraken-editor eronder lezen
     // dezelfde mijlpalen server-side.

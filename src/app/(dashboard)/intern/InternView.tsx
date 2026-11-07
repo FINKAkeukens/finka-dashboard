@@ -3,27 +3,26 @@
 import { useRef, useState } from 'react'
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { ExternalLink, FileText, Link2, Pin, Plus, Trash2, Upload, X } from 'lucide-react'
+import { ExternalLink, FileText, GripVertical, Link2, Pin, Plus, Trash2, Upload, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AutoTextarea from '@/components/ui/auto-textarea'
-import { Assignee, InternalInspiration, InternalNote, ProjectMilestone } from '@/lib/types'
-import { assigneeNames } from '@/lib/planning'
+import { Assignee, InternalInspiration, InternalNote, MilestoneStatus, ProjectMilestone } from '@/lib/types'
+import { MILESTONE_STATUS_COLORS, MILESTONE_STATUS_LABELS, MILESTONE_STATUS_ORDER, assigneeNames } from '@/lib/planning'
 import { fileHref } from '@/lib/storage-url'
 import { INTERN_BORDER, INTERN_TEXT, INTERN_TINT } from '@/lib/intern'
 
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
+// Eigen volgorde: de to do's staan zoals ze versleept zijn (sort_order).
 function sortTodos(list: ProjectMilestone[]): ProjectMilestone[] {
-  return [...list].sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority ? -1 : 1
-    const da = a.date ?? '9999-12-31'
-    const db = b.date ?? '9999-12-31'
-    return da !== db ? da.localeCompare(db) : a.sort_order - b.sort_order
-  })
+  return [...list].sort((a, b) => a.sort_order - b.sort_order)
 }
+
+// Status van een open to do; "Klaar" gaat via het vinkje.
+const OPEN_STATUSES: MilestoneStatus[] = MILESTONE_STATUS_ORDER.filter((s) => s !== 'klaar')
 
 function sortNotes(list: InternalNote[]): InternalNote[] {
   return [...list].sort((a, b) => (a.pinned !== b.pinned ? (a.pinned ? -1 : 1) : b.updated_at.localeCompare(a.updated_at)))
@@ -80,6 +79,8 @@ export default function InternView({
   const [uploading, setUploading] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const savingTodo = useRef(false)
+  const [draggedTodo, setDraggedTodo] = useState<string | null>(null)
+  const [pickerReset, setPickerReset] = useState(0)
 
   const names = assigneeNames(assignees)
   const openTodos = sortTodos(todos.filter((t) => t.status !== 'klaar'))
@@ -133,6 +134,26 @@ export default function InternView({
     setNewTodoAssignee('')
   }
 
+  // Sleep een to do naar de plek van een andere; daarna krijgen de open
+  // to do's opnieuw oplopende nummers en slaan we alleen de gewijzigde op.
+  async function moveTodo(fromId: string, toId: string) {
+    if (fromId === toId) return
+    const list = [...openTodos]
+    const from = list.findIndex((t) => t.id === fromId)
+    const to = list.findIndex((t) => t.id === toId)
+    if (from < 0 || to < 0) return
+    const [moved] = list.splice(from, 1)
+    list.splice(to, 0, moved)
+    const changed = list.map((t, i) => ({ id: t.id, sort_order: i })).filter((x) => todos.find((t) => t.id === x.id)?.sort_order !== x.sort_order)
+    const orderOf = new Map(changed.map((x) => [x.id, x.sort_order]))
+    setTodos((prev) => prev.map((t) => (orderOf.has(t.id) ? { ...t, sort_order: orderOf.get(t.id)! } : t)))
+    const results = await Promise.all(
+      changed.map((x) => supabase.from('finka_project_milestones').update({ sort_order: x.sort_order }).eq('id', x.id))
+    )
+    const failed = results.find((r) => r.error)
+    if (failed?.error) fail(`Volgorde opslaan mislukt: ${failed.error.message}`)
+  }
+
   async function removeTodo(todo: ProjectMilestone) {
     if (!confirm(`"${todo.label}" verwijderen?`)) return
     setTodos((prev) => prev.filter((t) => t.id !== todo.id))
@@ -140,28 +161,92 @@ export default function InternView({
     if (delError) fail(`Verwijderen mislukt: ${delError.message}`)
   }
 
-  function dateText(date: string | null): { text: string; className: string } | null {
-    if (!date) return null
+  // Zelfde datumweergave als de takenlijst op /planning.
+  function dateText(date: string | null): { text: string; className: string } {
+    if (!date) return { text: 'Geen datum', className: 'text-[#9A948D]' }
     const days = differenceInCalendarDays(new Date(date), today)
-    const text = format(new Date(date), 'EEEEEE d MMM', { locale: nl })
-    if (days < 0) return { text, className: 'text-red-600 font-medium' }
-    if (days <= 1) return { text: days === 0 ? 'Vandaag' : 'Morgen', className: 'text-[#8A6A2E] font-medium' }
-    return { text, className: 'text-[#6B6560]' }
+    if (days < 0) return { text: format(new Date(date), 'd MMM', { locale: nl }), className: 'text-red-600 font-medium' }
+    if (days === 0) return { text: 'Vandaag', className: 'text-[#8A6A2E] font-medium' }
+    if (days === 1) return { text: 'Morgen', className: 'text-[#8A6A2E] font-medium' }
+    return { text: format(new Date(date), 'EEEEEE d MMM', { locale: nl }), className: 'text-[#6B6560]' }
+  }
+
+  // Klik op de datum opent meteen de datumkiezer, net als op /planning; bij
+  // de volgende klik op de pagina bouwen we het veld opnieuw op zodat de
+  // kiezer sluit.
+  function dateButton(todo: ProjectMilestone, date: { text: string; className: string }) {
+    return (
+      <span className="relative inline-block w-24 text-right text-[13px] shrink-0">
+        <button
+          type="button"
+          title="Datum aanpassen"
+          onClick={(ev) => {
+            const input = ev.currentTarget.nextElementSibling as HTMLInputElement | null
+            if (input?.showPicker) {
+              try {
+                input.showPicker()
+                setTimeout(() => {
+                  document.addEventListener('pointerdown', () => setPickerReset((n) => n + 1), { once: true })
+                }, 0)
+                return
+              } catch {}
+            }
+            setEditingTodo(todo.id)
+          }}
+          className={`hover:underline hover:text-[#8A6A2E] ${date.className}`}
+        >
+          {date.text}
+        </button>
+        <input
+          key={pickerReset}
+          type="date"
+          tabIndex={-1}
+          aria-hidden
+          value={todo.date ?? ''}
+          onChange={(ev) => saveTodo(todo.id, { date: ev.target.value || null })}
+          className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+        />
+      </span>
+    )
   }
 
   function renderTodo(todo: ProjectMilestone) {
     const done = todo.status === 'klaar'
     const isEditing = editingTodo === todo.id
     const date = dateText(todo.date)
+    const status: MilestoneStatus = OPEN_STATUSES.includes(todo.status) ? todo.status : 'nog_doen'
     return (
-      <div key={todo.id} className="border-t border-[#EEF2EF] first:border-t-0">
-        <div className="flex items-center gap-3 px-5 py-2.5 min-h-12">
+      <div
+        key={todo.id}
+        className={`border-t border-[#EFEBE6] first:border-t-0 ${draggedTodo === todo.id ? 'opacity-40' : ''}`}
+        onDragOver={(e) => {
+          if (draggedTodo && !done) e.preventDefault()
+        }}
+        onDrop={(e) => {
+          if (!draggedTodo || done) return
+          e.preventDefault()
+          moveTodo(draggedTodo, todo.id)
+          setDraggedTodo(null)
+        }}
+      >
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 min-h-14 ${done ? 'px-4' : 'pl-1.5 pr-4'}`}>
+          {!done && (
+            <span
+              draggable
+              onDragStart={() => setDraggedTodo(todo.id)}
+              onDragEnd={() => setDraggedTodo(null)}
+              title="Sleep om de volgorde te veranderen"
+              className="shrink-0 cursor-grab text-[#C7C2BB] hover:text-[#6B6560] active:cursor-grabbing"
+            >
+              <GripVertical size={15} />
+            </span>
+          )}
           <input
             type="checkbox"
             aria-label={done ? 'Heropenen' : 'Afvinken'}
             checked={done}
             onChange={() => saveTodo(todo.id, { status: done ? 'nog_doen' : 'klaar' })}
-            className="w-5 h-5 accent-[#4E6B5A] shrink-0 cursor-pointer"
+            className="w-5 h-5 accent-[#1C1B19] shrink-0 cursor-pointer"
           />
           {!done && (
             <button
@@ -176,22 +261,50 @@ export default function InternView({
               !
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setEditingTodo(isEditing ? null : todo.id)}
-            className={`flex-1 min-w-0 text-left text-[15px] ${done ? 'line-through text-[#9A948D]' : 'text-[#1C1B19] hover:text-[#4E6B5A]'}`}
-          >
-            {todo.label || 'Naamloze to do'}
-            {(todo.assigned_to || todo.notes) && (
-              <span className="block text-xs text-[#6B6560] truncate">
-                {[todo.assigned_to, todo.notes].filter(Boolean).join(' · ')}
-              </span>
-            )}
-          </button>
-          {date && !done && <span className={`text-[13px] shrink-0 ${date.className}`}>{date.text}</span>}
+          <div className="flex-[999_1_260px] min-w-0">
+            <button
+              type="button"
+              onClick={() => setEditingTodo(isEditing ? null : todo.id)}
+              className={`text-left text-[15px] ${done ? 'line-through text-[#9A948D]' : 'text-[#1C1B19] hover:text-[#8A6A2E]'}`}
+              title="Datum, notitie en details"
+            >
+              {todo.label || 'Naamloze to do'}
+            </button>
+            <p className="text-[13px] text-[#6B6560] truncate">
+              FINKA intern
+              {todo.notes && <> · {todo.notes}</>}
+            </p>
+          </div>
+          {!done && (
+            <select
+              aria-label="Status"
+              value={status}
+              onChange={(e) => saveTodo(todo.id, { status: e.target.value as MilestoneStatus })}
+              style={{ color: MILESTONE_STATUS_COLORS[status], borderColor: status === 'nog_doen' ? undefined : MILESTONE_STATUS_COLORS[status] }}
+              className="h-8 max-w-36 px-2 text-[13px] font-medium bg-white border border-[#DDD8D2] rounded-full shrink-0 focus:outline-none"
+            >
+              {OPEN_STATUSES.map((s) => (
+                <option key={s} value={s}>{MILESTONE_STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+          )}
+          {!done && (
+            <select
+              aria-label="Toegewezen aan"
+              value={todo.assigned_to ?? ''}
+              onChange={(e) => saveTodo(todo.id, { assigned_to: e.target.value || null })}
+              className="h-8 max-w-40 px-2 text-[13px] bg-[#FAF8F5] border border-[#DDD8D2] rounded-full focus:outline-none focus:border-[#1C1B19]"
+            >
+              <option value="">Niemand</option>
+              {assigneeNames(assignees, todo.assigned_to).map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+          )}
+          {!done && dateButton(todo, date)}
         </div>
         {isEditing && (
-          <div className="flex flex-wrap items-center gap-2 px-5 pb-3 sm:pl-[60px]">
+          <div className="flex flex-wrap items-center gap-2 px-4 pb-3 sm:pl-[106px]">
             <Input
               key={`label-${todo.id}`}
               aria-label="Naam"
@@ -209,17 +322,6 @@ export default function InternView({
               onChange={(e) => saveTodo(todo.id, { date: e.target.value || null })}
               className="h-8 w-40"
             />
-            <select
-              aria-label="Toegewezen aan"
-              value={todo.assigned_to ?? ''}
-              onChange={(e) => saveTodo(todo.id, { assigned_to: e.target.value || null })}
-              className="h-8 px-2 text-sm bg-white border border-[#DDD8D2] rounded-md focus:outline-none focus:border-[#1C1B19]"
-            >
-              <option value="">Niemand</option>
-              {assigneeNames(assignees, todo.assigned_to).map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
             <Input
               key={`notes-${todo.id}`}
               aria-label="Notitie"
@@ -233,6 +335,9 @@ export default function InternView({
             />
             <button type="button" onClick={() => removeTodo(todo)} aria-label="To do verwijderen" className="p-1.5">
               <Trash2 size={14} className="text-[#9A948D] hover:text-red-600" />
+            </button>
+            <button type="button" onClick={() => setEditingTodo(null)} aria-label="Sluiten" className="p-1.5 text-[#6B6560] hover:text-[#1C1B19]">
+              <X size={14} />
             </button>
           </div>
         )}
@@ -359,7 +464,7 @@ export default function InternView({
   const inputClass = 'h-9 px-2.5 text-sm text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#4E6B5A] min-w-0'
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="space-y-6">
       {error && (
         <p className="flex items-start gap-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">
           <span className="flex-1">{error}</span>
@@ -367,7 +472,8 @@ export default function InternView({
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] items-start">
+      {/* Onder elkaar, elk over de volle breedte: to do's, aantekeningen, inspiratie. */}
+      <div className="space-y-6">
         <Section title="To do's" count={openTodos.length}>
           <form onSubmit={addTodo} className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-[#EEF2EF]">
             <Input
@@ -429,7 +535,7 @@ export default function InternView({
           {notes.length === 0 ? (
             <p className="px-5 py-6 text-sm text-[#6B6560]">Nog geen aantekeningen.</p>
           ) : (
-            <div className="p-4 grid gap-3 sm:grid-cols-2">
+            <div className="p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {notes.map((note) => (
                 <article
                   key={note.id}

@@ -16,6 +16,8 @@ export interface PlanningProjectInfo {
   title: string
   referenceNumber: string
   customerName: string
+  // Voor de agenda-uitnodiging (Google Agenda) — kan leeg zijn.
+  customerEmail: string | null
   // Fase waar een nieuwe taak bij dit project in komt (zie
   // phaseLabelForStatus).
   phaseLabel: string | null
@@ -36,6 +38,33 @@ export interface PlanningEntry {
   notes: string | null
   isAfspraak: boolean
   milestoneStatus: MilestoneStatus | null
+  // Alleen bij afspraken (mijlpalen): tijden en Google Agenda.
+  agenda: AfspraakAgenda | null
+}
+
+export interface AfspraakAgenda {
+  startTime: string | null
+  endTime: string | null
+  inGoogle: boolean
+  withMeet: boolean
+  inviteCustomer: boolean
+  meetLink: string | null
+  googleError: string | null
+  // Eigen afspraak ("Anders"); vaste afspraken horen bij elk project.
+  custom: boolean
+}
+
+export function afspraakAgenda(m: ProjectMilestone): AfspraakAgenda {
+  return {
+    startTime: m.start_time ? m.start_time.slice(0, 5) : null,
+    endTime: m.end_time ? m.end_time.slice(0, 5) : null,
+    inGoogle: !!m.in_google_calendar,
+    withMeet: !!m.with_meet,
+    inviteCustomer: !!m.invite_customer,
+    meetLink: m.meet_link ?? null,
+    googleError: m.google_sync_error ?? null,
+    custom: m.milestone_key === 'custom',
+  }
 }
 
 export type PlanningBucket = 'prio' | 'laat' | 'vandaag' | 'week' | 'volgende' | 'later' | 'geen'
@@ -120,6 +149,7 @@ export function buildPlanningEntries({
         notes: s.item.notes,
         isAfspraak: !!s.milestone,
         milestoneStatus: s.milestone?.status ?? null,
+        agenda: s.milestone ? afspraakAgenda(s.milestone) : null,
       })
     }
 
@@ -154,6 +184,7 @@ export function milestoneEntry(m: ProjectMilestone, project: PlanningProjectInfo
     notes: m.notes,
     isAfspraak: !!project,
     milestoneStatus: m.status,
+    agenda: project ? afspraakAgenda(m) : null,
   }
 }
 
