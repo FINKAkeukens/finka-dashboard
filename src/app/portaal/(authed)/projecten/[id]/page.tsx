@@ -94,12 +94,17 @@ export default async function PortalProjectPage({
 
   // Offerte-downloads en zelf geüploade documenten samen, nieuwste eerst —
   // voor de klant is het allebei gewoon "een document bij mijn project".
+  // ?download=<naam> laat /api/bestand het bestand opslaan i.p.v. openen,
+  // onder een leesbare naam (in Storage heet het een uuid).
+  const downloadHref = (url: string, name: string) => `${fileHref(url)}?download=${encodeURIComponent(name)}`
+
   const documents: PortalDocumentRow[] = [
     ...quoteDownloads.map((d) => ({
       kind: 'download' as const,
       id: d.id,
       name: `${d.filename ?? 'Offerte'}.pdf`,
       url: fileHref(d.pdf_url as string),
+      downloadUrl: downloadHref(d.pdf_url as string, `${d.filename ?? 'Offerte'}.pdf`),
       date: d.downloaded_at,
       approval_required: d.approval_required,
       approved_at: d.approved_at,
@@ -109,6 +114,7 @@ export default async function PortalProjectPage({
       id: d.id,
       name: d.filename,
       url: fileHref(d.file_url),
+      downloadUrl: downloadHref(d.file_url, d.filename),
       date: d.uploaded_at,
       approval_required: d.approval_required,
       approved_at: d.approved_at,
@@ -127,7 +133,7 @@ export default async function PortalProjectPage({
   const featuredDocuments = visibleStandardDocuments.filter((d) => d.featured)
   const standardDocuments: PortalStandardDocumentRow[] = visibleStandardDocuments
     .filter((d) => !d.featured)
-    .map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url) }))
+    .map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url), downloadUrl: downloadHref(d.file_url, d.filename) }))
 
   // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
   const maatformulierItems = ((maatformulierData ?? []) as MaatformulierItem[]).filter((i) => i.visible_to_customer)

@@ -9,6 +9,7 @@ import { Sample, SampleModel, Supplier } from '@/lib/types'
 import { AVAILABILITY_COLORS, AVAILABILITY_LABELS, normalizeSampleSettings, sampleAvailability, sampleCategoryLabel, sampleFieldLabel } from '@/lib/samples'
 import { LOAN_SELECT, LoanWithProject } from '../loan-borrower'
 import EditSampleForm from './EditSampleForm'
+import CopySampleButton from './CopySampleButton'
 import SampleLoans, { ProjectOption } from './SampleLoans'
 
 export default async function SampleDetailPage({
@@ -104,6 +105,9 @@ export default async function SampleDetailPage({
         <EditSampleForm sample={sample} suppliers={(suppliers ?? []) as Supplier[]} models={(models ?? []) as SampleModel[]}
           settings={settings}
         />
+        <div className="mt-3">
+          <CopySampleButton sample={sample} />
+        </div>
       </div>
 
       <h2 className="text-sm font-medium text-[#1C1B19] mb-3">Uitlenen</h2>

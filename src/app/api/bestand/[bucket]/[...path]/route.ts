@@ -35,8 +35,15 @@ export async function GET(
   }
 
   // ?download=<bestandsnaam> → de browser slaat het bestand op i.p.v. het
-  // te openen (Content-Disposition: attachment), onder die naam.
-  const downloadName = new URL(request.url).searchParams.get('download')?.replace(/[\\/:*?"<>|]/g, '').slice(0, 150)
+  // te openen (Content-Disposition: attachment), onder die naam. Accenten
+  // eruit: Supabase codeert de naam dubbel, waardoor "Marèl" als
+  // "Mar%C3%A8l" in de downloadmap belandde.
+  const downloadName = new URL(request.url).searchParams
+    .get('download')
+    ?.normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .slice(0, 150)
   const { data, error } = await service.storage
     .from(bucket)
     .createSignedUrl(path, SIGNED_URL_SECONDS, downloadName ? { download: downloadName } : undefined)

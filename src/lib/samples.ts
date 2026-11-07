@@ -120,3 +120,24 @@ export function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return format(new Date(`${iso}T00:00:00`), 'd-M-yyyy')
 }
+
+// Kopieën van een sample (bv. een extra FINKA-tas) nummeren door:
+// "3. Groene FINKA tas (L)" → base "Groene FINKA tas (L)", en de kopieën
+// worden "4. …", "5. …" vanaf het hoogste nummer dat al bestaat. Zonder
+// nummer vooraan: "Naam (2)", "Naam (3)" — het origineel telt als 1.
+export function sampleNumberBase(name: string): { base: string; numbered: boolean } {
+  const m = name.trim().match(/^\d+\.\s*(.+)$/)
+  return m ? { base: m[1], numbered: true } : { base: name.trim(), numbered: false }
+}
+
+export function sampleCopyNames(name: string, existingNames: string[], count: number): string[] {
+  const { base, numbered } = sampleNumberBase(name)
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = numbered ? new RegExp(`^(\\d+)\\.\\s*${escaped}$`) : new RegExp(`^${escaped}(?: \\((\\d+)\\))?$`)
+  let max = 0
+  for (const existing of existingNames) {
+    const m = existing.trim().match(pattern)
+    if (m) max = Math.max(max, m[1] ? Number(m[1]) : 1)
+  }
+  return Array.from({ length: count }, (_, i) => (numbered ? `${max + i + 1}. ${base}` : `${base} (${max + i + 1})`))
+}
