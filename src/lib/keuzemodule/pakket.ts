@@ -5,6 +5,9 @@ import {
   extrasVoor,
   VARIANTEN,
   WAND_EXTRAS,
+  HOUT_NAAM,
+  greepKleur,
+  werkbladGroep,
   codeVoorBreedte,
   metBreedte,
   splitLadeCode,
@@ -72,23 +75,6 @@ interface CatItem {
   afbeelding_url: string | null
 }
 
-const HOUT = /eiken|eik |noten|evoke|hout/i
-
-function greepKleur(naam: string): PakketGreep['kleur'] {
-  const n = naam.toLowerCase()
-  if (/eiken|noten|hout/.test(n)) return 'hout'
-  if (/brons|messing|goud|bruin/.test(n)) return 'brons'
-  if (/zwart|antraciet/.test(n)) return 'zwart'
-  if (/wit|porcelein/.test(n)) return 'wit'
-  return 'rvs'
-}
-
-function werkbladGroep(naam: string): PakketWerkblad['groep'] {
-  const n = naam.toLowerCase()
-  if (/eiken|noten|evoke|halifax/.test(n)) return 'hout'
-  if (/marmor|marmer|travertin/.test(n)) return 'marmer'
-  return 'steen'
-}
 
 export async function laadKeuzemodule(service: Service, projectId: string) {
   const [{ data: instelling }, { data: kasten }] = await Promise.all([
@@ -198,7 +184,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
   const v = instelling.voorstel ?? {}
   const corpusOpties = items
     .filter((i) => i.soort === 'corpus')
-    .map((i) => ({ code: i.code, naam: i.naam ?? i.code, img: i.afbeelding_url, hout: HOUT.test(i.naam ?? '') }))
+    .map((i) => ({ code: i.code, naam: i.naam ?? i.code, img: i.afbeelding_url, hout: HOUT_NAAM.test(i.naam ?? '') }))
   const greepAantal = Math.max(1, v.greep_aantal ?? 1)
   const greepItems = items.filter((i) => i.soort === 'greep')
   const voorstelMeer = (greepItems.find((g) => g.code === v.greep)?.prijzen as number | undefined) ?? 0

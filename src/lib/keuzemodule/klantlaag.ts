@@ -339,3 +339,22 @@ export const WERKBLAD_MATERIALEN = [
 ] as const
 
 export const WERKBLAD_RICHTINGEN = ['Licht en wit', 'Warm en beige', 'Grijs', 'Donker en zwart', 'Met ader of tekening']
+
+// Indeling van catalogusnamen in de filters van het portaal.
+export const HOUT_NAAM = /eiken|eik |noten|evoke|hout/i
+
+export function greepKleur(naam: string): 'rvs' | 'zwart' | 'brons' | 'hout' | 'wit' {
+  const n = naam.toLowerCase()
+  if (/eiken|noten|hout/.test(n)) return 'hout'
+  if (/brons|messing|goud|bruin/.test(n)) return 'brons'
+  if (/zwart|antraciet/.test(n)) return 'zwart'
+  if (/wit|porcelein/.test(n)) return 'wit'
+  return 'rvs'
+}
+
+export function werkbladGroep(naam: string): 'steen' | 'hout' | 'marmer' {
+  const n = naam.toLowerCase()
+  if (/eiken|noten|evoke|halifax/.test(n)) return 'hout'
+  if (/marmor|marmer|travertin/.test(n)) return 'marmer'
+  return 'steen'
+}
