@@ -89,13 +89,19 @@ function KastPaneel({
 
   return (
     <Kaart className="p-6 flex flex-col gap-[22px]">
-      <div className="flex flex-col gap-1.5">
-        <div className="text-[13px] font-semibold" style={{ color: C.muted }}>
-          Kast {k.positie}{k.wand ? ` · ${k.wand}` : ''}
+      <div className="flex gap-4 items-start">
+        <div className="flex flex-col gap-1.5 flex-auto min-w-0">
+          <div className="text-[13px] font-semibold" style={{ color: C.muted }}>
+            Kast {k.positie}{k.wand ? ` · ${k.wand}` : ''}
+          </div>
+          <h2 className="m-0 text-2xl font-bold">{k.naam}</h2>
+          {k.omschrijving && <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>{k.omschrijving}</p>}
+          <div className="text-xs" style={{ color: C.zacht }}>Code in ontwerp: {k.code}</div>
         </div>
-        <h2 className="m-0 text-2xl font-bold">{k.naam}</h2>
-        {k.omschrijving && <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>{k.omschrijving}</p>}
-        <div className="text-xs" style={{ color: C.zacht }}>Code in ontwerp: {k.code}</div>
+        {k.afbeelding && (
+          // eslint-disable-next-line @next/next/no-img-element -- kortlevende signed URL
+          <img src={k.afbeelding} alt={`Tekening van kast ${k.positie}`} className="flex-none w-24 h-24 sm:w-28 sm:h-28 object-contain rounded-lg bg-white" style={{ border: `1px solid ${C.lijnInput}` }} />
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

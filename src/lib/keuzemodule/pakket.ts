@@ -14,6 +14,7 @@ import {
 } from './klantlaag'
 import type { Pakket, PakketExtra, PakketGreep, PakketKast, PakketWerkblad } from './types'
 import type { Plattegrond, Vak } from './plattegrond'
+import { parseProtectedUrl } from '@/lib/storage-url'
 
 // Stelt per project samen wat het portaal mag tonen. Draait alleen op de
 // server (service-role): de catalogus en de brutoprijzen blijven hier, de
@@ -55,7 +56,9 @@ export interface KeuzemoduleKast {
   wand: string | null
   vak: Vak | null
   inbegrepen: string[]
-  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; uitvoering?: Uitvoering }
+  // afbeelding: opgeslagen (publieke) URL in de afgeschermde bucket
+  // project-documenten, uit de elementenlijst geknipt.
+  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; uitvoering?: Uitvoering; afbeelding?: string }
   zichtbaar: boolean
   volgorde: number
 }
@@ -149,6 +152,14 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
     return null
   }
 
+  // Kastafbeeldingen: de bucket is privé, dus één batch kortlevende links.
+  const paden = kasten.map((k) => parseProtectedUrl(k.data?.afbeelding)?.path).filter((p): p is string => !!p)
+  const getekend = new Map<string, string>()
+  if (paden.length) {
+    const { data } = await service.storage.from('project-documenten').createSignedUrls(paden, 3600)
+    for (const d of data ?? []) if (d.path && d.signedUrl) getekend.set(d.path, d.signedUrl)
+  }
+
   const pakketKasten: PakketKast[] = kasten.map((k) => {
     const defs = extrasVoor(k.code, k.soort)
     const extras = defs.map((d) => extraVan(d, k.breedte)).filter((e): e is PakketExtra => !!e)
@@ -180,6 +191,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
       apparaat: k.data?.apparaat ?? null,
       apparaatVoorstel: k.data?.apparaat_voorstel ?? null,
       uitvoering: k.data?.uitvoering ?? null,
+      afbeelding: getekend.get(parseProtectedUrl(k.data?.afbeelding)?.path ?? '') ?? null,
     }
   })
 

@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Eye, FileDown, RefreshCw } from 'lucide-react'
+import { Check, Eye, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
@@ -10,6 +10,8 @@ import type { KeuzemoduleInstelling, KeuzemoduleKast } from '@/lib/keuzemodule/p
 import type { Wijziging } from '@/lib/keuzemodule/types'
 import { KAST_SOORT_LABELS, type KastSoort } from '@/lib/keuzemodule/klantlaag'
 import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
+import Wijzigingsrapport from './Wijzigingsrapport'
+import { fileHref } from '@/lib/storage-url'
 
 export interface UitdraaiBron {
   url: string
@@ -77,8 +79,21 @@ export default function KeuzemoduleBeheer({
     setBezig('Uitdraai lezen…')
     try {
       const { leesUitdraai } = await import('@/lib/keuzemodule/winnerflex-browser')
-      const { uitdraai, tekening } = await leesUitdraai(bron, tekenBron || null)
+      const { uitdraai, tekening, plaatjes } = await leesUitdraai(bron, tekenBron || null)
       if (!uitdraai.kasten.length) throw new Error('Geen kasten gevonden in deze uitdraai. Is het een Winner Flex-offerte of -order?')
+
+      // Kastafbeeldingen (alleen uit een elementenlijst) naar de afgeschermde
+      // bucket; elke keer een nieuwe naam, zodat er niets overschreven wordt.
+      const afbeeldingen: Record<string, string> = {}
+      const teUploaden = Object.entries(plaatjes)
+      if (teUploaden.length) setBezig('Kastafbeeldingen opslaan…')
+      const stempel = new Date().getTime()
+      for (const [pos, blob] of teUploaden) {
+        const pad = `${projectId}/keuzemodule/${stempel}-${pos.replace(/[^\w.-]/g, '_')}.webp`
+        const { error } = await supabase.storage.from('project-documenten').upload(pad, blob, { contentType: 'image/webp' })
+        if (error) throw new Error(`Afbeelding kast ${pos} opslaan mislukt: ${error.message}`)
+        afbeeldingen[pos] = supabase.storage.from('project-documenten').getPublicUrl(pad).data.publicUrl
+      }
 
       setBezig('Kasten opslaan…')
       const v = uitdraai.voorstel
@@ -119,7 +134,7 @@ export default function KeuzemoduleBeheer({
           wand: oud?.wand ?? null,
           vak: tekening ? tekening.vakken[k.positie] ?? null : oud?.vak ?? null,
           inbegrepen: k.inbegrepen,
-          data: { ...oud?.data, naam: oud?.code === k.code && oud.data?.naam ? oud.data.naam : k.naam, apparaat: k.apparaat ?? undefined, uitvoering: k.uitvoering ?? undefined },
+          data: { ...oud?.data, naam: oud?.code === k.code && oud.data?.naam ? oud.data.naam : k.naam, apparaat: k.apparaat ?? undefined, uitvoering: k.uitvoering ?? undefined, afbeelding: afbeeldingen[k.positie] ?? (oud?.code === k.code ? oud.data?.afbeelding : undefined) },
           zichtbaar: oud?.zichtbaar ?? true,
           volgorde: i,
         }
@@ -180,7 +195,6 @@ export default function KeuzemoduleBeheer({
     else router.refresh()
   }
 
-  const codelijst = useMemo(() => [...new Set((laatste?.wijzigingen ?? []).flatMap((w) => w.codes))], [laatste])
   const opTekening = lokaleKasten.filter((k) => k.zichtbaar && k.vak)
   const wanden = [...new Set(lokaleKasten.map((k) => k.wand).filter(Boolean))] as string[]
 
@@ -326,7 +340,13 @@ export default function KeuzemoduleBeheer({
                 <tbody className="divide-y divide-[#EAE6DD]">
                   {lokaleKasten.map((k) => (
                     <tr key={k.id} id={`kast-${k.id}`} className={`align-top ${selId === k.id ? 'bg-[#EEF4F1]' : ''}`}>
-                      <td className="py-2 pr-2 font-medium">{k.positie}</td>
+                      <td className="py-2 pr-2 font-medium">
+                        {k.positie}
+                        {k.data?.afbeelding && (
+                          // eslint-disable-next-line @next/next/no-img-element -- afgeschermd bestand via /api/bestand
+                          <img src={fileHref(k.data.afbeelding)} alt="" className="mt-1 w-12 h-12 object-contain" />
+                        )}
+                      </td>
                       <td className="py-2 pr-2 space-y-1 min-w-[220px]">
                         <input className={veld} defaultValue={k.data?.naam ?? ''} onBlur={(e) => e.target.value !== (k.data?.naam ?? '') && bewaarKast(k.id, { data: { ...k.data, naam: e.target.value } })} />
                         <input className={veld} defaultValue={k.omschrijving ?? ''} placeholder="Omschrijving voor de klant" onBlur={(e) => e.target.value !== (k.omschrijving ?? '') && bewaarKast(k.id, { omschrijving: e.target.value })} />
@@ -394,30 +414,10 @@ export default function KeuzemoduleBeheer({
                   : `nog bezig (laatst bijgewerkt ${new Date(r.updated_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})`}
                 {' · '}{r.wijzigingen.length} punten{totaal ? ` · ${euro(totaal)} (indicatie incl. btw)` : ''}
               </summary>
-              <ul className="divide-y divide-[#EAE6DD] text-sm">
-                {r.wijzigingen.map((w, i) => (
-                  <li key={i} className="px-4 py-2 flex justify-between gap-3">
-                    <div>
-                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded mr-2 ${w.soort === 'vraag' ? 'bg-[#DCE6F4] text-[#203C6B]' : 'bg-[#F6E3C3] text-[#6B3F06]'}`}>{w.tag}</span>
-                      <span className="font-medium">{w.titel}</span>
-                      <div className="text-[#6B6560] mt-0.5">{w.tekst}</div>
-                    </div>
-                    <div className="text-right whitespace-nowrap">
-                      {w.bedrag ? euro(w.bedrag) : ''}{w.prijsVolgt ? (w.bedrag ? ' + ' : '') + 'prijs volgt' : ''}
-                      {w.codes.length > 0 && <div className="text-xs text-[#9A948D]">{w.codes.join(', ')}</div>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <Wijzigingsrapport titel={`Keuzemodule ronde ${r.ronde}`} wijzigingen={r.wijzigingen} />
             </details>
           )
         })}
-        {codelijst.length > 0 && (
-          <div className="text-sm bg-[#F7F5F2] rounded-lg px-4 py-3">
-            <div className="flex items-center gap-1.5 font-medium mb-1"><FileDown size={13} />Codes voor Winner Flex (ronde {laatste.ronde})</div>
-            <code className="text-xs break-all">{codelijst.join('  ·  ')}</code>
-          </div>
-        )}
       </section>
     </div>
   )

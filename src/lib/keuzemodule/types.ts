@@ -45,6 +45,8 @@ export interface PakketKast {
   apparaatVoorstel: string | null
   // Houtuitvoering van de inzetten in het ontwerp; standaard voor nieuwe keuzes.
   uitvoering: Uitvoering | null
+  // Tekening van de kast uit de elementenlijst (kortlevende link) of null.
+  afbeelding: string | null
 }
 
 export interface PakketDecor {
@@ -138,6 +140,12 @@ export interface Wijziging {
   bedrag: number | null
   prijsVolgt: boolean
   soort: 'wijziging' | 'vraag'
-  // Sachsen-codes voor de ontwerper in Winner Flex.
+  // Sachsen-codes voor de ontwerper in Winner Flex: erbij en (bij een
+  // vervanging) eraf.
   codes: string[]
+  codesWeg?: string[]
+  // Alleen bij kasten: positienummer, naam en de kastcode in het ontwerp.
+  positie?: string
+  kast?: string
+  codeInOntwerp?: string
 }

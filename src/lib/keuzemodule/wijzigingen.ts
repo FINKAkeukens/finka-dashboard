@@ -34,6 +34,7 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
     const x = keuzes.kasten?.[k.id] ?? {}
     const delen: string[] = []
     const codes: string[] = []
+    const codesWeg: string[] = []
     let som = 0
     let prijsVolgt = false
     const voorstel = k.indelingen.find((i) => i.voorstel)
@@ -43,7 +44,10 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
       som += gekozen.prijs ?? 0
       if (gekozen.prijs === null) prijsVolgt = true
       const lade = splitLadeCode(k.code)
-      if (lade) codes.push(lade.basis + (gekozen.key === 'DEUR' ? '' : gekozen.key))
+      if (lade) {
+        codes.push(lade.basis + (gekozen.key === 'DEUR' ? '' : gekozen.key))
+        codesWeg.push(k.code)
+      }
     }
     for (const e of k.extras) {
       if (!x.extras?.[e.key] || e.inOntwerp) continue
@@ -55,6 +59,7 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
         : undefined
       delen.push(e.label + (u ? ` (${UITVOERINGEN.find((v) => v.key === u)!.label.toLowerCase()})` : '') + (vervangt ? ` in plaats van ${vervangt.label.toLowerCase()}` : ''))
       if (e.code) codes.push(e.code.replace('{u}', u ?? ''))
+      if (vervangt?.code) codesWeg.push(vervangt.code.replace('{u}', k.uitvoering ?? vervangt.uitvoeringen?.[0] ?? ''))
       if (e.prijs === null) prijsVolgt = true
       else som += e.prijs - (vervangt?.prijs ?? 0)
     }
@@ -72,9 +77,14 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
         prijsVolgt,
         soort: 'wijziging',
         codes,
+        codesWeg,
+        positie: k.positie,
+        kast: k.naam,
+        codeInOntwerp: k.code,
       })
-    } else if (x.status === 'vraag' || x.note) {
-      out.push({ tag: `Kast ${k.positie}`, titel, tekst: x.note ? `"${x.note}"` : 'Vraag zonder toelichting', bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [] })
+    } else if (x.status === 'vraag' || x.status === 'wijzig' || x.note) {
+      const zonder = x.status === 'wijzig' ? 'Wil iets aan deze kast veranderen, zonder toelichting' : 'Vraag zonder toelichting'
+      out.push({ tag: `Kast ${k.positie}`, titel, tekst: x.note ? `"${x.note}"` : zonder, bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [], positie: k.positie, kast: k.naam, codeInOntwerp: k.code })
     }
   }
 
