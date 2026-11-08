@@ -58,7 +58,7 @@ export default function PlattegrondTekening({
   }
 
   return (
-    <svg viewBox={`${kx} ${ky} ${kw} ${kh}`} role="group" aria-label={titel} className="block w-full h-auto rounded-md" style={{ background: '#F3F1EC' }}>
+    <svg viewBox={`${kx} ${ky} ${kw} ${kh}`} role="group" aria-label={titel} className="block w-full h-auto rounded-[2px]" style={{ background: '#F0ECE7' }}>
       <style>{`.kv-vak:focus-visible > :first-child { stroke: #2F5D50; stroke-width: ${1.4 * eenheid}px; }`}</style>
       {plattegrond.muren.map((d, i) => <path key={i} d={d} fill="#CFCAC0" fillRule="evenodd" />)}
       {onder.map((k) => {

@@ -121,17 +121,17 @@ export default function KeuzemoduleApp({
 
   return (
     <div style={{ color: C.ink }}>
-      <header className="bg-white border-b" style={{ borderColor: C.lijn }}>
+      <header className="border-b" style={{ borderColor: C.lijn, background: C.achtergrond }}>
         <div className="max-w-[1360px] mx-auto px-4 sm:px-8 pt-5 pb-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
             <Link href={`/portaal/projecten/${projectId}`} className="flex items-center gap-1.5 text-sm hover:underline" style={{ color: C.muted }}>
               <ArrowLeft size={14} />
               {projectTitel}
             </Link>
-            <div className="text-[13px] font-semibold uppercase tracking-[0.04em]" style={{ color: C.muted }}>
+            <div className="kv-label" style={{ color: C.muted }}>
               Jouw keukenontwerp · ronde {pakket.ronde}
             </div>
-            <h1 className="m-0 text-[22px] sm:text-[26px] font-bold">Bekijk je keuken en geef je feedback</h1>
+            <h1 className="kv-kop m-0 text-[32px] sm:text-[44px]">Bekijk je keuken en geef je feedback</h1>
             {pakket.toelichting && (
               <p className="m-0 mt-1 max-w-[680px] text-[15px] leading-normal whitespace-pre-line" style={{ color: C.tekst }}>{pakket.toelichting}</p>
             )}
@@ -141,8 +141,8 @@ export default function KeuzemoduleApp({
               <span className="font-semibold">{bekeken} van {pakket.kasten.length} kasten bekeken</span>
               <span style={{ color: C.muted }}>{pct}%</span>
             </div>
-            <div className="h-2 rounded overflow-hidden" style={{ background: '#E9E5DD' }}>
-              <div className="h-full rounded" style={{ width: `${pct}%`, background: C.groen }} />
+            <div className="h-2 rounded-[2px] overflow-hidden" style={{ background: '#E9E5DD' }}>
+              <div className="h-full rounded-[2px]" style={{ width: `${pct}%`, background: C.groen }} />
             </div>
             <div className="text-xs h-4" style={{ color: bewaarStatus === 'fout' ? '#B42318' : C.zacht }}>
               {voorbeeld ? 'Voorbeeld: niets wordt opgeslagen'
@@ -160,11 +160,11 @@ export default function KeuzemoduleApp({
               key={key}
               type="button"
               onClick={() => setTab(key)}
-              className="shrink-0 min-h-12 px-4 bg-transparent border-0 cursor-pointer text-[15px]"
+              aria-current={tab === key ? 'page' : undefined}
+              className="kv-knop shrink-0 min-h-12 px-4 bg-transparent border-0 cursor-pointer"
               style={{
-                borderBottom: `3px solid ${tab === key ? C.groen : 'transparent'}`,
+                borderBottom: `1px solid ${tab === key ? C.ink : 'transparent'}`,
                 color: tab === key ? C.ink : C.muted,
-                fontWeight: tab === key ? 700 : 500,
               }}
             >
               {label}
@@ -175,7 +175,7 @@ export default function KeuzemoduleApp({
 
       <main className="max-w-[1360px] mx-auto px-4 sm:px-8 pt-7 pb-12">
         {ingestuurdAt && (
-          <div className="mb-6 rounded-[14px] px-5 py-4 text-[15px]" style={{ background: '#DCEBDD', color: '#1F4D2B' }}>
+          <div className="mb-6 rounded-[2px] px-5 py-4 text-[15px]" style={{ background: '#E3EADF', color: '#2F3D2B' }}>
             <strong>Je feedback is verstuurd</strong> op{' '}
             {new Date(ingestuurdAt).toLocaleString('nl-NL', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.
             We verwerken alles in één aangepast ontwerp en laten het je hier weten zodra het klaarstaat. Je keuzes kun je

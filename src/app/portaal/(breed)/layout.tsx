@@ -12,7 +12,7 @@ export default async function PortalBreedLayout({ children }: { children: React.
   if (!session) redirect('/portaal/login')
 
   return (
-    <div className="min-h-screen bg-[#F3F1EC]">
+    <div className="min-h-screen bg-[#F8F6F3]">
       <PortalHeader preview={session.preview} naam={`${session.customer.first_name} ${session.customer.last_name}`} />
       {children}
     </div>

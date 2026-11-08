@@ -331,8 +331,9 @@ export const KEUKEN_RIJEN = [
 ] as const
 
 // Werkbladmaterialen met hun eigenschappen, voor de vergelijking naast ons
-// voorstel. Score 3 = goed, 2 = redelijk, 1 = gevoelig. Algemene indicatie:
-// per steensoort en afwerking (gepolijst, mat, leather) verschilt het.
+// voorstel. Per eigenschap hoe gevoelig het materiaal is: 1 = laag,
+// 2 = gemiddeld, 3 = hoog. Algemene indicatie: per steensoort en afwerking
+// (gepolijst, mat, leather) verschilt het.
 export const WERKBLAD_MATERIAAL = [
   { key: 'marmer', label: 'Marmer', sub: 'Natuursteen met zachte aders; elk blad is uniek en krijgt patina.' },
   { key: 'kwartsiet', label: 'Kwartsiet', sub: 'Natuursteen, harder dan graniet, met de look van marmer.' },
@@ -341,14 +342,14 @@ export const WERKBLAD_MATERIAAL = [
 ] as const
 export type WerkbladMateriaal = (typeof WERKBLAD_MATERIAAL)[number]['key']
 
-export const WERKBLAD_EIGENSCHAPPEN: { key: string; label: string; uitleg: string; score: Record<WerkbladMateriaal, 1 | 2 | 3> }[] = [
-  { key: 'kras', label: 'Krasbestendig', uitleg: 'Snijden, schuiven met pannen', score: { marmer: 1, kwartsiet: 3, composiet: 2, keramiek: 3 } },
-  { key: 'chip', label: 'Stevige randen', uitleg: 'Kans op een schilfer bij een stoot', score: { marmer: 2, kwartsiet: 2, composiet: 2, keramiek: 1 } },
-  { key: 'vlek', label: 'Vlekbestendig', uitleg: 'Koffie, olie, rode wijn', score: { marmer: 1, kwartsiet: 2, composiet: 3, keramiek: 3 } },
-  { key: 'zuur', label: 'Zuurbestendig', uitleg: 'Citroen, azijn, tomaat', score: { marmer: 1, kwartsiet: 3, composiet: 3, keramiek: 3 } },
-  { key: 'hitte', label: 'Hittebestendig', uitleg: 'Hete pan direct neerzetten', score: { marmer: 2, kwartsiet: 3, composiet: 1, keramiek: 3 } },
-  { key: 'uv', label: 'Kleurvast in zonlicht', uitleg: 'Verkleurt niet bij een raam', score: { marmer: 3, kwartsiet: 3, composiet: 2, keramiek: 3 } },
-  { key: 'onderhoud', label: 'Weinig onderhoud', uitleg: 'Impregneren is niet nodig', score: { marmer: 1, kwartsiet: 2, composiet: 3, keramiek: 3 } },
+export const WERKBLAD_EIGENSCHAPPEN: { key: string; label: string; uitleg: string; gevoelig: Record<WerkbladMateriaal, 1 | 2 | 3> }[] = [
+  { key: 'kras', label: 'Krasgevoelig', uitleg: 'Snijden, schuiven met pannen', gevoelig: { marmer: 3, kwartsiet: 1, composiet: 2, keramiek: 1 } },
+  { key: 'schade', label: 'Gevoelig voor beschadigingen', uitleg: 'Een schilfer bij een stoot op de rand', gevoelig: { marmer: 2, kwartsiet: 2, composiet: 2, keramiek: 3 } },
+  { key: 'vlek', label: 'Vlekgevoelig', uitleg: 'Koffie, olie, rode wijn', gevoelig: { marmer: 3, kwartsiet: 2, composiet: 1, keramiek: 1 } },
+  { key: 'zuur', label: 'Zuurgevoelig', uitleg: 'Citroen, azijn, tomaat', gevoelig: { marmer: 3, kwartsiet: 1, composiet: 1, keramiek: 1 } },
+  { key: 'hitte', label: 'Hittegevoelig', uitleg: 'Hete pan direct neerzetten', gevoelig: { marmer: 2, kwartsiet: 1, composiet: 3, keramiek: 1 } },
+  { key: 'uv', label: 'Verkleurt in zonlicht', uitleg: 'Bijvoorbeeld bij een raam', gevoelig: { marmer: 1, kwartsiet: 1, composiet: 2, keramiek: 1 } },
+  { key: 'onderhoud', label: 'Onderhoud nodig', uitleg: 'Zoals regelmatig impregneren', gevoelig: { marmer: 3, kwartsiet: 2, composiet: 1, keramiek: 1 } },
 ]
 
 // Materiaal herkennen in onze omschrijving ("Composiet Calacatta Bettogli").

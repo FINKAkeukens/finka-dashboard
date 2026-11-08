@@ -56,10 +56,10 @@ export default function KastExtras({
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex justify-between items-baseline gap-2">
-        <div className="text-sm font-semibold">Extra&apos;s voor deze kast</div>
+        <div className="kv-label" style={{ color: C.muted }}>Extra&apos;s voor deze kast</div>
         {prijzen && <div className="text-xs" style={{ color: C.zacht }}>prijzen incl. btw, indicatie</div>}
       </div>
-      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.lijnInput}` }}>
+      <div className="rounded-[2px] overflow-hidden" style={{ border: `1px solid ${C.lijnInput}` }}>
         {groepen.map(({ g, opties }, gi) => {
           const isOpen = open === g.key
           const inOntwerp = opties.filter((e) => e.inOntwerp)
@@ -140,7 +140,7 @@ export default function KastExtras({
                 type="button"
                 onClick={() => setKast(k.id, { uitvoering: u.key })}
                 aria-pressed={aan}
-                className="inline-flex items-center gap-1.5 min-h-9 px-3 rounded-full text-[13px] font-semibold cursor-pointer"
+                className="inline-flex items-center gap-1.5 min-h-9 px-3 rounded-[2px] text-[13px] font-semibold cursor-pointer"
                 style={{ background: aan ? C.groenLicht : '#FFFFFF', border: `1px solid ${aan ? C.groen : C.lijnInput}`, color: C.ink }}
               >
                 <span aria-hidden="true" className="inline-block w-3 h-3 rounded-full" style={{ background: u.kleur }} />
@@ -173,7 +173,7 @@ function Optie({
       aria-checked={aan}
       aria-disabled={vast || undefined}
       onClick={onClick}
-      className="flex items-center gap-3 px-3 py-2 min-h-12 rounded-[10px] text-left"
+      className="flex items-center gap-3 px-3 py-2 min-h-12 rounded-[2px] text-left"
       style={{
         background: aan ? C.groenLicht : '#FFFFFF',
         border: aan ? `1.5px solid ${C.groen}` : `1px solid ${C.lijnInput}`,
@@ -193,7 +193,7 @@ function Optie({
         {sub && <span className="text-[13px] leading-snug" style={{ color: C.muted }}>{sub}</span>}
       </span>
       {prijs && (
-        <span className="text-[13px] font-semibold whitespace-nowrap" style={{ color: voorstel ? C.groen : C.tekst }}>{prijs}</span>
+        <span className="text-[13px] font-semibold whitespace-nowrap" style={{ color: voorstel ? C.accent : C.tekst }}>{prijs}</span>
       )}
     </button>
   )

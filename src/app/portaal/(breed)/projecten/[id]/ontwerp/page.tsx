@@ -5,7 +5,11 @@ import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
 import { bouwPakket } from '@/lib/keuzemodule/pakket'
 import type { Keuzes } from '@/lib/keuzemodule/types'
+import { Cormorant_Garamond } from 'next/font/google'
 import KeuzemoduleApp from './KeuzemoduleApp'
+
+// Koppen in de FINKA-huisstijl (zoals de website); zelf gehost door Next.
+const display = Cormorant_Garamond({ subsets: ['latin'], weight: ['300', '400', '500'], variable: '--kv-display', display: 'swap' })
 
 export default async function OntwerpPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -32,6 +36,7 @@ export default async function OntwerpPage({ params }: { params: Promise<{ id: st
     .maybeSingle()
 
   return (
+    <div className={display.variable}>
     <KeuzemoduleApp
       projectId={id}
       projectTitel={project.title as string}
@@ -40,5 +45,6 @@ export default async function OntwerpPage({ params }: { params: Promise<{ id: st
       ingestuurdAt={feedback?.status === 'ingestuurd' ? (feedback.ingestuurd_at as string) : null}
       voorbeeld={session.preview}
     />
+    </div>
   )
 }

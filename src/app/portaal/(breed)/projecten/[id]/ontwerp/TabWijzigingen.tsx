@@ -29,7 +29,7 @@ export default function TabWijzigingen({
   return (
     <section aria-label="Wijzigingen" className="max-w-[920px] flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <h2 className="m-0 text-[22px] font-bold">Je wijzigingen op een rij</h2>
+        <h2 className="kv-kop m-0 text-[30px] sm:text-[36px]">Je wijzigingen op een rij</h2>
         <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>
           Controleer alles en stuur het in één keer naar ons. Dit is je feedbackronde: wij verwerken alles in één
           aangepast ontwerp.
@@ -41,7 +41,7 @@ export default function TabWijzigingen({
           <div key={i} className="px-5 py-3.5 flex justify-between items-start gap-4" style={{ borderBottom: '1px solid #EFECE6' }}>
             <div className="flex gap-3.5 items-start min-w-0">
               <span
-                className="flex-none text-xs font-bold px-2 py-1 rounded-md"
+                className="flex-none text-xs font-bold px-2 py-1 rounded-[2px]"
                 style={w.soort === 'vraag' ? { background: '#DCE6F4', color: '#203C6B' } : { background: '#F6E3C3', color: '#6B3F06' }}
               >
                 {w.tag}
@@ -78,7 +78,7 @@ export default function TabWijzigingen({
             type="button"
             onClick={insturen}
             disabled={bezig || voorbeeld}
-            className="min-h-12 px-6 rounded-xl border-0 text-white text-[15px] font-bold cursor-pointer disabled:opacity-50"
+            className="min-h-12 px-7 rounded-[2px] border-0 text-white kv-knop cursor-pointer disabled:opacity-50"
             style={{ background: C.groen }}
           >
             {bezig ? 'Bezig…' : 'Feedback insturen'}

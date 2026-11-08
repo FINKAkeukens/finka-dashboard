@@ -11,7 +11,7 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
   return (
     <section aria-label="Apparatuur" className="max-w-[1040px] flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <h2 className="m-0 text-[22px] font-bold">Apparatuur</h2>
+        <h2 className="kv-kop m-0 text-[30px] sm:text-[36px]">Apparatuur</h2>
         <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>
           Per plek in je keuken zie je welk apparaat wij voorstellen. Je kunt aangeven dat je een alternatief wilt of je
           eigen apparaat opgeven; wij controleren dan of het past.
@@ -27,7 +27,7 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
               type="button"
               onClick={() => zet(k.id, { choice: key })}
               aria-pressed={aan}
-              className="min-h-11 px-3.5 rounded-[10px] text-sm font-semibold cursor-pointer"
+              className="min-h-11 px-3.5 rounded-[2px] kv-knop cursor-pointer"
               style={{ background: aan ? C.groen : '#FFFFFF', color: aan ? '#FFFFFF' : C.ink, border: `1px solid ${aan ? C.groen : C.lijnInput}` }}
             >
               {label}
@@ -71,7 +71,7 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
                     value={a.merk ?? ''}
                     onChange={(e) => zet(k.id, { merk: e.target.value.slice(0, 100) })}
                     placeholder="Het merk op het typeplaatje"
-                    className="min-h-11 box-border rounded-[10px] px-3 text-sm bg-white"
+                    className="min-h-11 box-border rounded-[2px] px-3 text-sm bg-white"
                     style={{ border: `1px solid ${C.lijnInput}`, color: C.ink }}
                   />
                 </div>
@@ -83,7 +83,7 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
                     value={a.type ?? ''}
                     onChange={(e) => zet(k.id, { type: e.target.value.slice(0, 100) })}
                     placeholder="Staat op het typeplaatje"
-                    className="min-h-11 box-border rounded-[10px] px-3 text-sm bg-white"
+                    className="min-h-11 box-border rounded-[2px] px-3 text-sm bg-white"
                     style={{ border: `1px solid ${C.lijnInput}`, color: C.ink }}
                   />
                 </div>

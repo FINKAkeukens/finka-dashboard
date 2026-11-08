@@ -40,8 +40,8 @@ function RijKaart({
         <div className="flex items-center gap-3.5 min-w-0">
           {staal}
           <div className="flex flex-col gap-0.5 min-w-0">
-            <div className="text-[13px] font-semibold" style={{ color: C.muted }}>{label}</div>
-            <div className="text-base font-semibold">{waarde}</div>
+            <div className="kv-label" style={{ color: C.muted }}>{label}</div>
+            <div className="kv-kop text-[24px]">{waarde}</div>
             {sub && <div className="text-[13px]" style={{ color: C.zacht }}>{sub}</div>}
           </div>
         </div>
@@ -51,7 +51,7 @@ function RijKaart({
               type="button"
               onClick={onOpen}
               aria-expanded={!!open}
-              className="min-h-11 px-4 rounded-[10px] text-sm font-semibold cursor-pointer"
+              className="min-h-11 px-4 rounded-[2px] kv-knop cursor-pointer"
               style={{ background: open ? C.groen : '#FFFFFF', color: open ? '#FFFFFF' : C.groenDonker, border: `1px solid ${C.groen}` }}
             >
               {open ? 'Sluiten' : kiesLabel}
@@ -66,7 +66,7 @@ function RijKaart({
                 type="button"
                 onClick={() => onKeuze(k)}
                 aria-pressed={aan}
-                className="min-h-11 px-4 rounded-[10px] text-sm font-semibold cursor-pointer"
+                className="min-h-11 px-4 rounded-[2px] kv-knop cursor-pointer"
                 style={{ background: aan ? c.bg : '#FFFFFF', color: aan ? c.ink : C.ink, border: aan ? `2px solid ${c.border}` : `1px solid ${C.lijnInput}` }}
               >
                 {k === 'akkoord' ? 'Akkoord' : 'Bespreken'}
@@ -122,13 +122,13 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
   const telSoort = (s: string) => kk.greep.opties.filter((g) => g.soort === s).length
 
   const vlakStaal = (kleur: string) => (
-    <span aria-hidden="true" className="flex-none w-11 h-11 rounded-[10px]" style={{ background: kleur, border: '1px solid rgba(0,0,0,0.12)' }} />
+    <span aria-hidden="true" className="flex-none w-11 h-11 rounded-[2px]" style={{ background: kleur, border: '1px solid rgba(0,0,0,0.12)' }} />
   )
 
   return (
     <section aria-label="Hele keuken" className="max-w-[920px] flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <h2 className="m-0 text-[22px] font-bold">Keuzes voor de hele keuken</h2>
+        <h2 className="kv-kop m-0 text-[30px] sm:text-[36px]">Keuzes voor de hele keuken</h2>
         <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>
           Deze keuzes gelden voor alle kasten. Bij kleur binnenkant en grepen kun je alle mogelijkheden bekijken.
           Twijfel je? Kies &quot;Bespreken&quot;; dan nemen we het mee in het gesprek.
@@ -143,7 +143,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
         sub={keuken.corpus && keuken.corpus !== kk.corpus.voorstel
           ? `Jouw keuze · ons voorstel was ${corpusVoorstel?.naam ?? kk.corpus.voorstel}`
           : `Ons voorstel · kies uit ${kk.corpus.opties.length} kleuren`}
-        staal={<Staal src={corpus?.img ?? null} className="flex-none w-[54px] h-[35px] rounded-lg" style={{ border: '1px solid rgba(0,0,0,0.12)' }} />}
+        staal={<Staal src={corpus?.img ?? null} className="flex-none w-[54px] h-[35px] rounded-[2px]" style={{ border: '1px solid rgba(0,0,0,0.12)' }} />}
         keuze={rijKeuze('corpus')}
         onKeuze={(v) => zetRij('corpus', v)}
         kiesLabel="Andere kleur kiezen"
@@ -199,7 +199,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
               ))}
             </div>
             {gSoort === 'lang' && (
-              <div className="text-[13px] leading-normal rounded-[10px] px-3 py-2.5" style={{ color: C.tekst, background: C.vlak }}>
+              <div className="text-[13px] leading-normal rounded-[2px] px-3 py-2.5" style={{ color: C.tekst, background: C.vlak }}>
                 Lange grepen komen op brede lades en deuren. Op smalle fronten komt automatisch dezelfde greep in een kortere maat.
               </div>
             )}
@@ -220,7 +220,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
               })}
             </div>
             {!gAlles && greepTotaal > TOON && (
-              <button type="button" onClick={() => setGAlles(true)} className="self-start min-h-11 px-4 rounded-full text-sm font-semibold cursor-pointer bg-white" style={{ border: `1px solid ${C.groen}`, color: C.groenDonker }}>
+              <button type="button" onClick={() => setGAlles(true)} className="self-start min-h-11 px-4 rounded-[2px] kv-knop cursor-pointer bg-white" style={{ border: `1px solid ${C.groen}`, color: C.groenDonker }}>
                 Toon alle {greepTotaal}
               </button>
             )}
@@ -228,7 +228,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
         )}
         {gSoort === 'lijst' && (
           <>
-            <div className="text-[13px] leading-normal rounded-[10px] px-3 py-2.5" style={{ color: C.tekst, background: C.vlak }}>
+            <div className="text-[13px] leading-normal rounded-[2px] px-3 py-2.5" style={{ color: C.tekst, background: C.vlak }}>
               Een greeplijst is een verzonken profiel in plaats van grepen. Dat verandert de opbouw van de kasten, dus we
               passen het ontwerp hierop aan. De kleur van de lijst en eventuele verlichting bespreken we samen.
             </div>
@@ -240,7 +240,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
         )}
         {gSoort === 'push' && (
           <>
-            <div className="text-[13px] leading-normal rounded-[10px] px-3 py-2.5" style={{ color: C.tekst, background: C.vlak }}>
+            <div className="text-[13px] leading-normal rounded-[2px] px-3 py-2.5" style={{ color: C.tekst, background: C.vlak }}>
               Geen grepen in zicht. Let op: niet mogelijk op binnenlades en op de koelkastdeur; daar zoeken we samen een oplossing voor.
             </div>
             <KeuzeKaart aan={greep.kind === 'push'} onClick={() => zetGreep({ kind: 'push' })} className="max-w-sm">
@@ -258,7 +258,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
       {pakket.wand.length > 0 && (
         <Kaart className="px-5 py-[18px] flex flex-col gap-3">
           <div className="flex flex-col gap-0.5">
-            <h3 className="m-0 text-[17px] font-bold">Extra&apos;s aan de wand en verlichting</h3>
+            <h3 className="kv-kop m-0 text-[22px]">Extra&apos;s aan de wand en verlichting</h3>
             <div className="text-[13px]" style={{ color: C.muted }}>Niet aan één kast gebonden. Waar het precies komt, bespreken we samen.</div>
           </div>
           <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
@@ -270,7 +270,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
                   type="button"
                   onClick={() => wijzig((k) => ({ ...k, wand: { ...k.wand, [e.key]: !aan } }))}
                   aria-pressed={aan}
-                  className="flex items-center gap-3 px-3.5 py-2.5 min-h-14 rounded-xl cursor-pointer text-left"
+                  className="flex items-center gap-3 px-3.5 py-2.5 min-h-14 rounded-[2px] cursor-pointer text-left"
                   style={{ background: aan ? C.groenLicht : '#FFFFFF', border: aan ? `2px solid ${C.groen}` : `1px solid ${C.lijnInput}`, color: C.ink }}
                 >
                   <Vinkje aan={aan} />
