@@ -14,6 +14,15 @@ function bedragTekst(w: Wijziging) {
   return b + (w.prijsVolgt ? (b ? ' + ' : '') + 'prijs volgt' : '')
 }
 
+// Totaal van de indicaties, voor FINKA altijd zichtbaar (ook als de klant
+// geen prijzen ziet: het rapport wordt met prijzen berekend).
+function totaalTekst(lijst: Wijziging[]) {
+  const som = lijst.reduce((s, w) => s + (w.bedrag ?? 0), 0)
+  const open = lijst.filter((w) => w.prijsVolgt).length
+  const bedrag = (som < 0 ? '−' : '+') + '€' + Math.abs(Math.round(som)).toLocaleString('nl-NL')
+  return { bedrag, open: open ? `plus ${open} ${open === 1 ? 'post' : 'posten'} waarvan de prijs nog volgt` : 'alle posten doorgerekend' }
+}
+
 const sorteer = (a: Wijziging, b: Wijziging) =>
   (a.positie ?? '').localeCompare(b.positie ?? '', 'nl', { numeric: true })
 
@@ -33,6 +42,8 @@ function alsTekst(titel: string, kasten: Wijziging[], algemeen: Wijziging[]) {
       regels.push(`  ${w.tag} · ${w.titel}: ${w.tekst}${w.codes.length ? ` [${w.codes.join(', ')}]` : ''}${bedragTekst(w) ? ` (${bedragTekst(w)})` : ''}`)
     }
   }
+  const t = totaalTekst([...kasten, ...algemeen])
+  regels.push('', `Prijsverschil (indicatie incl. btw): ${t.bedrag}, ${t.open}`)
   return regels.join('\n').trim()
 }
 
@@ -103,6 +114,15 @@ export default function Wijzigingsrapport({ titel, wijzigingen }: { titel: strin
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-[#1C1B19]">
+              <td colSpan={4} className="px-4 py-2.5">
+                <span className="font-semibold">Prijsverschil (indicatie incl. btw)</span>
+                <span className="text-xs text-[#6B6560] ml-2">{totaalTekst(wijzigingen).open}</span>
+              </td>
+              <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">{totaalTekst(wijzigingen).bedrag}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       <div className="flex justify-between items-center gap-3 px-4 py-2.5 border-t border-[#EAE6DD] bg-[#F7F5F2]">
