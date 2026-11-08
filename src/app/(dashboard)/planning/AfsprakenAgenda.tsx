@@ -1,15 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { addDays, addWeeks, differenceInCalendarDays, format, getISOWeek, isSameDay, startOfWeek } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, TriangleAlert, Video } from 'lucide-react'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, TriangleAlert, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PlanningEntry } from '@/lib/planning-overzicht'
+import type { GoogleAgendaEvent } from '@/lib/google-calendar'
 
 // Weekagenda bovenaan /planning: alle afspraken (mijlpalen) van maandag
 // t/m zondag, met tijd, wie, Meet-link en of ze in Google Agenda staan.
 // Klikken opent de afspraak in de editor eronder (PlanningOverzicht).
+// Daarnaast de afspraken die alleen in Google Agenda staan (grijs); die
+// openen in Google Agenda zelf.
 export default function AfsprakenAgenda({
   afspraken,
   today,
@@ -27,6 +30,31 @@ export default function AfsprakenAgenda({
   const [weekStart, setWeekStart] = useState(thisMonday)
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const weekEnd = days[6]
+  const [google, setGoogle] = useState<{ week: string; events: GoogleAgendaEvent[]; error?: string } | null>(null)
+  const weekKey = format(weekStart, 'yyyy-MM-dd')
+
+  useEffect(() => {
+    if (!calendarAccount) return
+    let cancelled = false
+    const to = format(addDays(weekStart, 6), 'yyyy-MM-dd')
+    fetch(`/api/google-calendar/events?from=${weekKey}&to=${to}`)
+      .then((r) => r.json())
+      .then((data: { events?: GoogleAgendaEvent[]; error?: string }) => {
+        if (!cancelled) setGoogle({ week: weekKey, events: data.events ?? [], error: data.error })
+      })
+      .catch(() => {
+        if (!cancelled) setGoogle({ week: weekKey, events: [], error: 'Google Agenda is niet bereikbaar' })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [calendarAccount, weekKey, weekStart])
+
+  const googleEvents = google?.week === weekKey ? google.events : []
+  const googleOn = (day: Date) => {
+    const d = format(day, 'yyyy-MM-dd')
+    return googleEvents.filter((g) => g.date <= d && d <= g.endDate)
+  }
 
   const dated = afspraken.filter((e) => e.date)
   const inWeek = (day: Date) =>
@@ -79,20 +107,28 @@ export default function AfsprakenAgenda({
           {days.map((day) => {
             const isToday = isSameDay(day, today)
             const list = inWeek(day)
+            const extern = googleOn(day)
             return (
               <div key={day.toISOString()} className={cn('min-h-40 p-2 border-r border-[#EFEBE6] last:border-r-0 flex flex-col gap-2', isToday && 'bg-[#FDFBF7]')}>
                 <div className="flex items-baseline gap-1.5 px-1">
                   <span className="text-[11px] uppercase tracking-wide text-[#6B6560]">{format(day, 'EEEEEE', { locale: nl })}</span>
                   <span className={cn('text-lg font-semibold', isToday ? 'text-[#8A6A2E]' : 'text-[#1C1B19]')}>{format(day, 'd')}</span>
                 </div>
-                {list.map((e) => (
-                  <AfspraakCard key={e.key} entry={e} selected={selectedKey === e.key} onOpen={onOpen} />
-                ))}
+                {[
+                  ...list.map((e) => ({ time: e.agenda?.startTime ?? '', node: <AfspraakCard key={e.key} entry={e} selected={selectedKey === e.key} onOpen={onOpen} /> })),
+                  ...extern.map((g) => ({ time: g.startTime ?? '', node: <GoogleCard key={g.id} event={g} /> })),
+                ]
+                  .sort((a, b) => a.time.localeCompare(b.time))
+                  .map((x) => x.node)}
               </div>
             )
           })}
         </div>
       </div>
+
+      {google?.error && google.week === weekKey && (
+        <p className="px-5 py-2 border-t border-[#DDD8D2] text-xs text-red-600">Google Agenda: {google.error}</p>
+      )}
 
       {(overdue.length > 0 || undated.length > 0) && (
         <div className="flex flex-col gap-2 px-5 py-3 border-t border-[#DDD8D2] bg-[#FAF9F7]">
@@ -145,6 +181,52 @@ function AfspraakCard({ entry: e, selected, onOpen }: { entry: PlanningEntry; se
           {!copied && <Copy size={11} className="ml-auto text-[#9A948D]" />}
         </button>
       )}
+    </div>
+  )
+}
+
+function CopyMeet({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(link).then(() => {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2000)
+        })
+      }}
+      className="flex items-center gap-1 w-full px-2 py-1 border-t border-[#EFEBE6] text-[11px] text-[#1C1B19] hover:bg-[#F5F3EF] rounded-b-lg"
+      title={link}
+    >
+      {copied ? <Check size={12} className="text-green-700" /> : <Video size={12} className="text-[#6B6560]" />}
+      {copied ? 'Gekopieerd' : 'Meet-link kopiëren'}
+      {!copied && <Copy size={11} className="ml-auto text-[#9A948D]" />}
+    </button>
+  )
+}
+
+// Afspraak die alleen in Google Agenda staat.
+function GoogleCard({ event: g }: { event: GoogleAgendaEvent }) {
+  const time = g.startTime ? (g.endTime ? `${g.startTime}–${g.endTime}` : g.startTime) : 'Hele dag'
+  return (
+    <div className="rounded-lg border border-[#E4E0DA] bg-white hover:border-[#B8B2AA] transition-colors">
+      <a
+        href={g.htmlLink ?? undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block px-2 pt-1.5 pb-1"
+        title="Openen in Google Agenda"
+      >
+        <span className="flex items-center gap-1 text-[11px] text-[#6B6560]">
+          {time}
+          <ExternalLink size={10} className="ml-auto text-[#9A948D]" />
+        </span>
+        <span className="block text-[13px] font-medium text-[#1C1B19] leading-snug">{g.title}</span>
+        {g.location && <span className="block text-xs text-[#6B6560] leading-snug truncate">{g.location}</span>}
+        <span className="block text-[10px] uppercase tracking-wide text-[#9A948D] mt-0.5">Google Agenda</span>
+      </a>
+      {g.meetLink && <CopyMeet link={g.meetLink} />}
     </div>
   )
 }

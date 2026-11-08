@@ -250,3 +250,97 @@ async function finish(
   await supabase.from('finka_project_milestones').update(patch).eq('id', id)
   return result.error ? { ok: false, error: result.error } : { ok: true, ...result }
 }
+
+// ---------------------------------------------------------------------------
+// Andersom: afspraken die in Google Agenda zelf staan (niet via het
+// dashboard gemaakt) ophalen voor de weekagenda op /planning. Alleen lezen;
+// events die bij een mijlpaal horen laten we weg, die staan er al.
+// ---------------------------------------------------------------------------
+
+export interface GoogleAgendaEvent {
+  id: string
+  title: string
+  date: string // eerste dag, yyyy-MM-dd
+  endDate: string // laatste dag (inclusief), yyyy-MM-dd
+  startTime: string | null // HH:mm, null = hele dag
+  endTime: string | null
+  meetLink: string | null
+  htmlLink: string | null
+  location: string | null
+}
+
+function amsterdamParts(dateTime: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(dateTime))
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` }
+}
+
+export async function listGoogleEvents(from: string, to: string): Promise<{ events: GoogleAgendaEvent[]; error?: string }> {
+  const supabase = serviceClient()
+  const conn = await getCalendar(supabase)
+  if (!conn) return { events: [] }
+  try {
+    const { data } = await conn.calendar.events.list({
+      calendarId: conn.calendarId,
+      // Een dag ruimer i.v.m. tijdzone; de agenda kiest zelf per dag.
+      timeMin: addDays(new Date(`${from}T00:00:00Z`), -1).toISOString(),
+      timeMax: addDays(new Date(`${to}T23:59:59Z`), 1).toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+    })
+    const items = (data.items ?? []).filter((e) => e.id && e.status !== 'cancelled')
+    const ids = items.map((e) => e.id!)
+    const { data: own } = ids.length
+      ? await supabase.from('finka_project_milestones').select('google_event_id').in('google_event_id', ids)
+      : { data: [] as { google_event_id: string }[] }
+    const ownIds = new Set((own ?? []).map((m) => m.google_event_id))
+
+    const events = items
+      .filter((e) => !ownIds.has(e.id!))
+      // Afspraken die contact@ zelf heeft afgeslagen niet tonen.
+      .filter((e) => !e.attendees?.some((a) => a.self && a.responseStatus === 'declined'))
+      .map((e): GoogleAgendaEvent | null => {
+        if (e.start?.date) {
+          const lastDay = format(addDays(new Date(`${e.end?.date ?? e.start.date}T00:00:00`), -1), 'yyyy-MM-dd')
+          return {
+            id: e.id!,
+            title: e.summary || '(geen titel)',
+            date: e.start.date,
+            endDate: lastDay < e.start.date ? e.start.date : lastDay,
+            startTime: null,
+            endTime: null,
+            meetLink: meetLinkOf(e),
+            htmlLink: e.htmlLink ?? null,
+            location: e.location ?? null,
+          }
+        }
+        if (!e.start?.dateTime) return null
+        const start = amsterdamParts(e.start.dateTime)
+        const end = e.end?.dateTime ? amsterdamParts(e.end.dateTime) : start
+        return {
+          id: e.id!,
+          title: e.summary || '(geen titel)',
+          date: start.date,
+          endDate: end.date < start.date ? start.date : end.date,
+          startTime: start.time,
+          endTime: end.time,
+          meetLink: meetLinkOf(e),
+          htmlLink: e.htmlLink ?? null,
+          location: e.location ?? null,
+        }
+      })
+      .filter((e): e is GoogleAgendaEvent => !!e)
+    return { events }
+  } catch (err) {
+    return { events: [], error: errorMessage(err) }
+  }
+}
