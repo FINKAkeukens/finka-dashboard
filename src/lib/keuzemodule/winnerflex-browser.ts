@@ -7,7 +7,7 @@
 // komen ook de kastafbeeldingen mee (kastplaatjes.ts); die uploadt de aanroeper.
 
 import type { PdfPage, PdfText } from '../catalogus/parse'
-import { openPdf } from '../catalogus/extract'
+import { laadPdfjs, openPdf } from '../catalogus/extract'
 import { parseWinnerFlex, type WinnerUitdraai } from './winnerflex'
 import { bouwPlattegrond, leesTekening, type Plattegrond, type Vak } from './plattegrond'
 import { koppelPlaatjes, plaatjesOpPagina } from './kastplaatjes'
@@ -99,7 +99,7 @@ export async function leesUitdraai(artikelen: Blob | string, tekening?: Blob | s
     if (!bov.length && tekenPdf && tekenPdf.numPages === 1) bov.push(1)
 
     const posities = uitdraai.kasten.map((k) => ({ positie: k.positie, wand: k.soort === 'wand' }))
-    const { OPS } = await import('pdfjs-dist')
+    const { OPS } = await laadPdfjs()
     const ops = OPS as unknown as Record<string, number>
     const plaatjes = await knipPlaatjes(pdf, pages.filter((p) => !isBovenaanzicht(p)), new Set(posities.map((p) => p.positie)), ops)
     let beste: Ingelezen['tekening'] = null

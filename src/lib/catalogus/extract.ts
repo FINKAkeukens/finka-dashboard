@@ -9,7 +9,12 @@
 import type { ImageRef, OutlineEntry, PdfBox, PdfPage, PdfText } from './parse'
 import { benodigdePaginas } from './parse'
 
-type PdfDocument = Awaited<ReturnType<typeof import('pdfjs-dist').getDocument>['promise']>
+// De legacy-build van pdf.js: de gewone build gebruikt gloednieuwe
+// JavaScript (o.a. Map.getOrInsertComputed) die Safari 26 nog niet heeft
+// ("undefined is not a function"). De legacy-build brengt die zelf mee.
+export const laadPdfjs = () => import('pdfjs-dist/legacy/build/pdf.mjs')
+
+type PdfDocument = Awaited<ReturnType<Awaited<ReturnType<typeof laadPdfjs>>['getDocument']>['promise']>
 
 export interface Voortgang {
   stap: string
@@ -18,10 +23,10 @@ export interface Voortgang {
 }
 
 export async function openPdf(file: Blob): Promise<PdfDocument> {
-  const pdfjs = await import('pdfjs-dist')
+  const pdfjs = await laadPdfjs()
   if (!pdfjs.GlobalWorkerOptions.workerPort) {
     pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-      new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url),
+      new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url),
       { type: 'module' }
     )
   }
@@ -56,7 +61,7 @@ const mul = (a: Matrix, b: number[]): Matrix => [
 ]
 
 async function leesPagina(pdf: PdfDocument, n: number, metAfbeeldingen: boolean): Promise<PdfPage> {
-  const pdfjs = await import('pdfjs-dist')
+  const pdfjs = await laadPdfjs()
   const page = await pdf.getPage(n)
   const vp = page.getViewport({ scale: 1 })
   const tc = await page.getTextContent()
