@@ -2773,7 +2773,7 @@ REVOKE ALL ON TABLE finka_google_calendar_token FROM anon, authenticated;
 GRANT ALL ON TABLE finka_google_calendar_token TO service_role;
 
 -- =========================================================
--- 100. Keuzemodule klantportaal: feedback per kast.
+-- 101. Keuzemodule klantportaal: feedback per kast.
 --
 --    finka_catalogi / finka_catalogus_items: de ingelezen Sachsenküchen-
 --    catalogus (SK130). Eén catalogus is actief; "Catalogus vernieuwen"
@@ -2788,7 +2788,8 @@ GRANT ALL ON TABLE finka_google_calendar_token TO service_role;
 --    finka_keuzemodule: instellingen per project (voorstel uit Winner Flex,
 --    prijsgroep, plattegrond, huidige ronde).
 --    finka_keuzemodule_kasten: de kasten per project (positie, code, soort,
---    pin op de plattegrond, wat al inbegrepen is).
+--    vak op de plattegrond, wat al in het ontwerp zit, afbeelding en
+--    toelichting in data).
 --    finka_keuzemodule_feedback: de keuzes van de klant per ronde; 'concept'
 --    tot de klant op "Feedback insturen" drukt.
 --    Alles staff-only; het portaal leest en schrijft via API-routes met de
