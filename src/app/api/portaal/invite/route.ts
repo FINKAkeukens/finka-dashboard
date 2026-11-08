@@ -49,15 +49,51 @@ export async function POST(request: Request) {
     password,
     email_confirm: true,
   })
-  if (createError || !created.user) {
-    return NextResponse.json({ error: createError?.message ?? 'Aanmaken account mislukt' }, { status: 400 })
+  let authUserId = created?.user?.id ?? null
+
+  if (!authUserId) {
+    // Er bestaat al een login met dit e-mailadres, bv. van een klant die is
+    // verwijderd. Hoort die login bij geen enkele andere klant meer, dan
+    // koppelen we hem aan deze klant met een nieuw wachtwoord.
+    const existing = createError && (await findAuthUserByEmail(service, customer.email))
+    if (!existing) {
+      return NextResponse.json({ error: createError?.message ?? 'Aanmaken account mislukt' }, { status: 400 })
+    }
+    const { data: other } = await service
+      .from('finka_customers')
+      .select('first_name, last_name')
+      .eq('auth_user_id', existing)
+      .neq('id', customerId)
+      .limit(1)
+      .maybeSingle()
+    if (other) {
+      return NextResponse.json(
+        { error: `Dit e-mailadres heeft al portaaltoegang via klant ${other.first_name} ${other.last_name}`.trim() },
+        { status: 400 }
+      )
+    }
+    const { error: updError } = await service.auth.admin.updateUserById(existing, { password })
+    if (updError) return NextResponse.json({ error: updError.message }, { status: 400 })
+    authUserId = existing
   }
 
   const { error: linkError } = await service
     .from('finka_customers')
-    .update({ auth_user_id: created.user.id })
+    .update({ auth_user_id: authUserId })
     .eq('id', customerId)
   if (linkError) return NextResponse.json({ error: linkError.message }, { status: 500 })
 
   return NextResponse.json({ email: customer.email, password })
+}
+
+async function findAuthUserByEmail(service: ReturnType<typeof createServiceClient>, email: string): Promise<string | null> {
+  const target = email.trim().toLowerCase()
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await service.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) return null
+    const hit = data.users.find((u) => u.email?.toLowerCase() === target)
+    if (hit) return hit.id
+    if (data.users.length < 1000) return null
+  }
+  return null
 }

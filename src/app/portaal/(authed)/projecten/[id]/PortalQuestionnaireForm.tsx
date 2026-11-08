@@ -203,6 +203,7 @@ export default function PortalQuestionnaireForm({
                           className="mt-2 w-full text-sm px-3 py-2 border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]"
                         />
                       )}
+                      <SelectedCount question={q.question} count={parseMultiSelectAnswer(answers[q.id] ?? '').selected.length} />
                     </div>
                   ) : q.type === 'lange_tekst' ? (
                     <textarea
@@ -274,4 +275,13 @@ export default function PortalQuestionnaireForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   )
+}
+
+// Optelling onder een meerkeuzevraag; bij de apparatuurvraag in apparaten.
+function SelectedCount({ question, count }: { question: string; count: number }) {
+  if (count === 0) return null
+  const text = /apparat/i.test(question)
+    ? `${count} ${count === 1 ? 'apparaat' : 'apparaten'} gekozen`
+    : `${count} gekozen`
+  return <p className="mt-2 text-xs font-medium text-[#8A6A2E]">Totaal: {text}</p>
 }
