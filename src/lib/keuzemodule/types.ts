@@ -3,7 +3,7 @@
 // wat de klant voor dít project mag zien, met klantprijzen (indicatie incl.
 // btw) — nooit brutopunten of de rest van de catalogus.
 
-import type { KastSoort, KastStatus, Uitvoering, WerkbladMateriaal } from './klantlaag'
+import type { AlgemeneOptie, KastSoort, KastStatus, Uitvoering, WerkbladMateriaal } from './klantlaag'
 import type { Plattegrond, Vak } from './plattegrond'
 
 export interface PakketIndeling {
@@ -69,6 +69,8 @@ export interface PakketGreep extends PakketDecor {
 export interface Pakket {
   // false = FINKA heeft prijzen uitgezet; alle prijs-velden zijn dan null.
   prijzen: boolean
+  // Algemene keuzes die FINKA aan of uit kan zetten (Instellingen → Keuzemodule).
+  opties: Record<AlgemeneOptie, boolean>
   toelichting: string | null
   ronde: number
   plattegrond: Plattegrond | null

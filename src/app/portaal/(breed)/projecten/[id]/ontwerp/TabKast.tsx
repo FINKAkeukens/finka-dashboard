@@ -74,11 +74,12 @@ function Plattegrond({
 }
 
 function KastPaneel({
-  k, keuzes, setKast, onVorige, onVolgende, prijzen,
+  k, keuzes, setKast, onVorige, onVolgende, prijzen, push,
 }: {
   k: PakketKast
   keuzes: Keuzes
   prijzen: boolean
+  push: boolean
   setKast: (id: string, patch: Partial<KastKeuze>) => void
   onVorige: () => void
   onVolgende: () => void
@@ -185,7 +186,7 @@ function KastPaneel({
           De indeling van deze kast hangt af van het apparaat. Wil je hier iets anders? Kies &quot;Ik heb een vraag&quot; en
           beschrijf het, of kijk bij Apparatuur.
         </div>
-      ) : (
+      ) : push && (
         <div className="flex flex-col gap-2.5">
           <div className="kv-label" style={{ color: C.muted }}>Openen</div>
           {[
@@ -332,6 +333,7 @@ export default function TabKast({
           keuzes={keuzes}
           setKast={setKast}
           prijzen={pakket.prijzen}
+          push={pakket.opties.push}
           onVorige={() => setSelId(kasten[(idx - 1 + kasten.length) % kasten.length].id)}
           onVolgende={() => { volgende(sel.id); setSelId(kasten[(idx + 1) % kasten.length].id) }}
         />

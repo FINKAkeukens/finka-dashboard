@@ -184,6 +184,52 @@ const WANDKAST: ExtraDef[] = [
 
 const AFVALKAST: ExtraDef[] = [LICHT('LED gaat aan als je de lade opent')]
 
+// Aan/uit per optie (Instellingen → Keuzemodule). Sleutels:
+//   kast:<key>      toebehoren in een kast (geldt voor alle kastsoorten)
+//   wand:<key>      extra's aan de wand en verlichting
+//   algemeen:<key>  keuzes die geen catalogusartikel zijn
+// Zonder opgeslagen keuze geldt de standaard: alles aan, behalve wat in
+// STANDAARD_UIT staat.
+export const ALGEMENE_OPTIES = [
+  { key: 'indeling', label: 'Andere indeling kiezen', sub: 'Bij ladekasten: 2 grote lades, 3 lades, deuren met plank' },
+  { key: 'push', label: 'Push-to-open per kast', sub: 'Keuze "Openen" bij elke kast' },
+  { key: 'corpus', label: 'Andere binnenkleur kiezen', sub: 'Alle corpuskleuren uit de catalogus' },
+  { key: 'greep', label: 'Andere greep kiezen', sub: 'Alle grepen en knoppen uit de catalogus' },
+  { key: 'greeplijst', label: 'Greeplijst (greeploos)', sub: 'Bij grepen: keuze voor een verzonken greeplijst' },
+  { key: 'greeppush', label: 'Push-to-open voor de hele keuken', sub: 'Bij grepen: helemaal zonder grepen' },
+] as const
+export type AlgemeneOptie = (typeof ALGEMENE_OPTIES)[number]['key']
+
+export const STANDAARD_UIT = new Set<string>([
+  // Merel, 2026-11-08: alleen wat uit de catalogus komt. De extra's aan de
+  // wand kloppen niet; verlichting per kast is geen catalogusartikel.
+  'kast:licht',
+  'wand:reling', 'wand:nisreling', 'wand:bovenlicht', 'wand:plintlicht', 'wand:stopcontact', 'wand:qi',
+])
+
+export function optieAan(sleutel: string, keuzes: Record<string, boolean>): boolean {
+  return keuzes[sleutel] ?? !STANDAARD_UIT.has(sleutel)
+}
+
+// Alle kasttoebehoren op een rij voor het overzicht in het dashboard: per
+// sleutel de definities en in welke kastsoorten ze voorkomen.
+export function kastOptieOverzicht(): { key: string; defs: ExtraDef[]; kasten: string[] }[] {
+  const sets: [string, ExtraDef[]][] = [
+    ['Ladekast', LADEKAST], ['Kast met deuren', DEURKAST], ['Hoge kast', HOGEKAST], ['Spoelkast', SPOELKAST],
+    ['Kookplaatkast', KOOKPLAATKAST], ['Wandkast', WANDKAST], ['Afvalkast', AFVALKAST],
+  ]
+  const per = new Map<string, { key: string; defs: ExtraDef[]; kasten: string[] }>()
+  for (const [naam, defs] of sets) {
+    for (const d of defs) {
+      const x = per.get(d.key) ?? { key: d.key, defs: [], kasten: [] }
+      if (!x.defs.some((o) => JSON.stringify(o.codes) === JSON.stringify(d.codes))) x.defs.push(d)
+      if (!x.kasten.includes(naam)) x.kasten.push(naam)
+      per.set(d.key, x)
+    }
+  }
+  return [...per.values()]
+}
+
 // Welke toebehoren passen in deze kast?
 export function extrasVoor(code: string, soort: KastSoort): ExtraDef[] {
   const c = code.toUpperCase()

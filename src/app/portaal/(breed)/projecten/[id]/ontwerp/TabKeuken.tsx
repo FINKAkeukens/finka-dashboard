@@ -83,7 +83,9 @@ function RijKaart({
 export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; keuzes: Keuzes; wijzig: (f: (k: Keuzes) => Keuzes) => void }) {
   const [open, setOpen] = useState<Rij | null>(null)
   const [cFilter, setCFilter] = useState<'alles' | 'hout' | 'effen'>('alles')
-  const [gSoort, setGSoort] = useState<(typeof GREEP_SOORTEN)[number][0]>('greep')
+  const opt = pakket.opties
+  const greepSoorten = GREEP_SOORTEN.filter(([s]) => (s === 'lijst' ? opt.greeplijst : s === 'push' ? opt.greeppush : opt.greep))
+  const [gSoort, setGSoort] = useState<(typeof GREEP_SOORTEN)[number][0]>(greepSoorten[0]?.[0] ?? 'greep')
   const [gKleur, setGKleur] = useState<(typeof GREEP_KLEUREN)[number][0]>('alles')
   const [gAlles, setGAlles] = useState(false)
 
@@ -130,7 +132,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
       <div className="flex flex-col gap-1.5">
         <h2 className="kv-kop m-0 text-[30px] sm:text-[36px]">Keuzes voor de hele keuken</h2>
         <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>
-          Deze keuzes gelden voor alle kasten. Bij kleur binnenkant en grepen kun je alle mogelijkheden bekijken.
+          Deze keuzes gelden voor alle kasten.{opt.corpus || opt.greep ? ' Bij kleur binnenkant en grepen kun je alle mogelijkheden bekijken.' : ''}
           Twijfel je? Kies &quot;Bespreken&quot;; dan nemen we het mee in het gesprek.
         </p>
       </div>
@@ -142,11 +144,11 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
         waarde={corpus ? `${corpus.naam} (${corpus.code})` : '—'}
         sub={keuken.corpus && keuken.corpus !== kk.corpus.voorstel
           ? `Jouw keuze · ons voorstel was ${corpusVoorstel?.naam ?? kk.corpus.voorstel}`
-          : `Ons voorstel · kies uit ${kk.corpus.opties.length} kleuren`}
+          : opt.corpus ? `Ons voorstel · kies uit ${kk.corpus.opties.length} kleuren` : 'Ons voorstel'}
         staal={<Staal src={corpus?.img ?? null} className="flex-none w-[54px] h-[35px] rounded-[2px]" style={{ border: '1px solid rgba(0,0,0,0.12)' }} />}
         keuze={rijKeuze('corpus')}
         onKeuze={(v) => zetRij('corpus', v)}
-        kiesLabel="Andere kleur kiezen"
+        kiesLabel={opt.corpus ? 'Andere kleur kiezen' : undefined}
         open={open === 'corpus'}
         onOpen={() => setOpen(open === 'corpus' ? null : 'corpus')}
       >
@@ -179,12 +181,12 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
           : vlakStaal('#FFFFFF')}
         keuze={rijKeuze('greep')}
         onKeuze={(v) => zetRij('greep', v)}
-        kiesLabel="Alle grepen bekijken"
+        kiesLabel={!greepSoorten.length ? undefined : opt.greep ? 'Alle grepen bekijken' : 'Andere mogelijkheden'}
         open={open === 'greep'}
         onOpen={() => setOpen(open === 'greep' ? null : 'greep')}
       >
         <div role="group" aria-label="Manier van openen" className="flex flex-wrap gap-1.5">
-          {GREEP_SOORTEN.map(([s, label]) => (
+          {greepSoorten.map(([s, label]) => (
             <Chip key={s} aan={gSoort === s} onClick={() => { setGSoort(s); setGAlles(false); setGKleur('alles') }}>
               {label}{s === 'greep' || s === 'lang' || s === 'knop' ? ` (${telSoort(s)})` : ''}
             </Chip>

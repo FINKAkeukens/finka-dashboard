@@ -3,6 +3,8 @@ import type { createServiceClient } from '@/lib/supabase/service'
 import { klantPrijs } from './prijzen'
 import {
   extrasVoor,
+  ALGEMENE_OPTIES,
+  optieAan,
   VARIANTEN,
   WAND_EXTRAS,
   HOUT_NAAM,
@@ -99,9 +101,16 @@ export async function bouwPakket(service: Service, projectId: string, { metPrijz
   if (!instelling) return null
   const kasten = alleKasten.filter((k) => k.zichtbaar && k.soort !== 'overig')
 
-  const { data: catalogus } = await service.from('finka_catalogi').select('id').eq('actief', true).maybeSingle()
+  const [{ data: catalogus }, { data: optieRijen }] = await Promise.all([
+    service.from('finka_catalogi').select('id').eq('actief', true).maybeSingle(),
+    service.from('finka_keuzemodule_opties').select('sleutel, aan'),
+  ])
   if (!catalogus) return null
   const catId = catalogus.id as string
+  // Opties die FINKA heeft uitgezet (Instellingen → Keuzemodule) gaan niet mee.
+  const optieKeuzes = Object.fromEntries((optieRijen ?? []).map((r) => [r.sleutel as string, r.aan as boolean]))
+  const aan = (sleutel: string) => optieAan(sleutel, optieKeuzes)
+  const algemeen = Object.fromEntries(ALGEMENE_OPTIES.map((o) => [o.key, aan(`algemeen:${o.key}`)])) as Pakket['opties']
 
   const pg = instelling.prijsgroep
   // Welke kast- en accessoirecodes hebben we nodig?
@@ -155,10 +164,14 @@ export async function bouwPakket(service: Service, projectId: string, { metPrijz
 
   const pakketKasten: PakketKast[] = kasten.map((k) => {
     const defs = extrasVoor(k.code, k.soort)
-    const extras = defs.map((d) => extraVan(d, k.breedte)).filter((e): e is PakketExtra => !!e)
+    // Uitgezet: weg, tenzij het al in het ontwerp zit (dan blijft het zichtbaar als "in je ontwerp").
+    const extras = defs
+      .filter((d) => aan(`kast:${d.key}`) || k.inbegrepen.includes(d.key))
+      .map((d) => extraVan(d, k.breedte))
+      .filter((e): e is PakketExtra => !!e)
     const lade = k.soort === 'lade' ? splitLadeCode(k.code) : null
     let indelingen: PakketKast['indelingen'] = []
-    if (lade && pg) {
+    if (lade && pg && algemeen.indeling) {
       const basisPrijs = kastPrijs.get(k.code)?.[pg - 1]
       if (typeof basisPrijs === 'number') {
         indelingen = VARIANTEN.flatMap((v) => {
@@ -208,6 +221,7 @@ export async function bouwPakket(service: Service, projectId: string, { metPrijz
 
   const pakket: Pakket = {
     prijzen: true,
+    opties: algemeen,
     toelichting: v.toelichting?.trim() || null,
     ronde: instelling.ronde,
     plattegrond: instelling.plattegrond,
@@ -218,14 +232,14 @@ export async function bouwPakket(service: Service, projectId: string, { metPrijz
       lades: v.lades ?? null,
       plint: v.plint ?? null,
       wangen: v.wangen ?? null,
-      corpus: { voorstel: v.corpus ?? null, opties: corpusOpties },
-      greep: { voorstel: v.greep ?? null, aantal: greepAantal, opties: greepOpties },
+      corpus: { voorstel: v.corpus ?? null, opties: algemeen.corpus ? corpusOpties : corpusOpties.filter((o) => o.code === v.corpus) },
+      greep: { voorstel: v.greep ?? null, aantal: greepAantal, opties: algemeen.greep ? greepOpties : greepOpties.filter((g) => g.code === v.greep) },
     },
     werkblad: {
       voorstel: v.werkblad?.tekst?.trim() || null,
       materiaal: v.werkblad?.materiaal ?? werkbladMateriaalUit(v.werkblad?.tekst),
     },
-    wand: WAND_EXTRAS.map((d) => extraVan(d, null)).filter((e): e is PakketExtra => !!e),
+    wand: WAND_EXTRAS.filter((d) => aan(`wand:${d.key}`)).map((d) => extraVan(d, null)).filter((e): e is PakketExtra => !!e),
   }
   return instelling.prijzen_tonen === false && !metPrijzen ? zonderPrijzen(pakket) : pakket
 }

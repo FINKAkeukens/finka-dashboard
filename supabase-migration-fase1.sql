@@ -2896,3 +2896,23 @@ CREATE POLICY "Staff kan catalogus verwijderen" ON storage.objects FOR DELETE TO
 ALTER TABLE finka_portal_activity DROP CONSTRAINT IF EXISTS finka_portal_activity_type_check;
 ALTER TABLE finka_portal_activity ADD CONSTRAINT finka_portal_activity_type_check
   CHECK (type IN ('vragenlijst','document_akkoord','maatformulier','keuzemodule'));
+
+-- =========================================================
+-- 102. Keuzemodule: opties aan/uit (Instellingen → Keuzemodule-opties).
+--
+--    Eén rij per optie die FINKA bewust aan of uit heeft gezet; zonder rij
+--    geldt de standaard uit de code (alles aan, behalve de extra's aan de
+--    wand). Sleutels: kast:<key>, wand:<key>, algemeen:<key>.
+--    Staff-only; het portaal leest via de service-role.
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_keuzemodule_opties (
+  sleutel TEXT PRIMARY KEY,
+  aan BOOLEAN NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE finka_keuzemodule_opties ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_keuzemodule_opties;
+CREATE POLICY "Staff only" ON finka_keuzemodule_opties FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_keuzemodule_opties TO authenticated, service_role;
