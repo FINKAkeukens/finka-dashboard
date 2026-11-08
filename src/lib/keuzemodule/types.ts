@@ -110,6 +110,7 @@ export interface ApparaatKeuze {
   alt?: 'instap' | 'luxe'
   merk?: string
   type?: string
+  opmerking?: string
 }
 
 export interface WerkbladKeuze {

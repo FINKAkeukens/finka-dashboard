@@ -38,10 +38,10 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
           <Kaart key={k.id} className="px-5 py-[18px] flex flex-col gap-3.5">
             <div className="flex flex-wrap justify-between gap-3.5 items-start">
               <div className="flex flex-col gap-1 min-w-0" style={{ flex: '1 1 320px' }}>
-                <div className="text-[13px] font-semibold" style={{ color: C.muted }}>
+                <div className="kv-label" style={{ color: C.muted }}>
                   {k.apparaat ?? 'Apparaat'} · kast {k.positie}
                 </div>
-                <div className="text-[17px] font-bold">{k.apparaatVoorstel ?? 'Volgens je offerte'}</div>
+                <div className="kv-kop text-[24px]">{k.apparaatVoorstel ?? 'Volgens je offerte'}</div>
                 <div className="text-sm" style={{ color: C.tekst }}>{k.naam}{k.omschrijving ? ` · ${k.omschrijving}` : ''}</div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -90,6 +90,18 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
                 <div className="text-[13px] basis-full" style={{ color: C.muted }}>Wij zoeken de inbouwmaten op en laten weten of het in de nis past.</div>
               </div>
             )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={`opm-${k.id}`} className="kv-label" style={{ color: C.muted }}>Opmerking of vraag</label>
+              <textarea
+                id={`opm-${k.id}`}
+                value={a.opmerking ?? ''}
+                onChange={(e) => zet(k.id, { opmerking: e.target.value.slice(0, 1000) })}
+                rows={2}
+                placeholder="Een wens of vraag over dit apparaat"
+                className="w-full box-border rounded-[2px] px-3 py-2.5 text-sm leading-normal resize-y bg-white"
+                style={{ border: `1px solid ${C.lijnInput}`, color: C.ink }}
+              />
+            </div>
           </Kaart>
         )
       })}

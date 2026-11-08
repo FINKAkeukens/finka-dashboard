@@ -142,20 +142,25 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
   for (const k of pakket.kasten) {
     if (k.soort !== 'apparaat') continue
     const a = keuzes.apparatuur?.[k.id]
+    const opm = a?.opmerking?.trim() ? ` — "${a.opmerking.trim()}"` : ''
+    const titel = `${k.apparaat ?? k.naam} · kast ${k.positie}`
+    // Positie erbij, zodat het rapport het bij de juiste kast zet.
+    const plek = { positie: k.positie, kast: k.apparaat ? `${k.apparaat} (${k.naam})` : k.naam, codeInOntwerp: k.code }
     if (a?.choice === 'alt') {
       out.push({
-        tag: 'Apparaat', titel: k.apparaat ?? k.naam,
-        tekst: `Alternatief gewenst: ${a.alt === 'luxe' ? 'luxer' : a.alt === 'instap' ? 'eenvoudiger' : 'nog niet gekozen'}`,
-        bedrag: null, prijsVolgt: true, soort: 'wijziging', codes: [],
+        tag: 'Apparaat', titel,
+        tekst: `Alternatief gewenst: ${a.alt === 'luxe' ? 'luxer' : a.alt === 'instap' ? 'eenvoudiger' : 'nog niet gekozen'}${opm}`,
+        bedrag: null, prijsVolgt: true, soort: 'wijziging', codes: [], ...plek,
       })
-    }
-    if (a?.choice === 'eigen') {
+    } else if (a?.choice === 'eigen') {
       const merkType = `${a.merk ?? ''} ${a.type ?? ''}`.trim()
       out.push({
-        tag: 'Apparaat', titel: k.apparaat ?? k.naam,
-        tekst: `Eigen apparaat: ${merkType || 'merk en type nog invullen'}`,
-        bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [],
+        tag: 'Apparaat', titel,
+        tekst: `Eigen apparaat: ${merkType || 'merk en type nog invullen'}${opm}`,
+        bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [], ...plek,
       })
+    } else if (opm) {
+      out.push({ tag: 'Apparaat', titel, tekst: `"${a!.opmerking!.trim()}"`, bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [], ...plek })
     }
   }
 
