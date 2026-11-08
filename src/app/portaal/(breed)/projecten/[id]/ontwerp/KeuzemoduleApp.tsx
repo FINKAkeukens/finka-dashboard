@@ -10,9 +10,10 @@ import TabKast from './TabKast'
 import TabKeuken from './TabKeuken'
 import TabWerkblad from './TabWerkblad'
 import TabApparatuur from './TabApparatuur'
+import TabAccessoires from './TabAccessoires'
 import TabWijzigingen from './TabWijzigingen'
 
-type Tab = 'kast' | 'keuken' | 'werkblad' | 'app' | 'wijz'
+type Tab = 'kast' | 'keuken' | 'werkblad' | 'app' | 'acc' | 'wijz'
 
 // Na een wijziging zo lang wachten voor het tussentijds bewaren, zodat
 // snel achter elkaar klikken één verzoek oplevert.
@@ -116,6 +117,7 @@ export default function KeuzemoduleApp({
     ['keuken', 'Hele keuken'],
     ['werkblad', 'Werkblad'],
     ...(pakket.kasten.some((k) => k.soort === 'apparaat') ? [['app', 'Apparatuur'] as [Tab, string]] : []),
+    ...(pakket.accessoires.length ? [['acc', 'Accessoires'] as [Tab, string]] : []),
     ['wijz', `Wijzigingen (${wijzigingen.length})`],
   ]
 
@@ -190,6 +192,7 @@ export default function KeuzemoduleApp({
           {tab === 'keuken' && <TabKeuken pakket={pakket} keuzes={keuzes} wijzig={wijzig} />}
           {tab === 'werkblad' && <TabWerkblad pakket={pakket} keuzes={keuzes} wijzig={wijzig} />}
           {tab === 'app' && <TabApparatuur pakket={pakket} keuzes={keuzes} wijzig={wijzig} />}
+          {tab === 'acc' && <TabAccessoires pakket={pakket} keuzes={keuzes} wijzig={wijzig} />}
         </fieldset>
         {tab === 'wijz' && (
           <TabWijzigingen

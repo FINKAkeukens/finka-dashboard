@@ -90,6 +90,7 @@ export interface Pakket {
     materiaal: WerkbladMateriaal | null
   }
   wand: PakketExtra[]
+  accessoires: PakketAccessoire[]
 }
 
 export interface KastKeuze {
@@ -115,6 +116,20 @@ export interface ApparaatKeuze {
   opmerking?: string
 }
 
+// Accessoires uit de offerte (spoelbak, kraan…): de klant geeft akkoord of
+// wil het bespreken, met een opmerking.
+export interface PakketAccessoire {
+  id: string
+  soort: string
+  naam: string
+  omschrijving: string | null
+}
+
+export interface AccessoireKeuze {
+  status?: 'akkoord' | 'bespreken'
+  opmerking?: string
+}
+
 export interface WerkbladKeuze {
   status?: 'akkoord' | 'bespreken'
   opmerking?: string
@@ -130,6 +145,7 @@ export interface Keuzes {
   wand?: Record<string, boolean>
   werkblad?: WerkbladKeuze
   apparatuur?: Record<string, ApparaatKeuze>
+  accessoires?: Record<string, AccessoireKeuze>
 }
 
 export interface Wijziging {

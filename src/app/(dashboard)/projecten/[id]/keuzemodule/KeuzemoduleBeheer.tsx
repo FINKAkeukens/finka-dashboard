@@ -12,6 +12,8 @@ import { KAST_SOORT_LABELS, WERKBLAD_MATERIAAL, extrasVoor, werkbladMateriaalUit
 import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
 import Wijzigingsrapport from './Wijzigingsrapport'
 import { fileHref } from '@/lib/storage-url'
+import { TYPE_LABELS, getSpecSummary } from '@/lib/appliance-utils'
+import type { Appliance } from '@/lib/types'
 
 export interface UitdraaiBron {
   url: string
@@ -171,6 +173,31 @@ export default function KeuzemoduleBeheer({
     } finally {
       setBezig('')
     }
+  }
+
+  // Accessoireregels (spoelbak, kraan…) uit de nieuwste offerte van dit
+  // project, met de omschrijving uit de apparatuurbibliotheek.
+  async function accessoiresUitOfferte(): Promise<Accessoire[]> {
+    const { data: offerte } = await supabase
+      .from('finka_quotes').select('id').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+    if (!offerte) throw new Error('Dit project heeft nog geen offerte.')
+    const { data, error } = await supabase
+      .from('finka_quote_items')
+      .select('id, description, brand, model, appliance:finka_appliances(*)')
+      .eq('quote_id', offerte.id)
+      .eq('type', 'accessoire')
+      .order('sort_order')
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => {
+      const app = (Array.isArray(r.appliance) ? r.appliance[0] : r.appliance) as Appliance | null
+      const naam = [r.brand, r.model].filter(Boolean).join(' ') || (r.description as string)
+      return {
+        id: r.id as string,
+        soort: app ? TYPE_LABELS[app.type] ?? 'Accessoire' : 'Accessoire',
+        naam,
+        omschrijving: app ? getSpecSummary(app) || null : null,
+      }
+    })
   }
 
   async function bewaarVoorstel() {
@@ -348,6 +375,11 @@ export default function KeuzemoduleBeheer({
               </div>
             </label>
           </div>
+          <Accessoires
+            lijst={voorstel.accessoires ?? []}
+            onChange={(accessoires) => setVoorstel({ ...voorstel, accessoires })}
+            overnemen={accessoiresUitOfferte}
+          />
           <Button size="sm" onClick={bewaarVoorstel} disabled={!!bezig}>Voorstel opslaan</Button>
         </section>
       )}
@@ -481,6 +513,60 @@ export default function KeuzemoduleBeheer({
           )
         })}
       </section>
+    </div>
+  )
+}
+
+type Accessoire = { id: string; soort: string; naam: string; omschrijving?: string | null }
+
+// Accessoires voor de klant (eigen tabblad in het portaal). Overnemen uit de
+// offerte vult de lijst; daarna vrij aan te passen. Opslaan gaat mee met
+// "Voorstel opslaan".
+function Accessoires({
+  lijst, onChange, overnemen,
+}: {
+  lijst: Accessoire[]
+  onChange: (lijst: Accessoire[]) => void
+  overnemen: () => Promise<Accessoire[]>
+}) {
+  const [bezig, setBezig] = useState(false)
+  const [melding, setMelding] = useState('')
+  const zet = (i: number, patch: Partial<Accessoire>) => onChange(lijst.map((a, j) => (j === i ? { ...a, ...patch } : a)))
+
+  async function haal() {
+    if (lijst.length && !confirm('De huidige accessoires vervangen door die uit de offerte?')) return
+    setBezig(true)
+    setMelding('')
+    try {
+      const nieuw = await overnemen()
+      onChange(nieuw)
+      setMelding(nieuw.length ? `${nieuw.length} overgenomen. Vergeet niet op "Voorstel opslaan" te klikken.` : 'Geen accessoires gevonden in de offerte.')
+    } catch (e) {
+      setMelding(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-[#6B6560]">Accessoires (spoelbak, kraan…) — eigen tabblad voor de klant, zonder prijzen</span>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={haal} disabled={bezig}>{bezig ? 'Ophalen…' : 'Uit de offerte overnemen'}</Button>
+          <Button size="sm" variant="outline" onClick={() => onChange([...lijst, { id: crypto.randomUUID(), soort: '', naam: '', omschrijving: '' }])}>Toevoegen</Button>
+        </div>
+      </div>
+      {melding && <p className="text-xs text-[#2F5D50]">{melding}</p>}
+      {lijst.map((a, i) => (
+        <div key={a.id} className="grid grid-cols-[8rem_1fr_1.4fr_auto] gap-2 items-center">
+          <input className={veld} value={a.soort} placeholder="Soort" aria-label="Soort accessoire" onChange={(e) => zet(i, { soort: e.target.value })} />
+          <input className={veld} value={a.naam} placeholder="Merk en type" aria-label="Merk en type" onChange={(e) => zet(i, { naam: e.target.value })} />
+          <input className={veld} value={a.omschrijving ?? ''} placeholder="Omschrijving voor de klant" aria-label="Omschrijving" onChange={(e) => zet(i, { omschrijving: e.target.value })} />
+          <button type="button" className="text-xs text-[#9B3B2E] underline" onClick={() => onChange(lijst.filter((_, j) => j !== i))}>Verwijderen</button>
+        </div>
+      ))}
+      {!lijst.length && <p className="text-xs text-[#9A948D]">Geen accessoires; het tabblad wordt dan niet getoond.</p>}
     </div>
   )
 }

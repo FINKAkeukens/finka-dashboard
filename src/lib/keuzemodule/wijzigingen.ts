@@ -164,6 +164,18 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
     }
   }
 
+  for (const a of pakket.accessoires) {
+    const x = keuzes.accessoires?.[a.id]
+    const opm = x?.opmerking?.trim()
+    if (x?.status === 'bespreken' || opm) {
+      out.push({
+        tag: 'Accessoire', titel: `${a.soort}: ${a.naam}`,
+        tekst: opm ? `"${opm}"` : 'Wil dit graag bespreken',
+        bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [],
+      })
+    }
+  }
+
   // Prijzen uit: geen bedragen en geen "prijs volgt".
   return pakket.prijzen ? out : out.map((w) => ({ ...w, bedrag: null, prijsVolgt: false }))
 }

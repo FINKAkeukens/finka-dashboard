@@ -47,6 +47,8 @@ export interface KeuzemoduleInstelling {
     plint?: string | null
     wangen?: string | null
     werkblad?: { tekst?: string | null; materiaal?: WerkbladMateriaal | null } | null
+    // Accessoires uit de offerte, door FINKA aan te passen in het dashboard.
+    accessoires?: { id: string; soort: string; naam: string; omschrijving?: string | null }[]
     // Bericht van FINKA bovenaan de module.
     toelichting?: string | null
   }
@@ -239,6 +241,9 @@ export async function bouwPakket(service: Service, projectId: string, { metPrijz
       voorstel: v.werkblad?.tekst?.trim() || null,
       materiaal: v.werkblad?.materiaal ?? werkbladMateriaalUit(v.werkblad?.tekst),
     },
+    accessoires: (v.accessoires ?? [])
+      .filter((a) => a.naam?.trim())
+      .map((a) => ({ id: a.id, soort: a.soort?.trim() || 'Accessoire', naam: a.naam.trim(), omschrijving: a.omschrijving?.trim() || null })),
     wand: WAND_EXTRAS.filter((d) => aan(`wand:${d.key}`)).map((d) => extraVan(d, null)).filter((e): e is PakketExtra => !!e),
   }
   return instelling.prijzen_tonen === false && !metPrijzen ? zonderPrijzen(pakket) : pakket
