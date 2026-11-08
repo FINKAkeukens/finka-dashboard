@@ -278,7 +278,7 @@ export interface ProjectStatus {
 export interface Project {
   id: string
   customer_id: string
-  // Keuzemodule (feedback per kast) zichtbaar in het klantportaal — migratie-sectie 100.
+  // Keuzemodule (feedback per kast) zichtbaar in het klantportaal — migratie-sectie 101.
   keuzemodule_actief?: boolean
   reference_number: string
   title: string
