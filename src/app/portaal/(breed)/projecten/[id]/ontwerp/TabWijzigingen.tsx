@@ -59,7 +59,7 @@ export default function TabWijzigingen({
         ))}
         {prijzen && <div className="px-5 py-4 flex justify-between items-center" style={{ background: C.vlak }}>
           <div className="flex flex-col gap-0.5">
-            <div className="text-[15px] font-bold">Prijsverschil (indicatie)</div>
+            <div className="text-[15px] font-bold">Prijsverschil</div>
             <div className="text-[13px]" style={{ color: C.muted }}>
               {open ? `plus ${open} ${open === 1 ? 'post' : 'posten'} waarvan we de prijs nog berekenen` : 'alle posten zijn doorgerekend'}
             </div>
