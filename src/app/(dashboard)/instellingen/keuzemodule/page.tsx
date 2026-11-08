@@ -82,7 +82,7 @@ export default async function KeuzemoduleOptiesPage() {
           Alles wat de klant in de keuzemodule kan kiezen. Zet een optie uit en hij verdwijnt bij alle projecten uit het
           portaal (wat al in een ontwerp zit, blijft zichtbaar als &quot;in je ontwerp&quot;). De controle laat zien of het
           artikel in de actieve catalogus staat{catalogus ? ` (${catalogus.titel})` : ''}, in welke breedtes, en de
-          klantprijs incl. btw.
+          catalogusprijs (1 punt = €1, zonder korting of btw).
         </p>
       </div>
       {error ? (

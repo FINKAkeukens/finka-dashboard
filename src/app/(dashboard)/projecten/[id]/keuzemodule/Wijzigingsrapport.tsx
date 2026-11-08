@@ -43,7 +43,7 @@ function alsTekst(titel: string, kasten: Wijziging[], algemeen: Wijziging[]) {
     }
   }
   const t = totaalTekst([...kasten, ...algemeen])
-  regels.push('', `Prijsverschil (indicatie incl. btw): ${t.bedrag}, ${t.open}`)
+  regels.push('', `Prijsverschil (catalogusprijzen): ${t.bedrag}, ${t.open}`)
   return regels.join('\n').trim()
 }
 
@@ -117,7 +117,7 @@ export default function Wijzigingsrapport({ titel, wijzigingen }: { titel: strin
           <tfoot>
             <tr className="border-t-2 border-[#1C1B19]">
               <td colSpan={4} className="px-4 py-2.5">
-                <span className="font-semibold">Prijsverschil (indicatie incl. btw)</span>
+                <span className="font-semibold">Prijsverschil (catalogusprijzen)</span>
                 <span className="text-xs text-[#6B6560] ml-2">{totaalTekst(wijzigingen).open}</span>
               </td>
               <td className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">{totaalTekst(wijzigingen).bedrag}</td>
@@ -126,7 +126,7 @@ export default function Wijzigingsrapport({ titel, wijzigingen }: { titel: strin
         </table>
       </div>
       <div className="flex justify-between items-center gap-3 px-4 py-2.5 border-t border-[#EAE6DD] bg-[#F7F5F2]">
-        <span className="text-xs text-[#6B6560]">+ = toevoegen in Winner Flex, − = vervalt. Bedragen zijn indicaties incl. btw.</span>
+        <span className="text-xs text-[#6B6560]">+ = toevoegen in Winner Flex, − = vervalt. Bedragen zijn catalogusprijzen (1 punt = €1).</span>
         <Button size="sm" variant="outline" onClick={kopieer}>
           {gekopieerd ? <Check size={13} /> : <Copy size={13} />}
           {gekopieerd ? 'Gekopieerd' : 'Kopiëren als tekst'}

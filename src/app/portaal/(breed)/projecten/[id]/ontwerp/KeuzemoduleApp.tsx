@@ -205,7 +205,7 @@ export default function KeuzemoduleApp({
 
         {pakket.prijzen && (
           <p className="mt-7 text-xs" style={{ color: C.zacht }}>
-            Prijzen zijn een indicatie inclusief btw, exclusief montage. Bedragen met &quot;prijs volgt&quot; berekenen we in het
+            Prijzen zijn een indicatie volgens de catalogusprijzen, exclusief montage. Bedragen met &quot;prijs volgt&quot; berekenen we in het
             aangepaste ontwerp.
           </p>
         )}

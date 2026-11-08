@@ -474,7 +474,7 @@ export default function KeuzemoduleBeheer({
                 {r.status === 'ingestuurd'
                   ? `ingestuurd op ${new Date(r.ingestuurd_at!).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
                   : `nog bezig (laatst bijgewerkt ${new Date(r.updated_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})`}
-                {' · '}{r.wijzigingen.length} punten{totaal ? ` · ${euro(totaal)} (indicatie incl. btw)` : ''}
+                {' · '}{r.wijzigingen.length} punten{totaal ? ` · ${euro(totaal)} (catalogusprijzen)` : ''}
               </summary>
               <Wijzigingsrapport titel={`Keuzemodule ronde ${r.ronde}`} wijzigingen={r.wijzigingen} />
             </details>

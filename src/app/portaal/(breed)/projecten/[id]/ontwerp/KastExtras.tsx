@@ -57,7 +57,7 @@ export default function KastExtras({
     <div className="flex flex-col gap-2.5">
       <div className="flex justify-between items-baseline gap-2">
         <div className="kv-label" style={{ color: C.muted }}>Extra&apos;s voor deze kast</div>
-        {prijzen && <div className="text-xs" style={{ color: C.zacht }}>prijzen incl. btw, indicatie</div>}
+        {prijzen && <div className="text-xs" style={{ color: C.zacht }}>indicatie, catalogusprijs</div>}
       </div>
       <div className="rounded-[2px] overflow-hidden" style={{ border: `1px solid ${C.lijnInput}` }}>
         {groepen.map(({ g, opties }, gi) => {
