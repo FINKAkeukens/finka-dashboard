@@ -74,10 +74,11 @@ function Plattegrond({
 }
 
 function KastPaneel({
-  k, keuzes, setKast, onVorige, onVolgende,
+  k, keuzes, setKast, onVorige, onVolgende, prijzen,
 }: {
   k: PakketKast
   keuzes: Keuzes
+  prijzen: boolean
   setKast: (id: string, patch: Partial<KastKeuze>) => void
   onVorige: () => void
   onVolgende: () => void
@@ -97,6 +98,11 @@ function KastPaneel({
           <h2 className="m-0 text-2xl font-bold">{k.naam}</h2>
           {k.omschrijving && <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>{k.omschrijving}</p>}
           <div className="text-xs" style={{ color: C.zacht }}>Code in ontwerp: {k.code}</div>
+          {k.toelichting && (
+            <div className="mt-1 text-sm leading-normal rounded-[10px] px-3 py-2 whitespace-pre-line" style={{ background: C.groenLicht, color: C.ink }}>
+              <span className="font-semibold">Van FINKA: </span>{k.toelichting}
+            </div>
+          )}
         </div>
         {k.afbeelding && (
           // eslint-disable-next-line @next/next/no-img-element -- kortlevende signed URL
@@ -130,7 +136,7 @@ function KastPaneel({
         <div className="flex flex-col gap-2.5">
           <div className="flex justify-between items-baseline">
             <div className="text-sm font-semibold">Indeling</div>
-            <div className="text-xs" style={{ color: C.zacht }}>prijsverschil t.o.v. ons voorstel</div>
+            {prijzen && <div className="text-xs" style={{ color: C.zacht }}>prijsverschil t.o.v. ons voorstel</div>}
           </div>
           <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
             {k.indelingen.map((o) => {
@@ -161,9 +167,11 @@ function KastPaneel({
                   </span>
                   <span className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-sm font-semibold leading-snug">{o.label}</span>
-                    <span className="text-[13px] font-semibold" style={{ color: o.voorstel ? C.groen : C.tekst }}>
-                      {o.voorstel ? 'ons voorstel' : delta(o.prijs)}
-                    </span>
+                    {(o.voorstel || prijzen) && (
+                      <span className="text-[13px] font-semibold" style={{ color: o.voorstel ? C.groen : C.tekst }}>
+                        {o.voorstel ? 'ons voorstel' : delta(o.prijs)}
+                      </span>
+                    )}
                   </span>
                 </button>
               )
@@ -182,7 +190,7 @@ function KastPaneel({
           <div className="text-sm font-semibold">Openen</div>
           {[
             { push: false, label: 'Zoals de hele keuken', sub: 'Met dezelfde greep als de andere kasten', prijs: 'ons voorstel' },
-            { push: true, label: 'Push-to-open, zonder greep', sub: 'Even drukken en de lade of deur gaat open', prijs: 'prijs volgt' },
+            { push: true, label: 'Push-to-open, zonder greep', sub: 'Even drukken en de lade of deur gaat open', prijs: prijzen ? 'prijs volgt' : '' },
           ].map((o) => {
             const aan = !!st.push === o.push
             return (
@@ -205,7 +213,7 @@ function KastPaneel({
         </div>
       )}
 
-      <KastExtras k={k} st={st} setKast={setKast} />
+      <KastExtras k={k} st={st} setKast={setKast} prijzen={prijzen} />
 
       <div className="flex flex-col gap-2">
         <label htmlFor="kast-notitie" className="text-sm font-semibold">Opmerking of vraag over deze kast</label>
@@ -323,6 +331,7 @@ export default function TabKast({
           k={sel}
           keuzes={keuzes}
           setKast={setKast}
+          prijzen={pakket.prijzen}
           onVorige={() => setSelId(kasten[(idx - 1 + kasten.length) % kasten.length].id)}
           onVolgende={() => { volgende(sel.id); setSelId(kasten[(idx + 1) % kasten.length].id) }}
         />

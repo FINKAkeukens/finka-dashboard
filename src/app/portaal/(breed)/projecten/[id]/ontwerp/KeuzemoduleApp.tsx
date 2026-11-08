@@ -132,6 +132,9 @@ export default function KeuzemoduleApp({
               Jouw keukenontwerp · ronde {pakket.ronde}
             </div>
             <h1 className="m-0 text-[22px] sm:text-[26px] font-bold">Bekijk je keuken en geef je feedback</h1>
+            {pakket.toelichting && (
+              <p className="m-0 mt-1 max-w-[680px] text-[15px] leading-normal whitespace-pre-line" style={{ color: C.tekst }}>{pakket.toelichting}</p>
+            )}
           </div>
           <div className="flex flex-col gap-1.5 min-w-[240px]">
             <div className="flex justify-between text-sm">
@@ -196,13 +199,16 @@ export default function KeuzemoduleApp({
             ingestuurd={!!ingestuurdAt}
             voorbeeld={voorbeeld}
             fout={fout}
+            prijzen={pakket.prijzen}
           />
         )}
 
-        <p className="mt-7 text-xs" style={{ color: C.zacht }}>
-          Prijzen zijn een indicatie inclusief btw, exclusief montage. Bedragen met &quot;prijs volgt&quot; berekenen we in het
-          aangepaste ontwerp.
-        </p>
+        {pakket.prijzen && (
+          <p className="mt-7 text-xs" style={{ color: C.zacht }}>
+            Prijzen zijn een indicatie inclusief btw, exclusief montage. Bedragen met &quot;prijs volgt&quot; berekenen we in het
+            aangepaste ontwerp.
+          </p>
+        )}
       </main>
     </div>
   )

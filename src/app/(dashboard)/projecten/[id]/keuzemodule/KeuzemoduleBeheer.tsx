@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 import type { KeuzemoduleInstelling, KeuzemoduleKast } from '@/lib/keuzemodule/pakket'
 import type { Wijziging } from '@/lib/keuzemodule/types'
-import { KAST_SOORT_LABELS, type KastSoort } from '@/lib/keuzemodule/klantlaag'
+import { KAST_SOORT_LABELS, WERKBLAD_MATERIAAL, extrasVoor, werkbladMateriaalUit, type KastSoort, type WerkbladMateriaal } from '@/lib/keuzemodule/klantlaag'
 import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
 import Wijzigingsrapport from './Wijzigingsrapport'
 import { fileHref } from '@/lib/storage-url'
@@ -28,12 +28,15 @@ export interface FeedbackRonde {
 
 const veld = 'w-full rounded-lg border border-[#DDD8D2] bg-white px-2.5 py-1.5 text-sm text-[#1C1B19]'
 
+// Suggesties voor het apparaat per kast; vrij invullen mag ook.
+const APPARATEN = ['Koelkast', 'Vriezer', 'Koel-vriescombinatie', 'Oven', 'Combimagnetron', 'Stoomoven', 'Oven en combimagnetron', 'Vaatwasser', 'Kookplaat', 'Afzuigkap', 'Koffiemachine', 'Warmhoudlade', 'Wijnklimaatkast']
+
 function euro(n: number) {
   return (n < 0 ? '−' : '+') + '€' + Math.abs(Math.round(n)).toLocaleString('nl-NL')
 }
 
 export default function KeuzemoduleBeheer({
-  projectId, customerId, actief, instelling, kasten, bronnen, catalogusTitel, werkbladDecors, modellen, rondes,
+  projectId, customerId, actief, instelling, kasten, bronnen, catalogusTitel, modellen, rondes,
 }: {
   projectId: string
   customerId: string
@@ -42,7 +45,6 @@ export default function KeuzemoduleBeheer({
   kasten: KeuzemoduleKast[]
   bronnen: UitdraaiBron[]
   catalogusTitel: string | null
-  werkbladDecors: { code: string; naam: string; compact: boolean }[]
   modellen: Record<string, number | null>
   rondes: FeedbackRonde[]
 }) {
@@ -59,6 +61,7 @@ export default function KeuzemoduleBeheer({
   const [voorstel, setVoorstel] = useState(instelling?.voorstel ?? {})
   const [pg, setPg] = useState<number | null>(instelling?.prijsgroep ?? null)
   const [lokaleKasten, setLokaleKasten] = useState(kasten)
+  const [prijzenTonen, setPrijzenTonen] = useState(instelling?.prijzen_tonen ?? true)
 
   const laatste = rondes[0]
   const huidigeRonde = instelling?.ronde ?? 1
@@ -188,6 +191,16 @@ export default function KeuzemoduleBeheer({
     if (error) setFout(error.message)
   }
 
+  async function zetPrijzen(aan: boolean) {
+    setFout('')
+    setPrijzenTonen(aan)
+    const { error } = await supabase.from('finka_keuzemodule').update({ prijzen_tonen: aan }).eq('project_id', projectId)
+    if (error) {
+      setPrijzenTonen(!aan)
+      setFout(error.message)
+    }
+  }
+
   async function nieuweRonde() {
     if (!confirm(`Ronde ${huidigeRonde + 1} starten? De klant kan dan opnieuw feedback geven; de feedback van ronde ${huidigeRonde} blijft bewaard.`)) return
     const { error } = await supabase.from('finka_keuzemodule').update({ ronde: huidigeRonde + 1 }).eq('project_id', projectId)
@@ -224,6 +237,18 @@ export default function KeuzemoduleBeheer({
             {actief ? 'Uitzetten' : 'Aanzetten voor deze klant'}
           </Button>
         </div>
+        {instelling && (
+          <label className="w-full flex items-start gap-2.5 text-sm border-t border-[#EAE6DD] pt-3">
+            <input type="checkbox" className="mt-0.5" checked={prijzenTonen} onChange={(e) => zetPrijzen(e.target.checked)} />
+            <span>
+              <span className="font-medium text-[#1C1B19]">Meer- en minderprijzen tonen aan de klant</span>
+              <span className="block text-xs text-[#6B6560]">
+                Uit: de klant ziet nergens bedragen of &quot;prijs volgt&quot;; ze worden ook niet naar de browser van de klant
+                gestuurd. In het rapport hieronder zie je ze wel.
+              </span>
+            </span>
+          </label>
+        )}
       </section>
 
       <section className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-3">
@@ -262,6 +287,15 @@ export default function KeuzemoduleBeheer({
       {instelling && (
         <section className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
           <h2 className="text-sm font-medium text-[#1C1B19]">Ons voorstel (wat de klant als uitgangspunt ziet)</h2>
+          <label className="block space-y-1 text-sm">
+            <span className="text-xs text-[#6B6560]">Bericht aan de klant (bovenaan de module, optioneel)</span>
+            <textarea
+              className={`${veld} min-h-[64px]`}
+              placeholder="Bijv. Dit is het ontwerp na ons gesprek van 4 november. De bestekbakken zijn in zwart essen, zoals besproken."
+              value={voorstel.toelichting ?? ''}
+              onChange={(e) => setVoorstel({ ...voorstel, toelichting: e.target.value })}
+            />
+          </label>
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <label className="space-y-1">
               <span className="text-xs text-[#6B6560]">Model en front</span>
@@ -299,19 +333,19 @@ export default function KeuzemoduleBeheer({
               <Input value={voorstel.wangen ?? ''} onChange={(e) => setVoorstel({ ...voorstel, wangen: e.target.value })} />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-[#6B6560]">Werkblad: Sachsen-decor en dikte, of eigen omschrijving</span>
+              <span className="text-xs text-[#6B6560]">Werkblad: materiaal en omschrijving</span>
               <div className="flex gap-2">
                 <select
-                  className={veld}
-                  value={voorstel.werkblad?.code ?? ''}
-                  onChange={(e) => setVoorstel({ ...voorstel, werkblad: { ...voorstel.werkblad, code: e.target.value || null } })}
+                  className={`${veld} w-36 flex-none`}
+                  value={voorstel.werkblad?.materiaal ?? ''}
+                  onChange={(e) => setVoorstel({ ...voorstel, werkblad: { ...voorstel.werkblad, materiaal: (e.target.value || null) as WerkbladMateriaal | null } })}
+                  aria-label="Materiaal werkblad"
                 >
-                  <option value="">Geen Sachsen-decor</option>
-                  {werkbladDecors.map((d) => <option key={`${d.code}${d.compact}`} value={d.code}>{d.code} {d.naam}{d.compact ? ' (compact)' : ''}</option>)}
+                  <option value="">{werkbladMateriaalUit(voorstel.werkblad?.tekst) ? `Automatisch (${werkbladMateriaalUit(voorstel.werkblad?.tekst)})` : 'Materiaal…'}</option>
+                  {WERKBLAD_MATERIAAL.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
-                <Input className="w-20" type="number" placeholder="mm" value={voorstel.werkblad?.dikte ?? ''} onChange={(e) => setVoorstel({ ...voorstel, werkblad: { ...voorstel.werkblad, dikte: e.target.value ? Number(e.target.value) : null } })} />
+                <Input placeholder="Bijv. Composiet Calacatta Bettogli, 20 mm" value={voorstel.werkblad?.tekst ?? ''} onChange={(e) => setVoorstel({ ...voorstel, werkblad: { ...voorstel.werkblad, tekst: e.target.value || null } })} />
               </div>
-              <Input placeholder="Bijv. Composiet Silestone Eternal Calacatta Gold, 20 mm" value={voorstel.werkblad?.tekst ?? ''} onChange={(e) => setVoorstel({ ...voorstel, werkblad: { ...voorstel.werkblad, tekst: e.target.value || null } })} />
             </label>
           </div>
           <Button size="sm" onClick={bewaarVoorstel} disabled={!!bezig}>Voorstel opslaan</Button>
@@ -327,6 +361,7 @@ export default function KeuzemoduleBeheer({
           <div className="grid lg:grid-cols-[1fr_minmax(0,1.1fr)] gap-5 items-start">
             <div className="overflow-x-auto">
               <datalist id="wanden">{wanden.map((w) => <option key={w} value={w} />)}</datalist>
+              <datalist id="apparaten">{APPARATEN.map((a) => <option key={a} value={a} />)}</datalist>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-[#6B6560]">
@@ -350,10 +385,37 @@ export default function KeuzemoduleBeheer({
                       <td className="py-2 pr-2 space-y-1 min-w-[220px]">
                         <input className={veld} defaultValue={k.data?.naam ?? ''} onBlur={(e) => e.target.value !== (k.data?.naam ?? '') && bewaarKast(k.id, { data: { ...k.data, naam: e.target.value } })} />
                         <input className={veld} defaultValue={k.omschrijving ?? ''} placeholder="Omschrijving voor de klant" onBlur={(e) => e.target.value !== (k.omschrijving ?? '') && bewaarKast(k.id, { omschrijving: e.target.value })} />
+                        <select
+                          className={veld}
+                          value={k.soort}
+                          onChange={(e) => bewaarKast(k.id, { soort: e.target.value as KastSoort })}
+                          aria-label={`Soort kast ${k.positie}`}
+                        >
+                          {(Object.keys(KAST_SOORT_LABELS) as KastSoort[]).map((s) => <option key={s} value={s}>{KAST_SOORT_LABELS[s]}</option>)}
+                        </select>
                         {k.soort === 'apparaat' && (
-                          <input className={veld} defaultValue={k.data?.apparaat_voorstel ?? ''} placeholder={`${k.data?.apparaat ?? 'Apparaat'}: merk en type uit de offerte`} onBlur={(e) => e.target.value !== (k.data?.apparaat_voorstel ?? '') && bewaarKast(k.id, { data: { ...k.data, apparaat_voorstel: e.target.value || undefined } })} />
+                          <div className="flex gap-2">
+                            <input
+                              className={`${veld} w-40 flex-none`}
+                              list="apparaten"
+                              defaultValue={k.data?.apparaat ?? ''}
+                              placeholder="Welk apparaat"
+                              aria-label={`Apparaat in kast ${k.positie}`}
+                              onBlur={(e) => e.target.value !== (k.data?.apparaat ?? '') && bewaarKast(k.id, { data: { ...k.data, apparaat: e.target.value || undefined } })}
+                            />
+                            <input className={veld} defaultValue={k.data?.apparaat_voorstel ?? ''} placeholder="Merk en type uit de offerte" aria-label={`Merk en type in kast ${k.positie}`} onBlur={(e) => e.target.value !== (k.data?.apparaat_voorstel ?? '') && bewaarKast(k.id, { data: { ...k.data, apparaat_voorstel: e.target.value || undefined } })} />
+                          </div>
                         )}
-                        <div className="text-xs text-[#9A948D]">{k.code} · {KAST_SOORT_LABELS[k.soort as KastSoort]}{k.inbegrepen.length ? ` · incl. ${k.inbegrepen.join(', ')}` : ''}</div>
+                        <textarea
+                          className={`${veld} min-h-[34px]`}
+                          rows={1}
+                          defaultValue={k.data?.toelichting ?? ''}
+                          placeholder="Toelichting voor de klant (optioneel)"
+                          aria-label={`Toelichting bij kast ${k.positie}`}
+                          onBlur={(e) => e.target.value !== (k.data?.toelichting ?? '') && bewaarKast(k.id, { data: { ...k.data, toelichting: e.target.value || undefined } })}
+                        />
+                        <InOntwerp kast={k} onChange={(inbegrepen) => bewaarKast(k.id, { inbegrepen })} />
+                        <div className="text-xs text-[#9A948D]">{k.code}{k.breedte ? ` · ${k.breedte} cm` : ''}</div>
                       </td>
                       <td className="py-2 pr-2 min-w-[110px]">
                         <input className={veld} list="wanden" defaultValue={k.wand ?? ''} placeholder="Bijv. Eiland" onBlur={(e) => (e.target.value || null) !== k.wand && bewaarKast(k.id, { wand: e.target.value || null })} />
@@ -420,6 +482,32 @@ export default function KeuzemoduleBeheer({
         })}
       </section>
     </div>
+  )
+}
+
+// Wat er volgens het ontwerp al in de kast zit (wordt bij inlezen herkend).
+// De klant ziet die opties als "in je ontwerp"; hier aan te passen.
+function InOntwerp({ kast, onChange }: { kast: KeuzemoduleKast; onChange: (inbegrepen: string[]) => void }) {
+  const opties = extrasVoor(kast.code, kast.soort)
+  if (!opties.length) return null
+  const aan = new Set(kast.inbegrepen)
+  const namen = opties.filter((o) => aan.has(o.key)).map((o) => o.label)
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer text-[#6B6560]">In het ontwerp: {namen.length ? namen.join(', ') : 'geen extra\'s'}</summary>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1.5">
+        {opties.map((o) => (
+          <label key={o.key} className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={aan.has(o.key)}
+              onChange={(e) => onChange(e.target.checked ? [...kast.inbegrepen, o.key] : kast.inbegrepen.filter((x) => x !== o.key))}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </details>
   )
 }
 

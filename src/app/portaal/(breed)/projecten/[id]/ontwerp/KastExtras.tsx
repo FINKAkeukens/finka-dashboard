@@ -17,9 +17,10 @@ function prijsTekst(p: number | null, aftrek = 0): string {
 }
 
 export default function KastExtras({
-  k, st, setKast,
+  k, st, setKast, prijzen,
 }: {
   k: PakketKast
+  prijzen: boolean
   st: KastKeuze
   setKast: (id: string, patch: Partial<KastKeuze>) => void
 }) {
@@ -56,7 +57,7 @@ export default function KastExtras({
     <div className="flex flex-col gap-2.5">
       <div className="flex justify-between items-baseline gap-2">
         <div className="text-sm font-semibold">Extra&apos;s voor deze kast</div>
-        <div className="text-xs" style={{ color: C.zacht }}>prijzen incl. btw, indicatie</div>
+        {prijzen && <div className="text-xs" style={{ color: C.zacht }}>prijzen incl. btw, indicatie</div>}
       </div>
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.lijnInput}` }}>
         {groepen.map(({ g, opties }, gi) => {
@@ -89,7 +90,7 @@ export default function KastExtras({
                     {samenvatting}
                   </span>
                 </span>
-                {gekozen.length > 0 && (
+                {prijzen && gekozen.length > 0 && (
                   <span className="text-[13px] font-semibold whitespace-nowrap" style={{ color: C.tekst }}>
                     {gekozen.some((e) => e.prijs === null) ? (som ? `${prijsTekst(som)} + p.v.` : 'prijs volgt') : prijsTekst(som)}
                   </span>
@@ -105,7 +106,7 @@ export default function KastExtras({
                       onClick={() => geenInGroep(g)}
                       label={vervangen ? vervangen.label : 'Geen'}
                       sub={vervangen ? 'Zit al in je ontwerp' : 'Geen bestekindeling'}
-                      prijs={vervangen ? 'ons voorstel' : ''}
+                      prijs={vervangen && prijzen ? 'ons voorstel' : ''}
                       voorstel={!!vervangen}
                     />
                   )}
@@ -118,7 +119,7 @@ export default function KastExtras({
                       onClick={() => zet(e, g)}
                       label={e.label}
                       sub={e.inOntwerp ? 'Zit al in je ontwerp' : e.sub}
-                      prijs={e.inOntwerp ? 'in je ontwerp' : prijsTekst(e.prijs, vervangen?.prijs ?? 0)}
+                      prijs={e.inOntwerp ? 'in je ontwerp' : prijzen ? prijsTekst(e.prijs, vervangen?.prijs ?? 0) : ''}
                       voorstel={!!e.inOntwerp}
                     />
                   ))}

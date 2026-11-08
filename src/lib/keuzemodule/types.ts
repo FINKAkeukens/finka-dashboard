@@ -3,7 +3,7 @@
 // wat de klant voor dít project mag zien, met klantprijzen (indicatie incl.
 // btw) — nooit brutopunten of de rest van de catalogus.
 
-import type { KastSoort, KastStatus, Uitvoering } from './klantlaag'
+import type { KastSoort, KastStatus, Uitvoering, WerkbladMateriaal } from './klantlaag'
 import type { Plattegrond, Vak } from './plattegrond'
 
 export interface PakketIndeling {
@@ -45,6 +45,8 @@ export interface PakketKast {
   apparaatVoorstel: string | null
   // Houtuitvoering van de inzetten in het ontwerp; standaard voor nieuwe keuzes.
   uitvoering: Uitvoering | null
+  // Opmerking van FINKA bij deze kast.
+  toelichting: string | null
   // Tekening van de kast uit de elementenlijst (kortlevende link) of null.
   afbeelding: string | null
 }
@@ -59,17 +61,15 @@ export interface PakketGreep extends PakketDecor {
   soort: 'knop' | 'greep' | 'lang'
   kleur: 'zwart' | 'rvs' | 'brons' | 'hout' | 'wit'
   lengte: number | null
-  // Meerprijs voor alle grepen samen t.o.v. ons voorstel.
-  prijs: number
+  // Meerprijs voor alle grepen samen t.o.v. ons voorstel (null = prijzen uit).
+  prijs: number | null
 }
 
-export interface PakketWerkblad extends PakketDecor {
-  compact: boolean
-  diktes: number[]
-  groep: 'hout' | 'steen' | 'marmer'
-}
 
 export interface Pakket {
+  // false = FINKA heeft prijzen uitgezet; alle prijs-velden zijn dan null.
+  prijzen: boolean
+  toelichting: string | null
   ronde: number
   plattegrond: Plattegrond | null
   kasten: PakketKast[]
@@ -82,10 +82,10 @@ export interface Pakket {
     corpus: { voorstel: string | null; opties: (PakketDecor & { hout: boolean })[] }
     greep: { voorstel: string | null; aantal: number; opties: PakketGreep[] }
   }
+  // Alleen ons voorstel; de klant kiest geen werkblad uit een catalogus.
   werkblad: {
-    voorstel: (PakketWerkblad & { dikte: number | null }) | null
-    voorstelTekst: string | null
-    decors: PakketWerkblad[]
+    voorstel: string | null
+    materiaal: WerkbladMateriaal | null
   }
   wand: PakketExtra[]
 }
@@ -113,11 +113,8 @@ export interface ApparaatKeuze {
 }
 
 export interface WerkbladKeuze {
-  mode?: 'voorstel' | 'zelf'
-  mat?: string
-  code?: string
-  dikte?: number
-  richting?: string
+  status?: 'akkoord' | 'bespreken'
+  opmerking?: string
 }
 
 export interface Keuzes {

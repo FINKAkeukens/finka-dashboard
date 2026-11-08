@@ -6,9 +6,10 @@ import { totaalVan } from '@/lib/keuzemodule/wijzigingen'
 import { C, Kaart, delta } from './ui'
 
 export default function TabWijzigingen({
-  wijzigingen, nietBekeken, onInsturen, ingestuurd, voorbeeld, fout,
+  wijzigingen, nietBekeken, onInsturen, ingestuurd, voorbeeld, fout, prijzen,
 }: {
   wijzigingen: Wijziging[]
+  prijzen: boolean
   nietBekeken: number
   onInsturen: () => Promise<void>
   ingestuurd: boolean
@@ -56,7 +57,7 @@ export default function TabWijzigingen({
             </div>
           </div>
         ))}
-        <div className="px-5 py-4 flex justify-between items-center" style={{ background: C.vlak }}>
+        {prijzen && <div className="px-5 py-4 flex justify-between items-center" style={{ background: C.vlak }}>
           <div className="flex flex-col gap-0.5">
             <div className="text-[15px] font-bold">Prijsverschil (indicatie)</div>
             <div className="text-[13px]" style={{ color: C.muted }}>
@@ -64,7 +65,7 @@ export default function TabWijzigingen({
             </div>
           </div>
           <div className="text-xl font-bold">{delta(totaal)}</div>
-        </div>
+        </div>}
       </Kaart>
       {!ingestuurd && (
         <div className="flex flex-wrap items-center justify-between gap-3">

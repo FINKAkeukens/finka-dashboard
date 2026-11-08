@@ -7,7 +7,7 @@ import KeuzemoduleBeheer, { type FeedbackRonde, type UitdraaiBron } from './Keuz
 
 // Tabblad "Keuzemodule" op het project. Laadt alleen als het tabblad open
 // staat (zie page.tsx); de catalogus wordt hier alleen in beperkte vorm
-// gelezen (werkbladdecors en modellen voor het voorstel).
+// gelezen (modellen voor de prijsgroep).
 export default async function KeuzemoduleTab({ projectId, customerId, actief }: { projectId: string; customerId: string; actief: boolean }) {
   const service = createServiceClient()
   const [{ instelling, kasten }, { data: feedbackRows }, { data: quotes }, { data: catalogus }] = await Promise.all([
@@ -28,15 +28,12 @@ export default async function KeuzemoduleTab({ projectId, customerId, actief }: 
       .map((a) => ({ url: a.url, naam: `${o.name as string} · ${a.name}` }))
   )
 
-  const [{ data: decors }, { data: modellen }] = catalogus
-    ? await Promise.all([
-        service.from('finka_catalogus_items').select('code, naam, data').eq('catalogus_id', catalogus.id).eq('soort', 'werkblad').order('code'),
-        service.from('finka_catalogus_items').select('code, data').eq('catalogus_id', catalogus.id).eq('soort', 'model'),
-      ])
-    : [{ data: [] }, { data: [] }]
+  const { data: modellen } = catalogus
+    ? await service.from('finka_catalogus_items').select('code, data').eq('catalogus_id', catalogus.id).eq('soort', 'model')
+    : { data: [] }
 
   // Feedback per ronde, met de wijzigingen zoals de klant ze zag.
-  const pakket = feedbackRows?.length ? await bouwPakket(service, projectId) : null
+  const pakket = feedbackRows?.length ? await bouwPakket(service, projectId, { metPrijzen: true }) : null
   const rondes: FeedbackRonde[] = (feedbackRows ?? []).map((f) => ({
     ronde: f.ronde as number,
     status: f.status as 'concept' | 'ingestuurd',
@@ -54,7 +51,6 @@ export default async function KeuzemoduleTab({ projectId, customerId, actief }: 
       kasten={kasten}
       bronnen={bronnen}
       catalogusTitel={(catalogus?.titel as string | undefined) ?? null}
-      werkbladDecors={(decors ?? []).map((d) => ({ code: d.code as string, naam: (d.naam as string) ?? '', compact: !!(d.data as { compact?: boolean })?.compact }))}
       modellen={Object.fromEntries((modellen ?? []).map((m) => [m.code as string, ((m.data as { pg?: number | null })?.pg) ?? null]))}
       rondes={rondes}
     />

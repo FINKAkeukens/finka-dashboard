@@ -7,7 +7,8 @@ import {
   WAND_EXTRAS,
   HOUT_NAAM,
   greepKleur,
-  werkbladGroep,
+  werkbladMateriaalUit,
+  type WerkbladMateriaal,
   codeVoorBreedte,
   metBreedte,
   splitLadeCode,
@@ -15,9 +16,10 @@ import {
   type KastSoort,
   type Uitvoering,
 } from './klantlaag'
-import type { Pakket, PakketExtra, PakketGreep, PakketKast, PakketWerkblad } from './types'
+import type { Pakket, PakketExtra, PakketGreep, PakketKast } from './types'
 import type { Plattegrond, Vak } from './plattegrond'
 import { parseProtectedUrl } from '@/lib/storage-url'
+import { zonderPrijzen } from './wijzigingen'
 
 // Stelt per project samen wat het portaal mag tonen. Draait alleen op de
 // server (service-role): de catalogus en de brutoprijzen blijven hier, de
@@ -42,9 +44,12 @@ export interface KeuzemoduleInstelling {
     lades?: string | null
     plint?: string | null
     wangen?: string | null
-    werkblad?: { code?: string | null; dikte?: number | null; tekst?: string | null } | null
+    werkblad?: { tekst?: string | null; materiaal?: WerkbladMateriaal | null } | null
+    // Bericht van FINKA bovenaan de module.
+    toelichting?: string | null
   }
   plattegrond: Plattegrond | null
+  prijzen_tonen: boolean
   ronde: number
 }
 
@@ -61,7 +66,8 @@ export interface KeuzemoduleKast {
   inbegrepen: string[]
   // afbeelding: opgeslagen (publieke) URL in de afgeschermde bucket
   // project-documenten, uit de elementenlijst geknipt.
-  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; uitvoering?: Uitvoering; afbeelding?: string }
+  // toelichting: opmerking van FINKA bij deze kast, voor de klant.
+  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; uitvoering?: Uitvoering; afbeelding?: string; toelichting?: string }
   zichtbaar: boolean
   volgorde: number
 }
@@ -87,7 +93,8 @@ export async function laadKeuzemodule(service: Service, projectId: string) {
   }
 }
 
-export async function bouwPakket(service: Service, projectId: string): Promise<Pakket | null> {
+// metPrijzen: voor het dashboard (rapport), ongeacht de instelling.
+export async function bouwPakket(service: Service, projectId: string, { metPrijzen = false } = {}): Promise<Pakket | null> {
   const { instelling, kasten: alleKasten } = await laadKeuzemodule(service, projectId)
   if (!instelling) return null
   const kasten = alleKasten.filter((k) => k.zichtbaar && k.soort !== 'overig')
@@ -112,7 +119,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
 
   const sel = 'soort, code, naam, prijzen, data, afbeelding_url'
   const [{ data: decors }, { data: kastItems }, { data: accItems }] = await Promise.all([
-    service.from('finka_catalogus_items').select(sel).eq('catalogus_id', catId).in('soort', ['corpus', 'werkblad', 'greep']),
+    service.from('finka_catalogus_items').select(sel).eq('catalogus_id', catId).in('soort', ['corpus', 'greep']),
     kastCodes.size
       ? service.from('finka_catalogus_items').select(sel).eq('catalogus_id', catId).eq('soort', 'kast').in('code', [...kastCodes])
       : Promise.resolve({ data: [] as CatItem[] }),
@@ -177,6 +184,7 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
       apparaat: k.data?.apparaat ?? null,
       apparaatVoorstel: k.data?.apparaat_voorstel ?? null,
       uitvoering: k.data?.uitvoering ?? null,
+      toelichting: k.data?.toelichting?.trim() || null,
       afbeelding: getekend.get(parseProtectedUrl(k.data?.afbeelding)?.path ?? '') ?? null,
     }
   })
@@ -197,19 +205,10 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
     lengte: (g.data.lengte as number | null) ?? null,
     prijs: klantPrijs((((g.prijzen as number) ?? 0) - voorstelMeer) * greepAantal),
   }))
-  const decorsWerkblad: PakketWerkblad[] = items
-    .filter((i) => i.soort === 'werkblad' && ((i.data.diktes as number[] | undefined)?.length ?? 0) > 0)
-    .map((i) => ({
-      code: i.code,
-      naam: i.naam ?? i.code,
-      img: i.afbeelding_url,
-      compact: !!i.data.compact,
-      diktes: (i.data.diktes as number[]) ?? [],
-      groep: werkbladGroep(i.naam ?? ''),
-    }))
-  const wbVoorstel = v.werkblad?.code ? decorsWerkblad.find((d) => d.code === v.werkblad?.code) : null
 
-  return {
+  const pakket: Pakket = {
+    prijzen: true,
+    toelichting: v.toelichting?.trim() || null,
     ronde: instelling.ronde,
     plattegrond: instelling.plattegrond,
     kasten: pakketKasten,
@@ -223,10 +222,10 @@ export async function bouwPakket(service: Service, projectId: string): Promise<P
       greep: { voorstel: v.greep ?? null, aantal: greepAantal, opties: greepOpties },
     },
     werkblad: {
-      voorstel: wbVoorstel ? { ...wbVoorstel, dikte: v.werkblad?.dikte ?? null } : null,
-      voorstelTekst: v.werkblad?.tekst ?? null,
-      decors: decorsWerkblad,
+      voorstel: v.werkblad?.tekst?.trim() || null,
+      materiaal: v.werkblad?.materiaal ?? werkbladMateriaalUit(v.werkblad?.tekst),
     },
     wand: WAND_EXTRAS.map((d) => extraVan(d, null)).filter((e): e is PakketExtra => !!e),
   }
+  return instelling.prijzen_tonen === false && !metPrijzen ? zonderPrijzen(pakket) : pakket
 }

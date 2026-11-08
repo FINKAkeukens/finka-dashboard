@@ -2830,6 +2830,8 @@ CREATE TABLE IF NOT EXISTS finka_keuzemodule (
   voorstel JSONB NOT NULL DEFAULT '{}'::jsonb,
   -- getekende plattegrond: kader + muren (uit het Winner Flex-bovenaanzicht)
   plattegrond JSONB,
+  -- uit = de klant ziet nergens meer- of minderprijzen (de server stuurt ze niet mee)
+  prijzen_tonen BOOLEAN NOT NULL DEFAULT true,
   ronde INT NOT NULL DEFAULT 1,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

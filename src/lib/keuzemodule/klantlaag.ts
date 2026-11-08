@@ -330,15 +330,36 @@ export const KEUKEN_RIJEN = [
   { key: 'wangen', label: 'Zijpanelen' },
 ] as const
 
-export const WERKBLAD_MATERIALEN = [
-  { key: 'laminaat', label: 'Laminaat', sub: 'Sterk en onderhoudsvriendelijk. Veel hout-, steen- en marmerlooks.' },
-  { key: 'compact', label: 'Compact laminaat', sub: 'Dun (12 mm) en massief, ook de randen. Strak en modern.' },
-  { key: 'composiet', label: 'Composiet', sub: 'Kwartscomposiet: hard, krasvast en weinig onderhoud.' },
-  { key: 'keramiek', label: 'Keramiek', sub: 'Hittebestendig en zeer krasvast. Dunne, strakke bladen.' },
-  { key: 'natuursteen', label: 'Natuursteen', sub: 'Graniet of marmer: elk blad is uniek.' },
+// Werkbladmaterialen met hun eigenschappen, voor de vergelijking naast ons
+// voorstel. Score 3 = goed, 2 = redelijk, 1 = gevoelig. Algemene indicatie:
+// per steensoort en afwerking (gepolijst, mat, leather) verschilt het.
+export const WERKBLAD_MATERIAAL = [
+  { key: 'marmer', label: 'Marmer', sub: 'Natuursteen met zachte aders; elk blad is uniek en krijgt patina.' },
+  { key: 'kwartsiet', label: 'Kwartsiet', sub: 'Natuursteen, harder dan graniet, met de look van marmer.' },
+  { key: 'composiet', label: 'Composiet', sub: 'Kwarts met hars gebonden; egaal en weinig onderhoud.' },
+  { key: 'keramiek', label: 'Keramiek', sub: 'Gebakken bij hoge temperatuur; dun, hard en hittebestendig.' },
 ] as const
+export type WerkbladMateriaal = (typeof WERKBLAD_MATERIAAL)[number]['key']
 
-export const WERKBLAD_RICHTINGEN = ['Licht en wit', 'Warm en beige', 'Grijs', 'Donker en zwart', 'Met ader of tekening']
+export const WERKBLAD_EIGENSCHAPPEN: { key: string; label: string; uitleg: string; score: Record<WerkbladMateriaal, 1 | 2 | 3> }[] = [
+  { key: 'kras', label: 'Krasbestendig', uitleg: 'Snijden, schuiven met pannen', score: { marmer: 1, kwartsiet: 3, composiet: 2, keramiek: 3 } },
+  { key: 'chip', label: 'Stevige randen', uitleg: 'Kans op een schilfer bij een stoot', score: { marmer: 2, kwartsiet: 2, composiet: 2, keramiek: 1 } },
+  { key: 'vlek', label: 'Vlekbestendig', uitleg: 'Koffie, olie, rode wijn', score: { marmer: 1, kwartsiet: 2, composiet: 3, keramiek: 3 } },
+  { key: 'zuur', label: 'Zuurbestendig', uitleg: 'Citroen, azijn, tomaat', score: { marmer: 1, kwartsiet: 3, composiet: 3, keramiek: 3 } },
+  { key: 'hitte', label: 'Hittebestendig', uitleg: 'Hete pan direct neerzetten', score: { marmer: 2, kwartsiet: 3, composiet: 1, keramiek: 3 } },
+  { key: 'uv', label: 'Kleurvast in zonlicht', uitleg: 'Verkleurt niet bij een raam', score: { marmer: 3, kwartsiet: 3, composiet: 2, keramiek: 3 } },
+  { key: 'onderhoud', label: 'Weinig onderhoud', uitleg: 'Impregneren is niet nodig', score: { marmer: 1, kwartsiet: 2, composiet: 3, keramiek: 3 } },
+]
+
+// Materiaal herkennen in onze omschrijving ("Composiet Calacatta Bettogli").
+export function werkbladMateriaalUit(tekst: string | null | undefined): WerkbladMateriaal | null {
+  const t = (tekst ?? '').toLowerCase()
+  if (/kwartsiet|quartzite/.test(t)) return 'kwartsiet'
+  if (/keramiek|ceramic|dekton|neolith|laminam/.test(t)) return 'keramiek'
+  if (/composiet|silestone|quartz|kwarts|caesarstone|compac/.test(t)) return 'composiet'
+  if (/marmer|marble/.test(t)) return 'marmer'
+  return null
+}
 
 // Indeling van catalogusnamen in de filters van het portaal.
 export const HOUT_NAAM = /eiken|eik |noten|evoke|hout/i
@@ -352,9 +373,3 @@ export function greepKleur(naam: string): 'rvs' | 'zwart' | 'brons' | 'hout' | '
   return 'rvs'
 }
 
-export function werkbladGroep(naam: string): 'steen' | 'hout' | 'marmer' {
-  const n = naam.toLowerCase()
-  if (/eiken|noten|evoke|halifax/.test(n)) return 'hout'
-  if (/marmor|marmer|travertin/.test(n)) return 'marmer'
-  return 'steen'
-}

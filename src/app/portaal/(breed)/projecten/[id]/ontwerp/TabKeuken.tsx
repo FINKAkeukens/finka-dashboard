@@ -106,7 +106,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
   let greepSub = ''
   if (greep.kind === 'greep' && gekozenGreep) {
     greepWaarde = `${gekozenGreep.soort === 'knop' ? 'Knop' : 'Greep'} ${gekozenGreep.code}, ${gekozenGreep.naam}`
-    greepSub = `${gekozenGreep.lengte ? (gekozenGreep.soort === 'knop' ? 'Doorsnede ' : 'Lengte ') + gekozenGreep.lengte + ' mm · ' : ''}${gekozenGreep.prijs ? delta(gekozenGreep.prijs) + ` voor ${kk.greep.aantal} grepen` : 'inbegrepen'}`
+    greepSub = `${gekozenGreep.lengte ? (gekozenGreep.soort === 'knop' ? 'Doorsnede ' : 'Lengte ') + gekozenGreep.lengte + ' mm · ' : ''}${!pakket.prijzen ? '' : gekozenGreep.prijs ? delta(gekozenGreep.prijs) + ` voor ${kk.greep.aantal} grepen` : 'inbegrepen'}`.replace(/ · $/, '')
   } else if (greep.kind === 'lijst') {
     greepWaarde = 'Greeplijst (greeploos)'
     greepSub = 'Verzonken lijst in de kast; we passen het ontwerp aan'
@@ -212,7 +212,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
                     <Staal src={g.img} className="w-full h-12 bg-white" style={{ objectFit: 'contain' }} />
                     <span className="text-[13px] font-semibold leading-tight">{g.naam}</span>
                     <span className="text-xs" style={{ color: C.zacht }}>
-                      {g.code}{g.lengte ? ` · ${g.lengte} mm` : ''} · {g.prijs ? `${delta(g.prijs)} voor ${kk.greep.aantal} grepen` : 'inbegrepen'}
+                      {g.code}{g.lengte ? ` · ${g.lengte} mm` : ''}{pakket.prijzen ? ` · ${g.prijs ? `${delta(g.prijs)} voor ${kk.greep.aantal} grepen` : 'inbegrepen'}` : ''}
                     </span>
                     {(voorstel || aan) && <Tag soort={voorstel ? 'voorstel' : 'gekozen'}>{voorstel ? 'ons voorstel' : 'gekozen'}</Tag>}
                   </KeuzeKaart>
@@ -234,7 +234,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
             </div>
             <KeuzeKaart aan={greep.kind === 'lijst'} onClick={() => zetGreep({ kind: 'lijst' })} className="max-w-sm">
               <span className="text-[13px] font-semibold">Greeploos met greeplijst</span>
-              <Tag soort={greep.kind === 'lijst' ? 'gekozen' : 'code'}>{greep.kind === 'lijst' ? 'gekozen' : 'prijs volgt'}</Tag>
+              {(greep.kind === 'lijst' || pakket.prijzen) && <Tag soort={greep.kind === 'lijst' ? 'gekozen' : 'code'}>{greep.kind === 'lijst' ? 'gekozen' : 'prijs volgt'}</Tag>}
             </KeuzeKaart>
           </>
         )}
@@ -245,7 +245,7 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
             </div>
             <KeuzeKaart aan={greep.kind === 'push'} onClick={() => zetGreep({ kind: 'push' })} className="max-w-sm">
               <span className="text-[13px] font-semibold">Push-to-open op alle lades en deuren</span>
-              <Tag soort={greep.kind === 'push' ? 'gekozen' : 'code'}>{greep.kind === 'push' ? 'gekozen' : 'prijs volgt'}</Tag>
+              {(greep.kind === 'push' || pakket.prijzen) && <Tag soort={greep.kind === 'push' ? 'gekozen' : 'code'}>{greep.kind === 'push' ? 'gekozen' : 'prijs volgt'}</Tag>}
             </KeuzeKaart>
           </>
         )}
@@ -278,9 +278,11 @@ export default function TabKeuken({ pakket, keuzes, wijzig }: { pakket: Pakket; 
                     <span className="text-sm font-semibold">{e.label}</span>
                     <span className="text-[13px]" style={{ color: C.muted }}>{e.sub}</span>
                   </span>
-                  <span className="text-[13px] font-semibold whitespace-nowrap" style={{ color: C.tekst }}>
-                    {e.prijs === null ? 'prijs volgt' : '+' + euro(e.prijs)}
-                  </span>
+                  {pakket.prijzen && (
+                    <span className="text-[13px] font-semibold whitespace-nowrap" style={{ color: C.tekst }}>
+                      {e.prijs === null ? 'prijs volgt' : '+' + euro(e.prijs)}
+                    </span>
+                  )}
                 </button>
               )
             })}

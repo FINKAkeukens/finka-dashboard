@@ -131,18 +131,12 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
   }
 
   const wb = keuzes.werkblad
-  if (wb?.mode === 'zelf') {
-    let tekst: string
-    const codes: string[] = []
-    if (wb.mat === 'laminaat' || wb.mat === 'compact') {
-      const d = pakket.werkblad.decors.find((x) => x.code === wb.code && x.compact === (wb.mat === 'compact'))
-      tekst = `${wb.mat === 'compact' ? 'Compact laminaat' : 'Laminaat'}, ${d ? `${d.naam} (${d.code})` : 'kleur nog niet gekozen'}${wb.dikte ? `, ${wb.dikte} mm` : ''}`
-      if (d) codes.push(d.code)
-    } else {
-      const mat = wb.mat ? wb.mat.charAt(0).toUpperCase() + wb.mat.slice(1) : 'Materiaal nog niet gekozen'
-      tekst = `${mat}${wb.richting ? `, richting: ${wb.richting.toLowerCase()}` : ''} · stalen bekijken in de showroom`
-    }
-    out.push({ tag: 'Werkblad', titel: 'Eigen keuze werkblad', tekst, bedrag: null, prijsVolgt: true, soort: 'wijziging', codes })
+  if (wb?.status === 'bespreken' || wb?.opmerking?.trim()) {
+    out.push({
+      tag: 'Werkblad', titel: pakket.werkblad.voorstel ?? 'Werkblad',
+      tekst: wb.opmerking?.trim() ? `"${wb.opmerking.trim()}"` : 'Wil het werkblad graag bespreken',
+      bedrag: null, prijsVolgt: false, soort: 'vraag', codes: [],
+    })
   }
 
   for (const k of pakket.kasten) {
@@ -165,12 +159,26 @@ export function berekenWijzigingen(pakket: Pakket, keuzes: Keuzes): Wijziging[] 
     }
   }
 
-  return out
+  // Prijzen uit: geen bedragen en geen "prijs volgt".
+  return pakket.prijzen ? out : out.map((w) => ({ ...w, bedrag: null, prijsVolgt: false }))
 }
 
 export function totaalVan(wijzigingen: Wijziging[]): { totaal: number; open: number } {
   return {
     totaal: wijzigingen.reduce((s, w) => s + (w.bedrag ?? 0), 0),
     open: wijzigingen.filter((w) => w.prijsVolgt).length,
+  }
+}
+
+// Prijzen uit: bouwPakket haalt alle bedragen er al op de server uit, zodat
+// ze ook niet in de paginabron of het netwerkverkeer van de klant staan.
+export function zonderPrijzen(p: Pakket): Pakket {
+  const extra = (e: PakketExtra): PakketExtra => ({ ...e, prijs: null })
+  return {
+    ...p,
+    prijzen: false,
+    kasten: p.kasten.map((k) => ({ ...k, indelingen: k.indelingen.map((i) => ({ ...i, prijs: null })), extras: k.extras.map(extra) })),
+    keuken: { ...p.keuken, greep: { ...p.keuken.greep, opties: p.keuken.greep.opties.map((g) => ({ ...g, prijs: null })) } },
+    wand: p.wand.map(extra),
   }
 }
