@@ -43,6 +43,8 @@ export interface PakketKast {
   inbegrepen: { key: string; label: string }[]
   apparaat: string | null
   apparaatVoorstel: string | null
+  // Kenmerken uit de apparatuurbibliotheek (bv. "nis 178 cm · 289L").
+  apparaatOmschrijving: string | null
   // Houtuitvoering van de inzetten in het ontwerp; standaard voor nieuwe keuzes.
   uitvoering: Uitvoering | null
   // Opmerking van FINKA bij deze kast.

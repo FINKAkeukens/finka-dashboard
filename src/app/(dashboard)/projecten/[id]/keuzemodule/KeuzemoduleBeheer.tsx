@@ -13,6 +13,7 @@ import PlattegrondTekening from '@/components/keuzemodule/PlattegrondTekening'
 import Wijzigingsrapport from './Wijzigingsrapport'
 import { fileHref } from '@/lib/storage-url'
 import { TYPE_LABELS, getSpecSummary } from '@/lib/appliance-utils'
+import { stelKoppelingVoor } from '@/lib/keuzemodule/apparaatkoppeling'
 import type { Appliance } from '@/lib/types'
 
 export interface UitdraaiBron {
@@ -64,6 +65,9 @@ export default function KeuzemoduleBeheer({
   const [pg, setPg] = useState<number | null>(instelling?.prijsgroep ?? null)
   const [lokaleKasten, setLokaleKasten] = useState(kasten)
   const [prijzenTonen, setPrijzenTonen] = useState(instelling?.prijzen_tonen ?? true)
+  // Ophogen na het overnemen van apparatuur: de invoervelden per kast
+  // (defaultValue) tekenen dan opnieuw met de nieuwe waarden.
+  const [versie, setVersie] = useState(0)
 
   const laatste = rondes[0]
   const huidigeRonde = instelling?.ronde ?? 1
@@ -390,6 +394,17 @@ export default function KeuzemoduleBeheer({
             <h2 className="text-sm font-medium text-[#1C1B19]">Kasten en plattegrond</h2>
             <p className="text-xs text-[#6B6560]">Klik op een kast in de tekening om hem in de lijst te vinden.</p>
           </div>
+          <ApparatuurUitOfferte
+            projectId={projectId}
+            kasten={lokaleKasten.filter((k) => k.soort === 'apparaat')}
+            toepassen={async (patches) => {
+              for (const [id, data] of patches) {
+                const k = lokaleKasten.find((x) => x.id === id)
+                if (k) await bewaarKast(id, { data: { ...k.data, ...data } })
+              }
+              setVersie((v) => v + 1)
+            }}
+          />
           <div className="grid lg:grid-cols-[1fr_minmax(0,1.1fr)] gap-5 items-start">
             <div className="overflow-x-auto">
               <datalist id="wanden">{wanden.map((w) => <option key={w} value={w} />)}</datalist>
@@ -406,7 +421,7 @@ export default function KeuzemoduleBeheer({
                 </thead>
                 <tbody className="divide-y divide-[#EAE6DD]">
                   {lokaleKasten.map((k) => (
-                    <tr key={k.id} id={`kast-${k.id}`} className={`align-top ${selId === k.id ? 'bg-[#EEF4F1]' : ''}`}>
+                    <tr key={`${k.id}-${versie}`} id={`kast-${k.id}`} className={`align-top ${selId === k.id ? 'bg-[#EEF4F1]' : ''}`}>
                       <td className="py-2 pr-2 font-medium">
                         {k.positie}
                         {k.data?.afbeelding && (
@@ -513,6 +528,119 @@ export default function KeuzemoduleBeheer({
           )
         })}
       </section>
+    </div>
+  )
+}
+
+type OfferteApparaat = { id: string; type: string; soort: string; naam: string; omschrijving: string }
+
+// Apparaten uit de nieuwste offerte koppelen aan de apparaatkasten: eerst een
+// voorstel (op soort en positie), per apparaat aan te passen, dan toepassen.
+// Meerdere apparaten in één kast (bv. combi-oven en stoomoven) worden samengevoegd.
+function ApparatuurUitOfferte({
+  projectId, kasten, toepassen,
+}: {
+  projectId: string
+  kasten: KeuzemoduleKast[]
+  toepassen: (patches: [string, Partial<KeuzemoduleKast['data']>][]) => Promise<void>
+}) {
+  const supabase = createClient()
+  const [apparaten, setApparaten] = useState<OfferteApparaat[] | null>(null)
+  const [koppeling, setKoppeling] = useState<Record<string, string | null>>({})
+  const [melding, setMelding] = useState('')
+  const [bezig, setBezig] = useState(false)
+  if (!kasten.length) return null
+
+  async function laad() {
+    setBezig(true)
+    setMelding('')
+    try {
+      const { data: offerte } = await supabase
+        .from('finka_quotes').select('id').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+      if (!offerte) throw new Error('Dit project heeft nog geen offerte.')
+      const { data, error } = await supabase
+        .from('finka_quote_items')
+        .select('id, description, brand, model, appliance:finka_appliances(*)')
+        .eq('quote_id', offerte.id)
+        .eq('type', 'apparaat')
+        .order('sort_order')
+      if (error) throw new Error(error.message)
+      const lijst: OfferteApparaat[] = (data ?? []).map((r) => {
+        const app = (Array.isArray(r.appliance) ? r.appliance[0] : r.appliance) as Appliance | null
+        return {
+          id: r.id as string,
+          type: app?.type ?? '',
+          soort: app ? TYPE_LABELS[app.type] ?? 'Apparaat' : 'Apparaat',
+          naam: [r.brand, r.model].filter(Boolean).join(' ') || (r.description as string),
+          omschrijving: app ? getSpecSummary(app) : '',
+        }
+      })
+      if (!lijst.length) throw new Error('Geen apparaten gevonden in de offerte.')
+      setApparaten(lijst)
+      setKoppeling(stelKoppelingVoor(lijst, kasten.map((k) => ({ id: k.id, positie: k.positie, apparaat: k.data?.apparaat ?? null }))))
+    } catch (e) {
+      setMelding(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  async function pasToe() {
+    if (!apparaten) return
+    const perKast = new Map<string, OfferteApparaat[]>()
+    for (const a of apparaten) {
+      const k = koppeling[a.id]
+      if (k) perKast.set(k, [...(perKast.get(k) ?? []), a])
+    }
+    setBezig(true)
+    await toepassen([...perKast].map(([id, lijst]) => [id, {
+      apparaat: [...new Set(lijst.map((a) => a.soort))].join(' en '),
+      apparaat_voorstel: lijst.map((a) => a.naam).join(' + '),
+      apparaat_omschrijving: lijst.map((a) => a.omschrijving).filter(Boolean).join('\n') || undefined,
+    }]))
+    setBezig(false)
+    setApparaten(null)
+    setMelding(`${perKast.size} ${perKast.size === 1 ? 'kast' : 'kasten'} bijgewerkt.`)
+  }
+
+  return (
+    <div className="rounded-lg border border-[#EAE6DD] bg-[#F7F5F2] px-4 py-3 space-y-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-[#6B6560]">Apparatuur per kast (merk, type en kenmerken) uit de offerte overnemen</span>
+        {!apparaten && <Button size="sm" variant="outline" onClick={laad} disabled={bezig}>{bezig ? 'Ophalen…' : 'Apparatuur uit de offerte overnemen'}</Button>}
+      </div>
+      {melding && <p className="text-xs text-[#2F5D50]">{melding}</p>}
+      {apparaten && (
+        <>
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-[#EAE6DD]">
+              {apparaten.map((a) => (
+                <tr key={a.id}>
+                  <td className="py-1.5 pr-2">
+                    <div className="font-medium">{a.soort}: {a.naam}</div>
+                    {a.omschrijving && <div className="text-xs text-[#9A948D]">{a.omschrijving}</div>}
+                  </td>
+                  <td className="py-1.5 w-56">
+                    <select
+                      className={veld}
+                      value={koppeling[a.id] ?? ''}
+                      aria-label={`Kast voor ${a.naam}`}
+                      onChange={(e) => setKoppeling({ ...koppeling, [a.id]: e.target.value || null })}
+                    >
+                      <option value="">Niet koppelen</option>
+                      {kasten.map((k) => <option key={k.id} value={k.id}>Kast {k.positie} · {k.data?.apparaat ?? k.code}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={pasToe} disabled={bezig}>Toepassen</Button>
+            <Button size="sm" variant="outline" onClick={() => setApparaten(null)} disabled={bezig}>Annuleren</Button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

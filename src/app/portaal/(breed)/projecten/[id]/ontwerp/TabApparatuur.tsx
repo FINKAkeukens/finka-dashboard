@@ -42,6 +42,7 @@ export default function TabApparatuur({ pakket, keuzes, wijzig }: { pakket: Pakk
                   {k.apparaat ?? 'Apparaat'} · kast {k.positie}
                 </div>
                 <div className="kv-kop text-[24px]">{k.apparaatVoorstel ?? 'Volgens je offerte'}</div>
+                {k.apparaatOmschrijving && <div className="text-sm whitespace-pre-line" style={{ color: C.tekst }}>{k.apparaatOmschrijving}</div>}
                 <div className="text-sm" style={{ color: C.tekst }}>{k.naam}{k.omschrijving ? ` · ${k.omschrijving}` : ''}</div>
               </div>
               <div className="flex flex-wrap gap-2">

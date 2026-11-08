@@ -71,7 +71,7 @@ export interface KeuzemoduleKast {
   // afbeelding: opgeslagen (publieke) URL in de afgeschermde bucket
   // project-documenten, uit de elementenlijst geknipt.
   // toelichting: opmerking van FINKA bij deze kast, voor de klant.
-  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; uitvoering?: Uitvoering; afbeelding?: string; toelichting?: string }
+  data: { naam?: string; apparaat?: string; apparaat_voorstel?: string; apparaat_omschrijving?: string; uitvoering?: Uitvoering; afbeelding?: string; toelichting?: string }
   zichtbaar: boolean
   volgorde: number
 }
@@ -198,6 +198,7 @@ export async function bouwPakket(service: Service, projectId: string, { metPrijz
       inbegrepen: defs.filter((d) => k.inbegrepen.includes(d.key)).map((d) => ({ key: d.key, label: d.label })),
       apparaat: k.data?.apparaat ?? null,
       apparaatVoorstel: k.data?.apparaat_voorstel ?? null,
+      apparaatOmschrijving: k.data?.apparaat_omschrijving?.trim() || null,
       uitvoering: k.data?.uitvoering ?? null,
       toelichting: k.data?.toelichting?.trim() || null,
       afbeelding: getekend.get(parseProtectedUrl(k.data?.afbeelding)?.path ?? '') ?? null,
