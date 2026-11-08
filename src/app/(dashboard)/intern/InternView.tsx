@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { differenceInCalendarDays, format, startOfDay } from 'date-fns'
 import { nl } from 'date-fns/locale'
-import { ExternalLink, FileText, GripVertical, Link2, Pin, Plus, Trash2, Upload, X } from 'lucide-react'
+import { ExternalLink, FileText, Link2, Pin, Plus, Trash2, Upload, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,9 +16,17 @@ import { INTERN_BORDER, INTERN_TEXT, INTERN_TINT } from '@/lib/intern'
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-// Eigen volgorde: de to do's staan zoals ze versleept zijn (sort_order).
+// Prio bovenaan, daarna op datum (zonder datum onderaan).
 function sortTodos(list: ProjectMilestone[]): ProjectMilestone[] {
-  return [...list].sort((a, b) => a.sort_order - b.sort_order)
+  return [...list].sort((a, b) => {
+    if (!!a.priority !== !!b.priority) return a.priority ? -1 : 1
+    if (a.date !== b.date) {
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return a.date.localeCompare(b.date)
+    }
+    return a.sort_order - b.sort_order
+  })
 }
 
 // Status van een open to do; "Klaar" gaat via het vinkje.
@@ -79,7 +87,6 @@ export default function InternView({
   const [uploading, setUploading] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const savingTodo = useRef(false)
-  const [draggedTodo, setDraggedTodo] = useState<string | null>(null)
   const [pickerReset, setPickerReset] = useState(0)
 
   const names = assigneeNames(assignees)
@@ -132,26 +139,6 @@ export default function InternView({
     setNewTodo('')
     setNewTodoDate('')
     setNewTodoAssignee('')
-  }
-
-  // Sleep een to do naar de plek van een andere; daarna krijgen de open
-  // to do's opnieuw oplopende nummers en slaan we alleen de gewijzigde op.
-  async function moveTodo(fromId: string, toId: string) {
-    if (fromId === toId) return
-    const list = [...openTodos]
-    const from = list.findIndex((t) => t.id === fromId)
-    const to = list.findIndex((t) => t.id === toId)
-    if (from < 0 || to < 0) return
-    const [moved] = list.splice(from, 1)
-    list.splice(to, 0, moved)
-    const changed = list.map((t, i) => ({ id: t.id, sort_order: i })).filter((x) => todos.find((t) => t.id === x.id)?.sort_order !== x.sort_order)
-    const orderOf = new Map(changed.map((x) => [x.id, x.sort_order]))
-    setTodos((prev) => prev.map((t) => (orderOf.has(t.id) ? { ...t, sort_order: orderOf.get(t.id)! } : t)))
-    const results = await Promise.all(
-      changed.map((x) => supabase.from('finka_project_milestones').update({ sort_order: x.sort_order }).eq('id', x.id))
-    )
-    const failed = results.find((r) => r.error)
-    if (failed?.error) fail(`Volgorde opslaan mislukt: ${failed.error.message}`)
   }
 
   async function removeTodo(todo: ProjectMilestone) {
@@ -218,29 +205,9 @@ export default function InternView({
     return (
       <div
         key={todo.id}
-        className={`border-t border-[#EFEBE6] first:border-t-0 ${draggedTodo === todo.id ? 'opacity-40' : ''}`}
-        onDragOver={(e) => {
-          if (draggedTodo && !done) e.preventDefault()
-        }}
-        onDrop={(e) => {
-          if (!draggedTodo || done) return
-          e.preventDefault()
-          moveTodo(draggedTodo, todo.id)
-          setDraggedTodo(null)
-        }}
+        className="border-t border-[#EFEBE6] first:border-t-0"
       >
-        <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 min-h-14 ${done ? 'px-4' : 'pl-1.5 pr-4'}`}>
-          {!done && (
-            <span
-              draggable
-              onDragStart={() => setDraggedTodo(todo.id)}
-              onDragEnd={() => setDraggedTodo(null)}
-              title="Sleep om de volgorde te veranderen"
-              className="shrink-0 cursor-grab text-[#C7C2BB] hover:text-[#6B6560] active:cursor-grabbing"
-            >
-              <GripVertical size={15} />
-            </span>
-          )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 min-h-14 px-4">
           <input
             type="checkbox"
             aria-label={done ? 'Heropenen' : 'Afvinken'}
