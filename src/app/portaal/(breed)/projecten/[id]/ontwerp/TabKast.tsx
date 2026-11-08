@@ -100,7 +100,7 @@ function KastPaneel({
           <div className="text-xs" style={{ color: C.zacht }}>Code in ontwerp: {k.code}</div>
           {k.toelichting && (
             <div className="mt-1 text-sm leading-normal rounded-[2px] px-3 py-2 whitespace-pre-line" style={{ background: C.groenLicht, color: C.ink }}>
-              <span className="font-semibold">Van FINKA: </span>{k.toelichting}
+              {k.toelichting}
             </div>
           )}
         </div>
