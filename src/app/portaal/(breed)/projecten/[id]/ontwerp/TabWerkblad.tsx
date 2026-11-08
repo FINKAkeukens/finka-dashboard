@@ -16,7 +16,7 @@ function Meter({ niveau }: { niveau: 1 | 2 | 3 }) {
   return (
     <span className="inline-flex gap-[2px]" aria-hidden="true">
       {[1, 2, 3].map((i) => (
-        <span key={i} className="w-[9px] h-[6px]" style={{ background: i <= niveau ? NIVEAU_KLEUR[niveau] : '#E4E0DA' }} />
+        <span key={i} className="w-[8px] sm:w-[12px] h-[7px]" style={{ background: i <= niveau ? NIVEAU_KLEUR[niveau] : '#E4E0DA' }} />
       ))}
     </span>
   )
@@ -29,8 +29,8 @@ export default function TabWerkblad({ pakket, keuzes, wijzig }: { pakket: Pakket
   const materiaal = WERKBLAD_MATERIAAL.find((m) => m.key === wbP.materiaal)
 
   return (
-    <section aria-label="Werkblad" className="grid lg:grid-cols-[minmax(0,1fr)_400px] gap-5 items-start max-w-[1180px]">
-      <div className="flex flex-col gap-[18px] min-w-0">
+    <section aria-label="Werkblad" className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,540px)] gap-6 lg:gap-12 items-start">
+      <div className="flex flex-col gap-[18px] min-w-0 max-w-[680px]">
         <div className="flex flex-col gap-1.5">
           <h2 className="kv-kop m-0 text-[30px] sm:text-[36px]">Werkblad</h2>
           <p className="m-0 text-[15px] leading-normal" style={{ color: C.tekst }}>
@@ -39,7 +39,7 @@ export default function TabWerkblad({ pakket, keuzes, wijzig }: { pakket: Pakket
           </p>
         </div>
 
-        <Kaart className="px-5 py-[18px] flex flex-col gap-4" style={{ border: `2px solid ${wb.status === 'bespreken' ? '#D08A3C' : C.groen}` }}>
+        <Kaart className="px-5 py-[18px] flex flex-col gap-4" style={{ border: `2px solid ${wb.status === 'bespreken' ? '#9A6B2A' : C.groen}` }}>
           <div className="flex flex-col gap-1">
             <div className="kv-label" style={{ color: C.accent }}>Ons voorstel</div>
             <div className="kv-kop text-[28px]">{wbP.voorstel ?? 'Volgt in het gesprek'}</div>
@@ -77,20 +77,20 @@ export default function TabWerkblad({ pakket, keuzes, wijzig }: { pakket: Pakket
         </Kaart>
       </div>
 
-      <Kaart className="px-4 py-4 flex flex-col gap-3">
+      <Kaart className="min-w-0 px-3 sm:px-6 py-5 flex flex-col gap-3.5">
         <div className="flex flex-col gap-0.5">
-          <h3 className="kv-kop m-0 text-[22px]">Materialen vergeleken</h3>
-          <div className="text-xs" style={{ color: C.muted }}>Algemene indicatie; per steensoort en afwerking verschilt het.</div>
+          <h3 className="kv-kop m-0 text-[26px]">Materialen vergeleken</h3>
+          <div className="text-[13px]" style={{ color: C.muted }}>Algemene indicatie; per steensoort en afwerking verschilt het.</div>
         </div>
-        <table className="w-full text-xs border-collapse">
+        <table className="w-full text-xs sm:text-[13px] border-collapse">
           <thead>
             <tr>
               <th className="text-left font-normal pb-1.5" />
               {WERKBLAD_MATERIAAL.map((m) => {
                 const jouw = m.key === wbP.materiaal
                 return (
-                  <th key={m.key} scope="col" className="pb-1.5 px-0.5 font-semibold text-center align-bottom" style={{ background: jouw ? C.groenLicht : undefined, borderRadius: 0 }}>
-                    {jouw && <div className="text-[10px] font-medium uppercase tracking-[0.16em] pt-1" style={{ color: C.accent }}>Jouw blad</div>}
+                  <th key={m.key} scope="col" className="pb-2 px-0.5 sm:px-1 font-semibold text-center align-bottom" style={{ background: jouw ? C.groenLicht : undefined, borderRadius: 0 }}>
+                    {jouw && <div className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.12em] sm:tracking-[0.16em] pt-1.5" style={{ color: C.accent }}>Jouw blad</div>}
                     {m.label}
                   </th>
                 )
@@ -100,14 +100,14 @@ export default function TabWerkblad({ pakket, keuzes, wijzig }: { pakket: Pakket
           <tbody>
             {WERKBLAD_EIGENSCHAPPEN.map((e) => (
               <tr key={e.key} style={{ borderTop: '1px solid #EFECE6' }}>
-                <th scope="row" className="text-left font-normal py-1.5 pr-1.5">
+                <th scope="row" className="text-left font-normal py-2.5 pr-1.5 sm:pr-3">
                   <div className="font-semibold" style={{ color: C.ink }}>{e.label}</div>
-                  <div className="text-[11px] leading-tight" style={{ color: C.zacht }}>{e.uitleg}</div>
+                  <div className="text-[11px] sm:text-xs leading-snug mt-0.5" style={{ color: C.zacht }}>{e.uitleg}</div>
                 </th>
                 {WERKBLAD_MATERIAAL.map((m) => {
                   const n = e.gevoelig[m.key]
                   return (
-                    <td key={m.key} className="text-center py-1.5" style={{ background: m.key === wbP.materiaal ? C.groenLicht : undefined }}>
+                    <td key={m.key} className="text-center py-2.5 px-0.5 sm:px-1" style={{ background: m.key === wbP.materiaal ? C.groenLicht : undefined }}>
                       <span className="sr-only">{NIVEAU_TEKST[n]}</span>
                       <Meter niveau={n} />
                     </td>
@@ -117,7 +117,7 @@ export default function TabWerkblad({ pakket, keuzes, wijzig }: { pakket: Pakket
             ))}
           </tbody>
         </table>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ color: C.muted }}>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: C.muted }}>
           <span>Gevoeligheid:</span>
           {([1, 2, 3] as const).map((n) => (
             <span key={n} className="inline-flex items-center gap-1.5"><Meter niveau={n} />{NIVEAU_TEKST[n]}</span>
