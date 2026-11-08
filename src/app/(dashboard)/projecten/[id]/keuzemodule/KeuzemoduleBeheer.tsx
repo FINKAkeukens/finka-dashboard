@@ -254,13 +254,13 @@ export default function KeuzemoduleBeheer({
       <section className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-3">
         <h2 className="text-sm font-medium text-[#1C1B19]">Ontwerp inlezen uit Winner Flex</h2>
         <p className="text-sm text-[#6B6560]">
-          Kasten, model, binnenkleur en greep komen uit de artikellijst; de getekende plattegrond uit het bovenaanzicht
-          met positienummers. Opnieuw inlezen werkt kasten per positie bij; wand en aanpassingen blijven staan.
+          Kasten, model, binnenkleur en greep komen uit de elementenlijst (daaruit ook de kastafbeeldingen); de
+          getekende plattegrond uit het bovenaanzicht met positienummers. Opnieuw inlezen werkt kasten per positie bij; wand en aanpassingen blijven staan.
           {instelling?.bron_naam ? ` Laatst ingelezen: ${instelling.bron_naam}.` : ''}
         </p>
         <div className="grid sm:grid-cols-2 gap-3 text-sm">
           <BronKiezer
-            label="Artikellijst (offerte of order)"
+            label="Elementenlijst met posities (of offerte/order)"
             waarde={bron}
             onChange={setBron}
             bronnen={bronnen}
