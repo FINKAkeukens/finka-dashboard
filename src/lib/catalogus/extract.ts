@@ -8,11 +8,15 @@
 
 import type { ImageRef, OutlineEntry, PdfBox, PdfPage, PdfText } from './parse'
 import { benodigdePaginas } from './parse'
+import { vulStreamAan } from './stream-polyfill'
 
 // De legacy-build van pdf.js: de gewone build gebruikt gloednieuwe
-// JavaScript (o.a. Map.getOrInsertComputed) die Safari 26 nog niet heeft
-// ("undefined is not a function"). De legacy-build brengt die zelf mee.
-export const laadPdfjs = () => import('pdfjs-dist/legacy/build/pdf.mjs')
+// JavaScript (o.a. Map.getOrInsertComputed) die Safari 26 nog niet heeft.
+// De legacy-build brengt die zelf mee; wat ook die mist staat in stream-polyfill.ts.
+export const laadPdfjs = () => {
+  vulStreamAan()
+  return import('pdfjs-dist/legacy/build/pdf.mjs')
+}
 
 type PdfDocument = Awaited<ReturnType<Awaited<ReturnType<typeof laadPdfjs>>['getDocument']>['promise']>
 
@@ -25,10 +29,11 @@ export interface Voortgang {
 export async function openPdf(file: Blob): Promise<PdfDocument> {
   const pdfjs = await laadPdfjs()
   if (!pdfjs.GlobalWorkerOptions.workerPort) {
-    pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-      new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url),
-      { type: 'module' }
-    )
+    // Kleine module-worker die eerst de stream-aanvulling uitvoert en dan de
+    // pdf.js-worker laadt (die pas bij berichten streams doorloopt).
+    const workerUrl = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).href
+    const code = `import ${JSON.stringify(workerUrl)};\n(${vulStreamAan.toString()})()`
+    pdfjs.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })), { type: 'module' })
   }
   return pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
 }

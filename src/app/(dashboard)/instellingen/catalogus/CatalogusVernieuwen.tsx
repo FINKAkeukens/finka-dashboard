@@ -96,7 +96,7 @@ export default function CatalogusVernieuwen({ catalogi }: { catalogi: CatalogusI
             const blob = blobs.get(r.ref)
             if (!blob) continue
             const pad = staalPad(id, r.soort, r.code, r.extra)
-            const { error } = await supabase.storage.from('catalogus').upload(pad, blob, { contentType: 'image/webp' })
+            const { error } = await supabase.storage.from('catalogus').upload(pad, blob, { contentType: blob.type || 'image/webp' })
             if (error) throw new Error(`Staal ${r.code} uploaden mislukt: ${error.message}`)
             urls.set(r.ref, supabase.storage.from('catalogus').getPublicUrl(pad).data.publicUrl)
             setVoortgang({ stap: 'Stalen uploaden', klaar: ++klaar, totaal: refs.length })

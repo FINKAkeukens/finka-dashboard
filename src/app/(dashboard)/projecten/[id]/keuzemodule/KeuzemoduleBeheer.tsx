@@ -99,7 +99,7 @@ export default function KeuzemoduleBeheer({
       const stempel = new Date().getTime()
       for (const [pos, blob] of teUploaden) {
         const pad = `${projectId}/keuzemodule/${stempel}-${pos.replace(/[^\w.-]/g, '_')}.webp`
-        const { error } = await supabase.storage.from('project-documenten').upload(pad, blob, { contentType: 'image/webp' })
+        const { error } = await supabase.storage.from('project-documenten').upload(pad, blob, { contentType: blob.type || 'image/webp' })
         if (error) throw new Error(`Afbeelding kast ${pos} opslaan mislukt: ${error.message}`)
         afbeeldingen[pos] = supabase.storage.from('project-documenten').getPublicUrl(pad).data.publicUrl
       }
