@@ -194,13 +194,24 @@ function imageLeftOf(page: PdfPage, label: PdfText): ImageRef | null {
 function parseCorpus(pages: PdfPage[]): CatalogusDecor[] {
   const out: CatalogusDecor[] = []
   for (const page of pages) {
+    // Tabelpagina's (omgevingskleuren) hebben ook K-codes, maar geen stalen met naam.
+    if (page.texts.some((t) => /omgevingskleuren/i.test(t.s))) continue
     for (const t of page.texts) {
       const code = t.s.trim()
       if (!/^K\d{1,3}$/.test(code)) continue
-      // Naam staat direct onder de code, links uitgelijnd.
-      const naam = page.texts.find((n) => Math.abs(n.x - t.x) < 2 && n.y > t.y && n.y - t.y < 14 && n.s.trim())
+      // Naam staat direct onder de code, links uitgelijnd (2027), of rechts
+      // naast de code, soms doorlopend op de regel eronder (2026).
+      const onder = page.texts.find((n) => Math.abs(n.x - t.x) < 2 && n.y > t.y && n.y - t.y < 14 && n.s.trim())
+      const naast = page.texts.find((n) => Math.abs(n.y - t.y) < 2 && n.x > t.x + t.w - 2 && n.x - (t.x + t.w) < 12 && /[a-z]/.test(n.s))
+      let naam = onder?.s ?? null
+      if (naast) {
+        const deel = naast.s.trim()
+        naam = deel
+        const vervolg = page.texts.find((n) => (Math.abs(n.x - naast.x) < 2 || Math.abs(n.x - t.x) < 12) && n.y > naast.y && n.y - naast.y < 14 && n.s.trim())
+        if (vervolg) naam = deel.endsWith('-') ? deel.slice(0, -1) + vervolg.s.trim() : `${deel} ${vervolg.s.trim()}`
+      }
       if (!naam || out.some((c) => c.code === code)) continue
-      out.push({ code, naam: norm(naam.s), img: imageAbove(page, t) })
+      out.push({ code, naam: norm(naam), img: imageAbove(page, t) })
     }
   }
   return out
@@ -446,6 +457,11 @@ function parseAccessoires(pages: PdfPage[]): CatalogusAccessoire[] {
 
 // ---------- welke pagina's ----------
 
+// Hoofdstuknamen verschillen per jaargang (2027 / 2026).
+const CORPUS_DECORS = /^(Corpusdecors|Decors - corpusuitvoeringen)$/i
+const DECOR_OVERZICHT = /^(Decorenoverzicht|Decors - overzichten)$/i
+const WERKBLAD_DECORS = /^Werkbladen Decors$/i
+
 const KAST_HOOFDSTUKKEN = [/^Onderkasten$/i, /^Hangkasten$/i, /^Hogekasten$/i, /^Greeploo?se keuken$/i]
 
 function greepPaginaBereik(outline: OutlineEntry[]): number[] {
@@ -463,8 +479,9 @@ function greepPaginaBereik(outline: OutlineEntry[]): number[] {
 // we gebruiken, afbeeldingsposities alleen waar stalen staan.
 export function benodigdePaginas(outline: OutlineEntry[], pageCount: number): { tekst: number[]; afbeeldingen: number[] } {
   const stalen = [
-    ...sectionPages(outline, /^Corpusdecors$/i, pageCount),
-    ...sectionPages(outline, /^Decorenoverzicht$/i, pageCount),
+    ...sectionPages(outline, CORPUS_DECORS, pageCount),
+    ...sectionPages(outline, DECOR_OVERZICHT, pageCount),
+    ...sectionPages(outline, WERKBLAD_DECORS, pageCount),
     ...greepPaginaBereik(outline),
   ]
   const tekst = [
@@ -494,9 +511,17 @@ export function parseCatalogus(outline: OutlineEntry[], pages: Map<number, PdfPa
     return get(nums)
   }
 
-  const corpus = parseCorpus(section(/^Corpusdecors$/i, 'Corpusdecors'))
-  const decorPages = section(/^Decorenoverzicht$/i, 'Decorenoverzicht')
-  const werkbladen = parseWerkbladen(decorPages.filter((p) => p.texts.some((t) => /WERKBLADEN/.test(t.s))))
+  // Zonder randfilter: in 2026 staan de eerste stalen tegen de linkermarge.
+  const corpusNums = sectionPages(outline, CORPUS_DECORS, pageCount)
+  if (!corpusNums.length) waarschuwingen.push('Hoofdstuk "Corpusdecors" niet gevonden in de inhoudsopgave')
+  const corpus = parseCorpus(corpusNums.map((n) => pages.get(n)).filter((p): p is PdfPage => !!p))
+  // Werkbladtabel: in 2027 in het decorenoverzicht, in 2026 bij de werkbladen.
+  const werkbladPaginas = [
+    ...get(sectionPages(outline, DECOR_OVERZICHT, pageCount)).filter((p) => p.texts.some((t) => /WERKBLADEN/.test(t.s))),
+    ...get(sectionPages(outline, WERKBLAD_DECORS, pageCount)),
+  ]
+  if (!werkbladPaginas.length) waarschuwingen.push('Geen werkbladdecors gevonden (hoofdstuk "Decorenoverzicht" of "Werkbladen Decors")')
+  const werkbladen = parseWerkbladen(werkbladPaginas)
 
   // Knoppen en grepen per boorafstand staan achter elkaar in "Grepen"; de
   // boorafstand komt uit de kopjes op de pagina's zelf.
