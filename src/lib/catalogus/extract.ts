@@ -31,7 +31,9 @@ export async function openPdf(file: Blob): Promise<PdfDocument> {
   if (!pdfjs.GlobalWorkerOptions.workerPort) {
     // Kleine module-worker die eerst de stream-aanvulling uitvoert en dan de
     // pdf.js-worker laadt (die pas bij berichten streams doorloopt).
-    const workerUrl = new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).href
+    // Volledig adres nodig: de bundler maakt er een pad als "/_next/…" van, en
+    // dat kan een blob-worker niet oplossen (hij blijft dan stil hangen).
+    const workerUrl = new URL(new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).href, location.href).href
     const code = `import ${JSON.stringify(workerUrl)};\n(${vulStreamAan.toString()})()`
     pdfjs.GlobalWorkerOptions.workerPort = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })), { type: 'module' })
   }

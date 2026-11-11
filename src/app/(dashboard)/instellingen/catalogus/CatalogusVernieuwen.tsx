@@ -53,6 +53,7 @@ export default function CatalogusVernieuwen({ catalogi }: { catalogi: CatalogusI
     setBestand(file)
     setTitel(titelUitBestandsnaam(file.name))
     setBezig(true)
+    setVoortgang({ stap: 'PDF openen', klaar: 0, totaal: 1 })
     try {
       const pdf = await openPdf(file)
       try {
