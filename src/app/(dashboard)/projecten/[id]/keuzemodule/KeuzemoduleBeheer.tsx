@@ -68,6 +68,17 @@ export default function KeuzemoduleBeheer({
   // Ophogen na het overnemen van apparatuur: de invoervelden per kast
   // (defaultValue) tekenen dan opnieuw met de nieuwe waarden.
   const [versie, setVersie] = useState(0)
+  // Na opnieuw inlezen (router.refresh) komen er nieuwe kasten en een nieuw
+  // voorstel binnen; de lokale kopieën daarop bijwerken, anders blijven
+  // lijst en tekening de oude stand tonen tot de pagina herladen wordt.
+  const [vorige, setVorige] = useState({ kasten, instelling })
+  if (vorige.kasten !== kasten || vorige.instelling !== instelling) {
+    setVorige({ kasten, instelling })
+    setLokaleKasten(kasten)
+    setVoorstel(instelling?.voorstel ?? {})
+    setPg(instelling?.prijsgroep ?? null)
+    setVersie((v) => v + 1)
+  }
 
   const laatste = rondes[0]
   const huidigeRonde = instelling?.ronde ?? 1
