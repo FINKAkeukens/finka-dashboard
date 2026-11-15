@@ -278,6 +278,8 @@ export interface ProjectStatus {
 export interface Project {
   id: string
   customer_id: string
+  // Keuzemodule (feedback per kast) zichtbaar in het klantportaal — migratie-sectie 101.
+  keuzemodule_actief?: boolean
   reference_number: string
   title: string
   status_id: string | null
@@ -1343,7 +1345,7 @@ export interface ConnectionSchema {
 // API-routes; zie migratie-sectie 63 en src/lib/portal-activity.ts.
 // ---------------------------------------------------------------------------
 
-export type PortalActivityType = 'vragenlijst' | 'document_akkoord' | 'maatformulier' | 'keuzes'
+export type PortalActivityType = 'vragenlijst' | 'document_akkoord' | 'maatformulier' | 'keuzemodule' | 'keuzes'
 
 export interface PortalActivity {
   id: string

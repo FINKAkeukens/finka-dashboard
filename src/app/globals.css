@@ -43,3 +43,9 @@ body {
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Keuzemodule klantportaal: FINKA-huisstijl (zoals de website en brochures).
+   --kv-display wordt op de ontwerppagina gezet (Cormorant Garamond). */
+.kv-kop { font-family: var(--kv-display), 'Cormorant Garamond', Georgia, serif; font-weight: 400; letter-spacing: -0.01em; line-height: 1.08; text-wrap: balance; }
+.kv-label { font-size: 11px; line-height: 1.4; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 500; }
+.kv-knop { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; }
