@@ -196,7 +196,9 @@ export function bouwPlattegrond(
 ): { plattegrond: Plattegrond; vakken: Record<string, Vak> } | null {
   const kastRechthoeken: { box: Box; rand: string; groen: boolean }[] = []
   for (const v of vormen) {
-    if (!v.rand || !v.vulling) continue
+    // Meestal wit gevuld met gekleurde rand; sommige tekeningen tekenen de
+    // kasten alleen als omlijning (geen vulling).
+    if (!v.rand) continue
     const box = rechthoek(v)
     if (box && box.x2 - box.x1 >= 4 && box.y2 - box.y1 >= 4) kastRechthoeken.push({ box, rand: v.rand, groen: isGroen(v.rand) })
   }
@@ -217,12 +219,20 @@ export function bouwPlattegrond(
     v.pts.map((p, i) => boxVan([p, v.pts[(i + 1) % v.pts.length]]))
   )
 
+  // Muur- en zichtnummers staan wit in een klein zwart rondje; die zijn
+  // geen kastposities, ook al hebben ze hetzelfde getal.
+  const rondjes = vormen
+    .filter((v) => v.vulling === '#000000' && v.gesloten)
+    .map((v) => boxVan(v.pts))
+    .filter((b) => b.x2 - b.x1 < 12 && b.y2 - b.y1 < 12)
+  const inRondje = (t: Tekst) => rondjes.some((b) => t.cx >= b.x1 && t.cx <= b.x2 && t.cy >= b.y1 && t.cy <= b.y2)
+
   const vakken: Record<string, Vak> = {}
   for (const { positie, wand } of posities) {
     if (vakken[positie]) continue
     let beste: { box: Box; rand: string; score: number; t: Tekst } | null = null
     for (const t of teksten) {
-      if (t.s !== positie) continue
+      if (t.s !== positie || inRondje(t)) continue
       for (const r of kastRechthoeken) {
         const b = r.box
         if (t.cx < b.x1 - 0.2 || t.cx > b.x2 + 0.2 || t.cy < b.y1 - 0.2 || t.cy > b.y2 + 0.2) continue
