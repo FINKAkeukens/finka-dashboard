@@ -2771,3 +2771,46 @@ CREATE TABLE IF NOT EXISTS finka_google_calendar_token (
 ALTER TABLE finka_google_calendar_token ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE finka_google_calendar_token FROM anon, authenticated;
 GRANT ALL ON TABLE finka_google_calendar_token TO service_role;
+
+-- =========================================================
+-- 101. Keuzes per project (zoals keuzes.finkakeukens.nl).
+--
+--    finka_project_keuzes: per project de vragen die de klant in het
+--    portaal (tabblad Keuzes) beantwoordt. options is een lijst
+--    [{ id, label, photo_url, link, price }], price = meerprijs incl. btw
+--    of null. De klant kiest één optie (choice = optie-id) of
+--    'weet_niet', met een optionele opmerking. Staff zet per vraag met
+--    visible_to_customer of de klant hem ziet. Op finka_projects staat
+--    wanneer en door wie de keuzes definitief zijn verstuurd; daarna kan de
+--    klant niets meer wijzigen tot staff het heropent.
+--    De klant schrijft nooit rechtstreeks: dat loopt via /api/portaal/keuzes
+--    (service role), vandaar "Staff only".
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS finka_project_keuzes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES finka_projects(id) ON DELETE CASCADE,
+  sort_order INT NOT NULL DEFAULT 0,
+  title TEXT NOT NULL,
+  description TEXT,
+  options JSONB NOT NULL DEFAULT '[]'::jsonb,
+  visible_to_customer BOOLEAN NOT NULL DEFAULT false,
+  choice TEXT,
+  comment TEXT,
+  answered_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS finka_project_keuzes_project_idx ON finka_project_keuzes(project_id, sort_order);
+ALTER TABLE finka_project_keuzes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_project_keuzes;
+CREATE POLICY "Staff only" ON finka_project_keuzes FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_project_keuzes TO authenticated, service_role;
+
+ALTER TABLE finka_projects
+  ADD COLUMN IF NOT EXISTS keuzes_submitted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS keuzes_submitted_by TEXT;
+
+ALTER TABLE finka_portal_activity DROP CONSTRAINT IF EXISTS finka_portal_activity_type_check;
+ALTER TABLE finka_portal_activity ADD CONSTRAINT finka_portal_activity_type_check
+  CHECK (type IN ('vragenlijst','document_akkoord','maatformulier','keuzes'));

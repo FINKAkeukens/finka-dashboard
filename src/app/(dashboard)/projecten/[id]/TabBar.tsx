@@ -12,6 +12,7 @@ const tabs = [
   // te herstellen.
   { id: 'planning', label: 'Planning' },
   { id: 'vragenlijst', label: 'Vragenlijst' },
+  { id: 'keuzes', label: 'Keuzes' },
   { id: 'maatformulier', label: 'Ruimte gereed' },
   { id: 'aansluitschema', label: 'Aansluitschema' },
   { id: 'facturen', label: 'Facturen' },

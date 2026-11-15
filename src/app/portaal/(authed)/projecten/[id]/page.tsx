@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect, notFound } from 'next/navigation'
-import { Check, Download, FileText } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { getPortalCustomer } from '@/lib/portal'
 import { createServiceClient } from '@/lib/supabase/service'
-import { ChecklistItem, Project, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff, StandardDocument } from '@/lib/types'
+import { ChecklistItem, Project, ProjectKeuze, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, ProjectDocument, MaatformulierItem, MaatformulierSignoff, StandardDocument } from '@/lib/types'
 import { categoryLabel, checklistItemLabel } from '@/lib/checklist'
 import { standardDocumentsFor, termsReferenceDate } from '@/lib/standard-documents'
 import { fileHref } from '@/lib/storage-url'
@@ -12,6 +12,7 @@ import PortalQuestionnaireForm from './PortalQuestionnaireForm'
 import PortalTabBar from './PortalTabBar'
 import PortalDocumentenList, { type PortalDocumentRow, type PortalStandardDocumentRow } from './PortalDocumentenList'
 import PortalMaatformulier from './PortalMaatformulier'
+import PortalKeuzes from './PortalKeuzes'
 
 export default async function PortalProjectPage({
   params,
@@ -46,6 +47,7 @@ export default async function PortalProjectPage({
     { data: maatformulierData },
     { data: signoffData },
     { data: standardDocsData },
+    { data: keuzesData },
   ] = await Promise.all([
     service.from('finka_checklist_items').select('*').eq('project_id', id),
     service.from('finka_questionnaire_categories').select('*').order('sort_order', { ascending: true }),
@@ -65,6 +67,13 @@ export default async function PortalProjectPage({
     // Standaarddocumenten (algemene voorwaarden, onderhoudsinstructies, ...)
     // uit Instellingen — gefilterd op het klanttype hieronder.
     service.from('finka_standard_documents').select('*').eq('active', true),
+    // Keuzes: alleen de vragen die staff zichtbaar heeft gezet.
+    service
+      .from('finka_project_keuzes')
+      .select('id, title, description, options, choice, comment')
+      .eq('project_id', id)
+      .eq('visible_to_customer', true)
+      .order('sort_order', { ascending: true }),
   ])
   // Alleen punten die staff expliciet zichtbaar heeft gezet voor de klant —
   // zie de oog-knop bij Checklist (project) en Instellingen > Checklist-
@@ -128,11 +137,10 @@ export default async function PortalProjectPage({
     // later een nieuwe versie is geüpload.
     termsReferenceDate((quotesForProject ?? []).map((q) => q.akkoord_at))
   )
-  // Uitgelichte documenten (algemene voorwaarden) staan boven de tabbladen,
-  // de rest onder "Algemene documenten" op het tabblad Documenten.
-  const featuredDocuments = visibleStandardDocuments.filter((d) => d.featured)
-  const standardDocuments: PortalStandardDocumentRow[] = visibleStandardDocuments
-    .filter((d) => !d.featured)
+  // Alle standaarddocumenten onder "Algemene documenten" op het tabblad
+  // Documenten; uitgelichte (algemene voorwaarden) bovenaan dat lijstje.
+  const standardDocuments: PortalStandardDocumentRow[] = [...visibleStandardDocuments]
+    .sort((a, b) => Number(!!b.featured) - Number(!!a.featured))
     .map((d) => ({ id: d.id, name: d.title, url: fileHref(d.file_url), downloadUrl: downloadHref(d.file_url, d.filename) }))
 
   // Formulier "Ruimte gereed": alleen de regels die staff zichtbaar heeft gezet.
@@ -141,6 +149,7 @@ export default async function PortalProjectPage({
   // Het tabblad verschijnt zodra staff het formulier heeft klaargezet — ook
   // als élke regel verborgen staat, want dan bestaat het formulier wél.
   const hasMaatformulier = (maatformulierData ?? []).length > 0
+  const keuzes = (keuzesData ?? []) as Pick<ProjectKeuze, 'id' | 'title' | 'description' | 'options' | 'choice' | 'comment'>[]
 
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length
@@ -158,35 +167,7 @@ export default async function PortalProjectPage({
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-[#1C1B19]">{(project as Project).title}</h1>
 
-      {featuredDocuments.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
-          {featuredDocuments.map((d) => (
-            <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 text-sm">
-              <FileText size={15} className="text-[#6B6560] shrink-0" />
-              <span className="flex-1 min-w-0 font-medium text-[#1C1B19]">{d.title}</span>
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={fileHref(d.file_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs px-3 py-1.5 rounded-full border border-[#DDD8D2] text-[#1C1B19] hover:border-[#C9A96E] transition-colors"
-                >
-                  Bekijken
-                </a>
-                <a
-                  href={`${fileHref(d.file_url)}?download=${encodeURIComponent(d.filename)}`}
-                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-[#1C1B19] text-white hover:bg-[#3d3a37] transition-colors"
-                >
-                  <Download size={12} />
-                  Downloaden
-                </a>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <PortalTabBar activeTab={tab} hasMaatformulier={hasMaatformulier} />
+      <PortalTabBar activeTab={tab} hasMaatformulier={hasMaatformulier} hasKeuzes={keuzes.length > 0} />
 
       {tab === 'checklist' ? (
         <div className="space-y-4">
@@ -240,6 +221,13 @@ export default async function PortalProjectPage({
             </p>
           )}
         </div>
+      ) : tab === 'keuzes' ? (
+        <PortalKeuzes
+          projectId={id}
+          keuzes={keuzes}
+          submittedAt={(project as Project).keuzes_submitted_at ?? null}
+          readOnly={session.preview}
+        />
       ) : tab === 'maatformulier' ? (
         <PortalMaatformulier projectId={id} items={maatformulierItems} signoff={maatformulierSignoff} />
       ) : tab === 'documenten' ? (

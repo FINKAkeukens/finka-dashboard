@@ -96,6 +96,8 @@ export default function ProjectTijdlijn({
   const [showDone, setShowDone] = useState<Set<string>>(new Set())
   const [openStepId, setOpenStepId] = useState<string | null>(null)
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
+  // Ophogen = datumvelden opnieuw opbouwen, zodat een open datumkiezer sluit
+  const [pickerReset, setPickerReset] = useState(0)
   const [adding, setAdding] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newDate, setNewDate] = useState('')
@@ -384,6 +386,47 @@ export default function ProjectTijdlijn({
     return <span className="text-[#6B6560]">{text}</span>
   }
 
+  // Klik op de datum opent meteen de datumkiezer (zoals op /planning); zonder
+  // showPicker (oudere browsers) klapt de taak open met het datumveld. Bij de
+  // volgende klik op de pagina bouwen we het veld opnieuw op, zodat de kiezer
+  // ook sluit als je ernaast klikt.
+  function dateButton(step: DraaiboekStep) {
+    if (step.done && !stepDate(step)) return null
+    return (
+      <span className="relative inline-block">
+        <button
+          type="button"
+          title="Datum aanpassen"
+          onClick={(ev) => {
+            const input = ev.currentTarget.nextElementSibling as HTMLInputElement | null
+            if (input?.showPicker) {
+              try {
+                input.showPicker()
+                setTimeout(() => {
+                  document.addEventListener('pointerdown', () => setPickerReset((n) => n + 1), { once: true })
+                }, 0)
+                return
+              } catch {}
+            }
+            setOpenStepId(step.item.id)
+          }}
+          className="hover:underline hover:text-[#8A6A2E]"
+        >
+          {renderDate(step) ?? <span className="text-xs text-[#9A948D]">+ datum</span>}
+        </button>
+        <input
+          key={pickerReset}
+          type="date"
+          tabIndex={-1}
+          aria-hidden
+          value={stepDate(step) ?? ''}
+          onChange={(ev) => saveDate(step, ev.target.value || null)}
+          className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+        />
+      </span>
+    )
+  }
+
   function renderStep(step: DraaiboekStep, opts: { locked?: boolean } = {}) {
     const { item } = step
     const date = stepDate(step)
@@ -473,7 +516,7 @@ export default function ProjectTijdlijn({
             {step.done && item.checked_at && !date ? (
               <span className="text-[#9A948D]">{format(new Date(item.checked_at), 'd MMM', { locale: nl })}</span>
             ) : (
-              renderDate(step)
+              dateButton(step)
             )}
           </span>
           )}

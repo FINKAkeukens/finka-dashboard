@@ -294,6 +294,9 @@ export interface Project {
   // wisselen van/naar de status On hold. NULL zodra het weer loopt.
   on_hold_since: string | null
   archived_at: string | null
+  // Keuzes (tabblad Keuzes / portaal) definitief verstuurd door de klant.
+  keuzes_submitted_at?: string | null
+  keuzes_submitted_by?: string | null
   created_at: string
   updated_at: string
   customer?: Customer
@@ -1340,7 +1343,7 @@ export interface ConnectionSchema {
 // API-routes; zie migratie-sectie 63 en src/lib/portal-activity.ts.
 // ---------------------------------------------------------------------------
 
-export type PortalActivityType = 'vragenlijst' | 'document_akkoord' | 'maatformulier'
+export type PortalActivityType = 'vragenlijst' | 'document_akkoord' | 'maatformulier' | 'keuzes'
 
 export interface PortalActivity {
   id: string
@@ -1515,4 +1518,32 @@ export interface InternalInspiration {
   file_url: string | null
   storage_path: string | null
   created_at: string
+}
+
+// Keuzes per project (migratie-sectie 101): de klant kiest per vraag één
+// optie (of "weet ik nog niet") in het portaal, staff zet de vragen klaar.
+export interface KeuzeOption {
+  id: string
+  label: string
+  photo_url: string | null
+  link: string | null
+  // Meerprijs incl. btw; null = geen bedrag tonen.
+  price: number | null
+}
+
+export const KEUZE_WEET_NIET = 'weet_niet'
+
+export interface ProjectKeuze {
+  id: string
+  project_id: string
+  sort_order: number
+  title: string
+  description: string | null
+  options: KeuzeOption[]
+  visible_to_customer: boolean
+  choice: string | null
+  comment: string | null
+  answered_at: string | null
+  created_at: string
+  updated_at: string
 }

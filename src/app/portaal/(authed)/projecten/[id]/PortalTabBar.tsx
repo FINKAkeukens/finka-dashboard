@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation'
 // klikbare tabjes bovenaan, huidige tab via ?tab= in de URL.
 const tabs = [
   { id: 'vragenlijst', label: 'Vragenlijst' },
+  { id: 'keuzes', label: 'Keuzes' },
   { id: 'checklist', label: 'Checklist' },
   { id: 'maatformulier', label: 'Ruimte gereed' },
   { id: 'documenten', label: 'Documenten' },
@@ -19,12 +20,17 @@ export default function PortalTabBar({
   // leeg tabblad met "er staat nog niets klaar" is voor de klant alleen maar
   // verwarrend. Daarna blijft 'ie staan tot staff het formulier verwijdert.
   hasMaatformulier,
+  // Keuzes alleen zodra staff er minstens één zichtbaar heeft gezet.
+  hasKeuzes,
 }: {
   activeTab: string
   hasMaatformulier: boolean
+  hasKeuzes: boolean
 }) {
   const pathname = usePathname()
-  const visibleTabs = tabs.filter((tab) => tab.id !== 'maatformulier' || hasMaatformulier)
+  const visibleTabs = tabs.filter(
+    (tab) => (tab.id !== 'maatformulier' || hasMaatformulier) && (tab.id !== 'keuzes' || hasKeuzes)
+  )
 
   return (
     // Op telefoons compacter; past het dan nóg niet (heel smal scherm), dan

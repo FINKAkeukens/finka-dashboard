@@ -16,13 +16,14 @@ import ProjectTijdlijn from './ProjectTijdlijn'
 import { phaseLabelForStatus } from '@/lib/draaiboek'
 import VragenlijstTab from './VragenlijstTab'
 import MaatformulierTab from './MaatformulierTab'
+import KeuzesTab, { type KeuzesSourceProject } from './KeuzesTab'
 import FinancieelTab from './FinancieelTab'
 import AansluitschemaTab from './AansluitschemaTab'
 import NotesPanel from './NotesPanel'
 import ProjectNotesButton from './ProjectNotesButton'
 import PortalActivityPanel from './PortalActivityPanel'
 import { ProjectTimeSummary } from '@/components/ProjectTimer'
-import { Appliance, Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument } from '@/lib/types'
+import { Appliance, Assignee, ChecklistCategoryItem, ChecklistItem, ChecklistTemplateItem, ConfiguratorOption, ConfiguratorScenario, ConnectionItem, ConnectionSchema, DefaultTexts, EurolineRates, Project, ProjectFinancialItem, ProjectMilestone, ProjectStatus, QuestionnaireCategoryItem, QuestionnaireResponse, QuestionnaireTemplateQuestion, Quote, QuoteDownloadMeta, QUOTE_DOWNLOAD_META_COLUMNS, QuoteItem, QuoteTextSnippet, WerkbladRates, PortalActivity, ProjectDocument, MaatformulierItem, MaatformulierSignoff, CustomerType, StandardDocument, ProjectKeuze } from '@/lib/types'
 import { leadTimeDays, RETIRED_MILESTONE_KEY } from '@/lib/planning'
 import { formatProjectDate, isOnHold, onHoldDays, projectDates, projectPhaseRows } from '@/lib/project-dates'
 import { DEFAULT_TEXTS } from '@/lib/default-texts'
@@ -154,6 +155,28 @@ export default async function ProjectDetailPage({
     ])
     maatformulierItems = (mfItems ?? []) as MaatformulierItem[]
     maatformulierSignoff = mfSignoff as MaatformulierSignoff | null
+  }
+
+  // Keuzes: de vragen van dit project, en andere projecten met keuzes om
+  // vragen uit over te nemen.
+  let keuzes: ProjectKeuze[] = []
+  let keuzesSources: KeuzesSourceProject[] = []
+  if (tab === 'keuzes') {
+    const [{ data: keuzesData }, { data: otherData }] = await Promise.all([
+      supabase.from('finka_project_keuzes').select('*').eq('project_id', id).order('sort_order'),
+      supabase
+        .from('finka_project_keuzes')
+        .select('project_id, project:finka_projects(reference_number, title)')
+        .neq('project_id', id),
+    ])
+    keuzes = (keuzesData ?? []) as ProjectKeuze[]
+    const byProject = new Map<string, KeuzesSourceProject>()
+    for (const row of (otherData ?? []) as unknown as { project_id: string; project: { reference_number: string; title: string } | null }[]) {
+      const existing = byProject.get(row.project_id)
+      if (existing) existing.count++
+      else byProject.set(row.project_id, { id: row.project_id, label: row.project ? `${row.project.reference_number} · ${row.project.title.trim()}` : 'Project', count: 1 })
+    }
+    keuzesSources = [...byProject.values()].sort((a, b) => b.label.localeCompare(a.label))
   }
 
   let financialItems: ProjectFinancialItem[] = []
@@ -431,6 +454,14 @@ export default async function ProjectDetailPage({
         </div>
       ) : tab === 'vragenlijst' ? (
         <VragenlijstTab projectId={id} categories={questionnaireCategories} questions={questionnaireQuestions} responses={questionnaireResponses} />
+      ) : tab === 'keuzes' ? (
+        <KeuzesTab
+          projectId={id}
+          keuzes={keuzes}
+          submittedAt={projectRow.keuzes_submitted_at ?? null}
+          submittedBy={projectRow.keuzes_submitted_by ?? null}
+          sourceProjects={keuzesSources}
+        />
       ) : tab === 'maatformulier' ? (
         <MaatformulierTab projectId={id} items={maatformulierItems} signoff={maatformulierSignoff} />
       ) : tab === 'aansluitschema' ? (
