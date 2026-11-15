@@ -2959,3 +2959,12 @@ ALTER TABLE finka_projects
 ALTER TABLE finka_portal_activity DROP CONSTRAINT IF EXISTS finka_portal_activity_type_check;
 ALTER TABLE finka_portal_activity ADD CONSTRAINT finka_portal_activity_type_check
   CHECK (type IN ('vragenlijst','document_akkoord','maatformulier','keuzemodule','keuzes'));
+
+-- =========================================================
+-- 104. Keuzes: meerdere antwoorden per vraag.
+--
+--    multiple = de klant mag meerdere opties aanvinken; choice bevat dan
+--    de gekozen optie-id's komma-gescheiden. Bestaande tabel → geen GRANT.
+-- =========================================================
+
+ALTER TABLE finka_project_keuzes ADD COLUMN IF NOT EXISTS multiple BOOLEAN NOT NULL DEFAULT false;

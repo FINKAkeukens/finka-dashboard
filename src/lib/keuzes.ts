@@ -14,19 +14,27 @@ export function extraLabel(n: number) {
   return n < 0 ? 'Minderprijs' : 'Meerprijs'
 }
 
-export function chosenOption(k: Pick<ProjectKeuze, 'options' | 'choice'>): KeuzeOption | null {
-  return k.options.find((o) => o.id === k.choice) ?? null
+// De gekozen optie-id's. Bij een vraag met meerdere antwoorden staan ze
+// komma-gescheiden in choice (id's zijn uuid's, zonder komma).
+export function selectedIds(k: Pick<ProjectKeuze, 'choice'>): string[] {
+  return k.choice ? k.choice.split(',').filter(Boolean) : []
+}
+
+export function chosenOptions(k: Pick<ProjectKeuze, 'options' | 'choice'>): KeuzeOption[] {
+  const ids = selectedIds(k)
+  return k.options.filter((o) => ids.includes(o.id))
 }
 
 export function choiceText(k: Pick<ProjectKeuze, 'options' | 'choice'>): string | null {
   if (!k.choice) return null
   if (k.choice === KEUZE_WEET_NIET) return 'Weet ik nog niet'
-  return chosenOption(k)?.label ?? null
+  const labels = chosenOptions(k).map((o) => o.label)
+  return labels.length ? labels.join(', ') : null
 }
 
-// Optelling van de meerprijzen van de gekozen opties.
+// Optelling van de meer-/minderprijzen van de gekozen opties.
 export function totalExtra(keuzes: Pick<ProjectKeuze, 'options' | 'choice'>[]): number {
-  return keuzes.reduce((sum, k) => sum + (chosenOption(k)?.price ?? 0), 0)
+  return keuzes.reduce((sum, k) => sum + chosenOptions(k).reduce((s, o) => s + (o.price ?? 0), 0), 0)
 }
 
 export function hasPrices(keuzes: Pick<ProjectKeuze, 'options'>[]): boolean {

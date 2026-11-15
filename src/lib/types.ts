@@ -1543,6 +1543,9 @@ export interface ProjectKeuze {
   description: string | null
   options: KeuzeOption[]
   visible_to_customer: boolean
+  // De klant mag meerdere opties aanvinken (migratie-sectie 104); choice is
+  // dan een komma-gescheiden lijst optie-id's.
+  multiple: boolean
   choice: string | null
   comment: string | null
   answered_at: string | null

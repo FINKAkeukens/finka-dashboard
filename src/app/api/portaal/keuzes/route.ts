@@ -67,7 +67,17 @@ export async function POST(request: Request) {
   }
 
   const open = keuze.options.length === 0
-  const validChoice = (open && !choice) || choice === null || choice === KEUZE_WEET_NIET || keuze.options.some((o) => o.id === choice)
+  // Meerdere antwoorden: komma-gescheiden optie-id's; "weet ik nog niet"
+  // altijd alleen.
+  const ids = typeof choice === 'string' ? choice.split(',').filter(Boolean) : []
+  const validChoice =
+    (open && !choice) ||
+    choice === null ||
+    choice === KEUZE_WEET_NIET ||
+    (ids.length > 0 &&
+      (keuze.multiple || ids.length === 1) &&
+      new Set(ids).size === ids.length &&
+      ids.every((id) => keuze.options.some((o) => o.id === id)))
   if (!validChoice) return NextResponse.json({ error: 'Onbekende optie' }, { status: 400 })
 
   const now = new Date().toISOString()

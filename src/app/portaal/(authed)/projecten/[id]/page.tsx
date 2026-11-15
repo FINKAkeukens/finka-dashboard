@@ -70,7 +70,7 @@ export default async function PortalProjectPage({
     // Keuzes: alleen de vragen die staff zichtbaar heeft gezet.
     service
       .from('finka_project_keuzes')
-      .select('id, title, description, options, choice, comment')
+      .select('id, title, description, options, multiple, choice, comment')
       .eq('project_id', id)
       .eq('visible_to_customer', true)
       .order('sort_order', { ascending: true }),
@@ -149,7 +149,7 @@ export default async function PortalProjectPage({
   // Het tabblad verschijnt zodra staff het formulier heeft klaargezet — ook
   // als élke regel verborgen staat, want dan bestaat het formulier wél.
   const hasMaatformulier = (maatformulierData ?? []).length > 0
-  const keuzes = (keuzesData ?? []) as Pick<ProjectKeuze, 'id' | 'title' | 'description' | 'options' | 'choice' | 'comment'>[]
+  const keuzes = (keuzesData ?? []) as Pick<ProjectKeuze, 'id' | 'title' | 'description' | 'options' | 'multiple' | 'choice' | 'comment'>[]
 
   const total = items.length
   const doneCount = items.filter((i) => i.checked).length

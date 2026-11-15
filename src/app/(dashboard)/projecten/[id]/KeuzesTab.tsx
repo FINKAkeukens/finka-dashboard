@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AutoTextarea from '@/components/ui/auto-textarea'
 import { KEUZE_WEET_NIET, KeuzeOption, ProjectKeuze } from '@/lib/types'
-import { choiceText, extraLabel, formatExtra, formatEuro, hasPrices, isAnswered, isOpenVraag, OPEN_VRAAG_TITLE, totalExtra } from '@/lib/keuzes'
+import { choiceText, extraLabel, selectedIds, formatExtra, formatEuro, hasPrices, isAnswered, isOpenVraag, OPEN_VRAAG_TITLE, totalExtra } from '@/lib/keuzes'
 
 export interface KeuzesSourceProject {
   id: string
@@ -100,7 +100,7 @@ export default function KeuzesTab({
     setBusy(true)
     const { data, error: selError } = await supabase
       .from('finka_project_keuzes')
-      .select('title, description, options, sort_order')
+      .select('title, description, options, sort_order, multiple')
       .eq('project_id', copyFrom)
       .order('sort_order')
     if (selError || !data?.length) {
@@ -113,6 +113,7 @@ export default function KeuzesTab({
       sort_order: start + i,
       title: k.title,
       description: k.description,
+      multiple: k.multiple,
       options: (k.options as KeuzeOption[]).map((o) => ({ ...o, id: crypto.randomUUID() })),
     }))
     const { data: inserted, error: insError } = await supabase.from('finka_project_keuzes').insert(rows).select()
@@ -255,7 +256,10 @@ function KeuzeCard({
     <div className={`bg-white rounded-xl border overflow-hidden ${k.visible_to_customer ? 'border-[#DDD8D2]' : 'border-dashed border-[#CFC8BF]'}`}>
       <div className="flex items-start gap-2 px-4 pt-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-[#1C1B19]">{k.title}</h3>
+          <h3 className="text-sm font-semibold text-[#1C1B19]">
+            {k.title}
+            {k.multiple && <span className="ml-2 text-[11px] font-normal text-[#8A6A2E]">meerdere antwoorden mogelijk</span>}
+          </h3>
           {k.description && <p className="text-xs text-[#6B6560] mt-0.5 whitespace-pre-line">{k.description}</p>}
         </div>
         <button
@@ -295,7 +299,7 @@ function KeuzeCard({
       <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-4">
         {k.options.map((o) => {
-          const chosen = k.choice === o.id
+          const chosen = selectedIds(k).includes(o.id)
           return (
             <div key={o.id} className={`rounded-lg border overflow-hidden ${chosen ? 'border-[#1C1B19] ring-1 ring-[#1C1B19]' : 'border-[#E4E0DA]'}`}>
               {o.photo_url ? (
@@ -347,13 +351,14 @@ function KeuzeEditor({
 }: {
   keuze: ProjectKeuze
   projectId: string
-  onSave: (values: Pick<ProjectKeuze, 'title' | 'description' | 'options'>) => Promise<void>
+  onSave: (values: Pick<ProjectKeuze, 'title' | 'description' | 'options' | 'multiple' | 'choice'>) => Promise<void>
   onCancel: () => void
   onError: (message: string) => void
 }) {
   const supabase = createClient()
   const [title, setTitle] = useState(keuze.title === NEW_TITLE ? '' : keuze.title)
   const [description, setDescription] = useState(keuze.description ?? '')
+  const [multiple, setMultiple] = useState(keuze.multiple)
   const open = isOpenVraag(keuze)
   const [options, setOptions] = useState<KeuzeOption[]>(keuze.options)
   const [uploading, setUploading] = useState<string | null>(null)
@@ -384,7 +389,11 @@ function KeuzeEditor({
     if (!title.trim()) return onError('Geef de vraag een titel.')
     if (!open && cleaned.length < 2) return onError('Een vraag heeft minstens 2 opties nodig.')
     setSaving(true)
-    await onSave({ title: title.trim(), description: description.trim() || null, options: open ? [] : cleaned })
+    // Antwoorden van verwijderde opties vervallen; terug naar één antwoord
+    // houdt alleen het eerste gekozen antwoord.
+    const kept = keuze.choice === KEUZE_WEET_NIET ? [KEUZE_WEET_NIET] : selectedIds(keuze).filter((id) => cleaned.some((o) => o.id === id))
+    const choice = (multiple ? kept : kept.slice(0, 1)).join(',') || null
+    await onSave({ title: title.trim(), description: description.trim() || null, options: open ? [] : cleaned, multiple: !open && multiple, choice })
     setSaving(false)
   }
 
@@ -414,6 +423,13 @@ function KeuzeEditor({
           e.target.value = ''
         }}
       />
+
+      {!open && (
+        <label className="flex items-center gap-2 text-sm text-[#1C1B19]">
+          <input type="checkbox" checked={multiple} onChange={(e) => setMultiple(e.target.checked)} className="w-4 h-4 accent-[#1C1B19]" />
+          Klant mag meerdere opties aanvinken
+        </label>
+      )}
 
       {!open && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -475,16 +491,19 @@ function KeuzeEditor({
             </div>
           </div>
         ))}
+        <button
+          type="button"
+          onClick={() => setOptions((prev) => [...prev, newOption()])}
+          className="min-h-32 rounded-lg border border-dashed border-[#CFC8BF] flex items-center justify-center gap-1.5 text-sm text-[#8A6A2E] hover:border-[#C9A96E] hover:bg-[#FBF7EF]"
+        >
+          <Plus size={15} /> Optie toevoegen
+        </button>
       </div>
-
       )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" className="h-9" onClick={save} disabled={saving || !!uploading}>{saving ? 'Bezig...' : 'Opslaan'}</Button>
         <Button size="sm" variant="outline" className="h-9" onClick={onCancel}>Annuleren</Button>
-        {!open && <button type="button" onClick={() => setOptions((prev) => [...prev, newOption()])} className="ml-auto inline-flex items-center gap-1 text-sm text-[#8A6A2E] hover:underline">
-          <Plus size={14} /> Optie
-        </button>}
       </div>
       <p className="text-xs text-[#9A948D]">
         {open

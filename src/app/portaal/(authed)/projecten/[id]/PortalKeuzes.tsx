@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
 import { KEUZE_WEET_NIET, ProjectKeuze } from '@/lib/types'
-import { choiceText, extraLabel, formatExtra, formatEuro, hasPrices, isAnswered, isOpenVraag, totalExtra } from '@/lib/keuzes'
+import { choiceText, extraLabel, selectedIds, formatExtra, formatEuro, hasPrices, isAnswered, isOpenVraag, totalExtra } from '@/lib/keuzes'
 
-type PortalKeuze = Pick<ProjectKeuze, 'id' | 'title' | 'description' | 'options' | 'choice' | 'comment'>
+type PortalKeuze = Pick<ProjectKeuze, 'id' | 'title' | 'description' | 'options' | 'multiple' | 'choice' | 'comment'>
 
 // Tabblad Keuzes in het portaal (zoals keuzes.finkakeukens.nl): per vraag
 // een foto-optie aanklikken of "Weet ik nog niet", met een opmerking. Elke
@@ -96,6 +96,7 @@ export default function PortalKeuzes({
             <div className="flex-1 min-w-0">
               <h2 className="text-sm font-medium text-[#1C1B19]">{k.title}</h2>
               {k.description && <p className="text-xs text-[#6B6560] mt-0.5 whitespace-pre-line">{k.description}</p>}
+              {k.multiple && <p className="text-xs text-[#8A6A2E] mt-0.5">Meerdere antwoorden mogelijk</p>}
             </div>
             {isAnswered(k) && <Check size={15} className="text-[#C9A96E] shrink-0 self-center" />}
           </div>
@@ -117,14 +118,19 @@ export default function PortalKeuzes({
           <div className="p-4 sm:p-5 space-y-3">
             <div className={`grid gap-3 ${k.options.length > 2 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
               {k.options.map((o) => {
-                const chosen = k.choice === o.id
-                const dimmed = !!k.choice && !chosen
+                const selected = selectedIds(k).filter((id) => id !== KEUZE_WEET_NIET)
+                const chosen = selected.includes(o.id)
+                // Bij één antwoord vallen de andere opties terug; bij meerdere niet.
+                const dimmed = !k.multiple && !!k.choice && !chosen
+                const next = k.multiple
+                  ? (chosen ? selected.filter((id) => id !== o.id) : [...selected, o.id]).join(',') || null
+                  : chosen ? null : o.id
                 return (
                   <div key={o.id} className="flex flex-col">
                     <button
                       type="button"
                       disabled={locked}
-                      onClick={() => save(k, { choice: chosen ? null : o.id })}
+                      onClick={() => save(k, { choice: next })}
                       aria-pressed={chosen}
                       className={`flex-1 flex flex-col text-left rounded-xl border overflow-hidden transition-all ${
                         chosen ? 'border-[#1C1B19] ring-2 ring-[#1C1B19]' : 'border-[#DDD8D2]'
@@ -143,7 +149,7 @@ export default function PortalKeuzes({
                       )}
                       <span className="flex-1 flex items-start gap-1.5 px-3 py-2.5 text-sm text-[#1C1B19]">
                         {!o.photo_url && (
-                          <span className={`mt-0.5 w-4 h-4 rounded-full border shrink-0 flex items-center justify-center ${chosen ? 'bg-[#1C1B19] border-[#1C1B19]' : 'border-[#B9B2A9]'}`}>
+                          <span className={`mt-0.5 w-4 h-4 ${k.multiple ? 'rounded' : 'rounded-full'} border shrink-0 flex items-center justify-center ${chosen ? 'bg-[#1C1B19] border-[#1C1B19]' : 'border-[#B9B2A9]'}`}>
                             {chosen && <Check size={10} className="text-white" strokeWidth={3} />}
                           </span>
                         )}
