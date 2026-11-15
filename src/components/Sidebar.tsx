@@ -111,7 +111,7 @@ const groups: NavGroup[] = [
       { href: '/instellingen/documenten', label: 'Standaarddocumenten', icon: FolderOpen },
       { href: '/instellingen/sample-modellen', label: 'Sample instellingen', icon: SwatchBook },
       { href: '/instellingen/catalogus', label: 'Catalogus', icon: BookOpen },
-      { href: '/instellingen/keuzemodule', label: 'Keuzemodule-opties', icon: SlidersHorizontal },
+      { href: '/instellingen/keuzemodule', label: 'Keukenindeling-opties', icon: SlidersHorizontal },
     ],
   },
 ]

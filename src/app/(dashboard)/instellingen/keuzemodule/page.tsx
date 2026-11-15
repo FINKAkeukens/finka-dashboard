@@ -77,9 +77,9 @@ export default async function KeuzemoduleOptiesPage() {
   return (
     <div className="p-4 md:p-8 max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#1C1B19]">Keuzemodule-opties</h1>
+        <h1 className="text-2xl font-semibold text-[#1C1B19]">Keukenindeling-opties</h1>
         <p className="text-sm text-[#6B6560] mt-1">
-          Alles wat de klant in de keuzemodule kan kiezen. Zet een optie uit en hij verdwijnt bij alle projecten uit het
+          Alles wat de klant in de keukenindeling kan kiezen. Zet een optie uit en hij verdwijnt bij alle projecten uit het
           portaal (wat al in een ontwerp zit, blijft zichtbaar als &quot;in je ontwerp&quot;). De controle laat zien of het
           artikel in de actieve catalogus staat{catalogus ? ` (${catalogus.titel})` : ''}, in welke breedtes, en de
           catalogusprijs (1 punt = €1, zonder korting of btw).

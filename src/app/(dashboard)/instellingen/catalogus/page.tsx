@@ -16,7 +16,7 @@ export default async function CatalogusPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#1C1B19]">Catalogus</h1>
         <p className="text-sm text-[#6B6560] mt-1">
-          De Sachsenküchen-catalogus (SK130) waaruit de keuzemodule in het klantportaal haalt: binnenkleuren,
+          De Sachsenküchen-catalogus (SK130) waaruit de keukenindeling in het klantportaal haalt: binnenkleuren,
           werkbladdecors, grepen, modellen met prijsgroep, kastprijzen en accessoires. Komt er een nieuwe catalogus
           uit, lees dan de PDF hier opnieuw in.
         </p>

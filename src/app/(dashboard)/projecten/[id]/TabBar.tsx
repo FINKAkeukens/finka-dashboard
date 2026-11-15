@@ -11,7 +11,7 @@ const tabs = [
   // ComingSoonTab-placeholder) — makkelijk terug te zetten door deze regel
   // te herstellen.
   { id: 'planning', label: 'Planning' },
-  { id: 'keuzemodule', label: 'Keuzemodule' },
+  { id: 'keuzemodule', label: 'Keukenindeling' },
   { id: 'vragenlijst', label: 'Vragenlijst' },
   { id: 'keuzes', label: 'Keuzes' },
   { id: 'maatformulier', label: 'Ruimte gereed' },

@@ -253,7 +253,7 @@ export default function KeuzemoduleBeheer({
 
       <section className="bg-white rounded-xl border border-[#DDD8D2] p-5 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-medium text-[#1C1B19]">Keuzemodule in het klantportaal</h2>
+          <h2 className="text-sm font-medium text-[#1C1B19]">Keukenindeling in het klantportaal</h2>
           <p className="text-sm text-[#6B6560] mt-0.5">
             {actief
               ? `Aan: de klant ziet "Jouw ontwerp" in het portaal (ronde ${huidigeRonde}).`
@@ -523,7 +523,7 @@ export default function KeuzemoduleBeheer({
                   : `nog bezig (laatst bijgewerkt ${new Date(r.updated_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})`}
                 {' · '}{r.wijzigingen.length} punten{totaal ? ` · ${euro(totaal)} (catalogusprijzen)` : ''}
               </summary>
-              <Wijzigingsrapport titel={`Keuzemodule ronde ${r.ronde}`} wijzigingen={r.wijzigingen} />
+              <Wijzigingsrapport titel={`Keukenindeling ronde ${r.ronde}`} wijzigingen={r.wijzigingen} />
             </details>
           )
         })}
