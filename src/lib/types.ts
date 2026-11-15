@@ -532,6 +532,8 @@ export interface QuoteTextSnippet {
   field_key: string
   title: string
   body: string
+  // Alleen WhatsApp-berichten: meervoudige versie naast body (enkelvoud).
+  body_plural?: string
   sort_order: number
   created_at: string
 }

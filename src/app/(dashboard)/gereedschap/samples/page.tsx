@@ -56,8 +56,8 @@ export default async function SamplesPage({
     if (r.availability === 'te-laat') counts.set('uitgeleend', (counts.get('uitgeleend') ?? 0) + 1)
   }
 
-  // Openstaande uitleningen per project, voor het aanpassen van de
-  // terugbrengdatum in één keer.
+  // Openstaande uitleningen per project, om de terugbrengdatum aan te passen
+  // of samples in één keer terug te melden.
   const groupMap = new Map<string, ProjectLoanGroup>()
   for (const r of rows) {
     const loan = r.openLoan
@@ -65,14 +65,12 @@ export default async function SamplesPage({
     const g = groupMap.get(loan.project_id) ?? {
       projectId: loan.project_id,
       name: loanBorrower(loan),
-      loanIds: [],
-      sampleNames: [],
+      loans: [],
       dueDate: loan.due_date,
       mixedDates: false,
     }
-    if (g.loanIds.length && g.dueDate !== loan.due_date) g.mixedDates = true
-    g.loanIds.push(loan.id)
-    g.sampleNames.push(r.name)
+    if (g.loans.length && g.dueDate !== loan.due_date) g.mixedDates = true
+    g.loans.push({ id: loan.id, sampleName: r.name, dueDate: loan.due_date })
     groupMap.set(loan.project_id, g)
   }
   const projectGroups = [...groupMap.values()]

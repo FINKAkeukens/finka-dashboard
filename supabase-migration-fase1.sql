@@ -2968,3 +2968,7 @@ ALTER TABLE finka_portal_activity ADD CONSTRAINT finka_portal_activity_type_chec
 -- =========================================================
 
 ALTER TABLE finka_project_keuzes ADD COLUMN IF NOT EXISTS multiple BOOLEAN NOT NULL DEFAULT false;
+
+-- 105. WhatsApp-berichten (Instellingen → Standaardteksten): meervoudige
+-- versie naast de enkelvoudige (body).
+ALTER TABLE finka_quote_text_snippets ADD COLUMN IF NOT EXISTS body_plural TEXT NOT NULL DEFAULT '';

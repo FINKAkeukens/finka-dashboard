@@ -44,6 +44,10 @@ export const QUOTE_TEXT_FIELDS: QuoteTextField[] = [
   { key: 'voorbehoud', group: 'Afsluiting', label: 'Voorbehoud-tekst (onder de totaalprijs)', mode: 'text' },
 ]
 
+// WhatsApp-berichten (Instellingen → Standaardteksten) staan in dezelfde tabel,
+// onder deze field_key. Hoort niet bij een offerteveld.
+export const WHATSAPP_FIELD_KEY = 'whatsapp'
+
 export function snippetsFor(snippets: QuoteTextSnippet[], fieldKey: string) {
   return snippets
     .filter((s) => s.field_key === fieldKey && s.body.trim())
