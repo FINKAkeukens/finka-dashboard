@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { logAudit } from '@/lib/audit'
+import { createProjectSteps } from '@/lib/draaiboek'
 import { Customer, ProjectStatus } from '@/lib/types'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -57,6 +58,10 @@ export default function NewProjectForm({
       newValue: data.title,
       changedBy: user?.email,
     })
+
+    // Draaiboek meteen klaarzetten. Lukt dat niet, dan staat op de Planning-tab
+    // een knop om het alsnog te doen — het project zelf is er al.
+    await createProjectSteps(supabase, data.id)
 
     router.push(`/projecten/${data.id}`)
   }

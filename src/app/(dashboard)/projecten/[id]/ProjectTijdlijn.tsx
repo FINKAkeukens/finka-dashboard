@@ -649,8 +649,22 @@ export default function ProjectTijdlijn({
     )
   }
 
+  // Er staan alleen losse taken in: het draaiboek is nooit aangemaakt (de
+  // knop hierboven verdwijnt zodra er één taak is). Hier alsnog aan te maken.
+  const missingDraaiboek = !items.some((i) => i.template_id)
+
   return (
     <div className="space-y-4">
+      {missingDraaiboek && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+          <p className="flex-1 min-w-[220px] text-sm text-[#1C1B19]">
+            De standaardtaken uit het draaiboek ontbreken bij dit project. Er staan alleen eigen taken in.
+          </p>
+          <Button size="sm" onClick={createChecklist} disabled={creating}>
+            {creating ? 'Bezig...' : 'Draaiboek toevoegen'}
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-sm text-[#6B6560]">
           <div className="w-32 sm:w-40 h-1.5 rounded-full bg-[#E6E1DA] overflow-hidden">
