@@ -2,10 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { Fragment } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { canAccessProject } from '@/lib/portal'
 import { redirect, notFound } from 'next/navigation'
 import { CATEGORY_LABELS, CATEGORY_ORDER, buildItemNumbers, formatItemNumber, PIN_TYPE_COLORS } from '@/lib/aansluitschema'
-import { ConnectionItem, ConnectionSchema, Project } from '@/lib/types'
+import { ConnectionItem, ConnectionSchema, DefaultTexts, Project } from '@/lib/types'
+import { DEFAULT_TEXTS } from '@/lib/default-texts'
 import PrintButton from './PrintButton'
 import DownloadButton from './DownloadButton'
 
@@ -27,10 +29,13 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
   if (!project) notFound()
   if (!(await canAccessProject(project.customer?.id))) notFound()
 
-  const [{ data: itemsData }, { data: schemaData }] = await Promise.all([
+  const [{ data: itemsData }, { data: schemaData }, { data: texts }] = await Promise.all([
     supabase.from('finka_connection_items').select('*').eq('project_id', projectId).order('sort_order'),
     supabase.from('finka_connection_schema').select('*').eq('project_id', projectId).maybeSingle(),
+    // Standaardteksten zijn staff-only (RLS); ook de klant moet de actuele inleiding zien.
+    createServiceClient().from('finka_default_texts').select('*').limit(1).maybeSingle(),
   ])
+  const intro = (texts as Partial<DefaultTexts> | null)?.aansluitschema_intro ?? DEFAULT_TEXTS.aansluitschema_intro
   const items = (itemsData ?? []) as ConnectionItem[]
   const schema = schemaData as ConnectionSchema | null
   const applicableItems = items.filter((i) => i.van_toepassing)
@@ -107,12 +112,7 @@ export default async function AansluitschemaPrintPage({ params }: { params: Prom
             </tbody>
           </table>
 
-          <p style={{ fontSize: 10.5, lineHeight: 1.5, marginBottom: 4 }}>
-            Voordat de keuken gemonteerd kan worden, is het van belang dat een aantal zaken met betrekking tot de leidingen goed geregeld is.
-            Indien u rekening houdt met onderstaande richtlijnen, kunnen wij ervoor zorgen dat uw keuken strak, netjes en helemaal volgens uw
-            wensen geplaatst wordt. Alleen de aangekruiste regels zijn van toepassing op dit project; alle maten zijn hartmaten gemeten vanaf
-            de afgewerkte vloer.
-          </p>
+          <p style={{ fontSize: 10.5, lineHeight: 1.5, marginBottom: 4, whiteSpace: 'pre-wrap' }}>{intro}</p>
           <p style={{ fontSize: 10.5, fontStyle: 'italic', color: '#6B6560', marginBottom: 16 }}>Heeft u vragen over onderstaande richtlijnen? Laat het ons weten.</p>
 
           <table>

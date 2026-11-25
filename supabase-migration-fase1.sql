@@ -2972,3 +2972,10 @@ ALTER TABLE finka_project_keuzes ADD COLUMN IF NOT EXISTS multiple BOOLEAN NOT N
 -- 105. WhatsApp-berichten (Instellingen → Standaardteksten): meervoudige
 -- versie naast de enkelvoudige (body).
 ALTER TABLE finka_quote_text_snippets ADD COLUMN IF NOT EXISTS body_plural TEXT NOT NULL DEFAULT '';
+
+-- =========================================================
+-- 106. Aansluitschema: inleidende tekst bovenaan het schema aanpasbaar
+--    via Instellingen → Standaardteksten. Bestaande tabel → geen GRANT.
+-- =========================================================
+
+ALTER TABLE finka_default_texts ADD COLUMN IF NOT EXISTS aansluitschema_intro TEXT NOT NULL DEFAULT 'Voordat de keuken gemonteerd kan worden, is het van belang dat een aantal zaken met betrekking tot de leidingen goed geregeld is. Indien u rekening houdt met onderstaande richtlijnen, kunnen wij ervoor zorgen dat uw keuken strak, netjes en helemaal volgens uw wensen geplaatst wordt. Alleen de aangekruiste regels zijn van toepassing op dit project; alle maten zijn hartmaten gemeten vanaf de afgewerkte vloer.';

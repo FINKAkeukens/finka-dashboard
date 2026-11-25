@@ -519,6 +519,7 @@ export interface DefaultTexts {
   offerte_disclaimer_text: string
   offerte_connections_disclaimer: string
   aansluitschema_let_op_notities: string
+  aansluitschema_intro: string
   updated_at: string
 }
 
