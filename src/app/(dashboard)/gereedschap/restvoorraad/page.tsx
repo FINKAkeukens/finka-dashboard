@@ -33,7 +33,7 @@ export default async function RestvoorraadPage() {
       </div>
       {error ? (
         <p className="text-sm text-[#6B6560] bg-white rounded-xl border border-dashed border-[#DDD8D2] p-6">
-          Nog geen tabel voor de restvoorraad gevonden — draai migratie 107 (finka_stock_items) in Supabase en herlaad deze pagina.
+          Nog geen tabel voor de restvoorraad gevonden — draai migratie 108 (finka_stock_items) in Supabase en herlaad deze pagina.
         </p>
       ) : (
         <RestvoorraadView initialItems={(items ?? []) as StockItem[]} projects={stockProjects} />

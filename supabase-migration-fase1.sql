@@ -2973,12 +2973,18 @@ ALTER TABLE finka_project_keuzes ADD COLUMN IF NOT EXISTS multiple BOOLEAN NOT N
 -- versie naast de enkelvoudige (body).
 ALTER TABLE finka_quote_text_snippets ADD COLUMN IF NOT EXISTS body_plural TEXT NOT NULL DEFAULT '';
 
--- 106. Algemene afspraken op /planning: mijlpaal zonder project die in de
+-- =========================================================
+-- 106. Aansluitschema: inleidende tekst bovenaan het schema aanpasbaar
+--    via Instellingen → Standaardteksten. Bestaande tabel → geen GRANT.
+-- =========================================================
+
+ALTER TABLE finka_default_texts ADD COLUMN IF NOT EXISTS aansluitschema_intro TEXT NOT NULL DEFAULT 'Voordat de keuken gemonteerd kan worden, is het van belang dat een aantal zaken met betrekking tot de leidingen goed geregeld is. Indien u rekening houdt met onderstaande richtlijnen, kunnen wij ervoor zorgen dat uw keuken strak, netjes en helemaal volgens uw wensen geplaatst wordt. Alleen de aangekruiste regels zijn van toepassing op dit project; alle maten zijn hartmaten gemeten vanaf de afgewerkte vloer.';
+-- 107. Algemene afspraken op /planning: mijlpaal zonder project die in de
 -- weekagenda staat (en eventueel in Google Agenda), niet bij de to do's van
 -- FINKA intern. Ook project_id NULL, maar is_afspraak = true.
 ALTER TABLE finka_project_milestones ADD COLUMN IF NOT EXISTS is_afspraak BOOLEAN NOT NULL DEFAULT false;
 
--- 107. Restvoorraad (Gereedschap → Restvoorraad): spullen die over zijn,
+-- 108. Restvoorraad (Gereedschap → Restvoorraad): spullen die over zijn,
 -- bijv. van montages van andere keukens. Waar het ligt, waar het vandaan
 -- komt en of het al gereserveerd/gebruikt is (target_project_id = voor/bij
 -- welk project).
@@ -3003,14 +3009,14 @@ DROP POLICY IF EXISTS "Staff only" ON finka_stock_items;
 CREATE POLICY "Staff only" ON finka_stock_items FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
 GRANT ALL ON TABLE finka_stock_items TO authenticated, service_role;
 
--- 108. Samples: aantal exemplaren van hetzelfde sample, zodat een staal die
+-- 109. Samples: aantal exemplaren van hetzelfde sample, zodat een staal die
 -- meerdere keren in huis is één regel blijft. Dan kan hij ook meerdere keren
 -- tegelijk uitgeleend zijn — de index "hooguit één open uitlening" (91)
 -- vervalt; het dashboard bewaakt dat er niet meer uitstaan dan het aantal.
 ALTER TABLE finka_samples ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1);
 DROP INDEX IF EXISTS finka_sample_loans_one_open;
 
--- 109. Projectnotities: prio-uitroepteken voor wat belangrijk is (bijv. vóór
+-- 110. Projectnotities: prio-uitroepteken voor wat belangrijk is (bijv. vóór
 -- het bestellen). Prio-notities staan bovenaan en tellen mee op de knop
 -- "Notities".
 ALTER TABLE finka_project_notes ADD COLUMN IF NOT EXISTS priority BOOLEAN NOT NULL DEFAULT false;

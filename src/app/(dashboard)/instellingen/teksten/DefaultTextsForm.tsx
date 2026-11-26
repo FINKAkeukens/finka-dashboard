@@ -28,6 +28,11 @@ const FIELDS: { key: TextKey; label: string; hint: string }[] = [
     hint: '',
   },
   {
+    key: 'aansluitschema_intro',
+    label: 'Aansluitschema — inleidende tekst',
+    hint: 'Bovenaan het aansluitschema. Een wijziging geldt direct voor alle aansluitschema\'s, ook bestaande.',
+  },
+  {
     key: 'aansluitschema_let_op_notities',
     label: 'Aansluitschema — "Let op"-notities',
     hint: 'Eén bulletpunt per regel (met een "- " ervoor).',
@@ -39,7 +44,7 @@ export default function DefaultTextsForm({ texts }: { texts: DefaultTexts | null
   const supabase = createClient()
   const [values, setValues] = useState<Record<TextKey, string>>(() => {
     const initial = {} as Record<TextKey, string>
-    for (const { key } of FIELDS) initial[key] = texts ? texts[key] : DEFAULT_TEXTS[key]
+    for (const { key } of FIELDS) initial[key] = texts?.[key] ?? DEFAULT_TEXTS[key]
     return initial
   })
   const [saving, setSaving] = useState(false)
@@ -59,7 +64,9 @@ export default function DefaultTextsForm({ texts }: { texts: DefaultTexts | null
     setError('')
     const { error } = await supabase
       .from('finka_default_texts')
-      .update({ ...values, updated_at: new Date().toISOString() })
+      // Alleen kolommen die al bestaan: een nieuw veld waarvan de migratie
+      // nog niet gedraaid is, laat de rest wel opslaan.
+      .update({ ...Object.fromEntries(Object.entries(values).filter(([k]) => k in texts!)), updated_at: new Date().toISOString() })
       .eq('id', texts!.id)
 
     if (error) {
@@ -78,6 +85,7 @@ export default function DefaultTextsForm({ texts }: { texts: DefaultTexts | null
         <div key={key} className="space-y-1.5">
           <Label className="text-xs">{label}</Label>
           {hint && <p className="text-xs text-[#9A948D]">{hint}</p>}
+          {!(key in texts) && <p className="text-xs text-amber-700">Nog niet opslaanbaar: draai eerst migratie 106 in Supabase.</p>}
           <AutoTextarea
             value={values[key]}
             onChange={(v) => setValues((prev) => ({ ...prev, [key]: v }))}

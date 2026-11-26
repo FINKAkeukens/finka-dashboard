@@ -19,5 +19,6 @@ export const DEFAULT_TEXTS: DefaultTexts = {
 - Alle stopcontacten moeten voorzien zijn van randaarde.
 - Wanneer er een kickspace op de cv-installatie komt, wordt vooraf een kogelafsluitkraan gemonteerd.
 - Oven en kookplaat moeten op verschillende groepen worden aangesloten.`,
+  aansluitschema_intro: 'Voordat de keuken gemonteerd kan worden, is het van belang dat een aantal zaken met betrekking tot de leidingen goed geregeld is. Indien u rekening houdt met onderstaande richtlijnen, kunnen wij ervoor zorgen dat uw keuken strak, netjes en helemaal volgens uw wensen geplaatst wordt. Alleen de aangekruiste regels zijn van toepassing op dit project; alle maten zijn hartmaten gemeten vanaf de afgewerkte vloer.',
   updated_at: '',
 }

@@ -68,7 +68,7 @@ export interface Sample {
   photo_url: string | null
   storage_path: string | null
   notes: string | null
-  // Aantal exemplaren (migratie 108); zoveel kunnen er tegelijk uitstaan.
+  // Aantal exemplaren (migratie 109); zoveel kunnen er tegelijk uitstaan.
   quantity?: number
   created_at: string
   updated_at: string
@@ -521,6 +521,7 @@ export interface DefaultTexts {
   offerte_disclaimer_text: string
   offerte_connections_disclaimer: string
   aansluitschema_let_op_notities: string
+  aansluitschema_intro: string
   updated_at: string
 }
 
@@ -1035,7 +1036,7 @@ export interface ProjectNote {
   id: string
   project_id: string
   body: string
-  // Prio-uitroepteken: bovenaan en in rood (migratie 109).
+  // Prio-uitroepteken: bovenaan en in rood (migratie 110).
   priority?: boolean
   created_by: string | null
   created_at: string
@@ -1097,7 +1098,7 @@ export interface ProjectMilestone {
   // Prio: bovenaan /planning, ongeacht de datum.
   priority: boolean
   // Alleen bij project_id NULL: true = algemene afspraak (weekagenda op
-  // /planning), false = to do van FINKA intern — migratie 106.
+  // /planning), false = to do van FINKA intern — migratie 107.
   is_afspraak?: boolean
   // Tijden ("10:00:00") en de koppeling met Google Agenda — migratie 100.
   start_time?: string | null
@@ -1563,7 +1564,7 @@ export interface ProjectKeuze {
 }
 
 // Restvoorraad (Gereedschap → Restvoorraad): spullen die over zijn, bijv.
-// van montages van andere keukens — migratie 107. target_project_id = het
+// van montages van andere keukens — migratie 108. target_project_id = het
 // project waarvoor het gereserveerd is of waarbij het gebruikt is.
 export type StockStatus = 'beschikbaar' | 'gereserveerd' | 'gebruikt'
 

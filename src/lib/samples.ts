@@ -103,7 +103,7 @@ export function defaultDueDate(lentAt: string): string {
   return format(addDays(parseISO(lentAt), LOAN_DAYS), 'yyyy-MM-dd')
 }
 
-// Een staal kan meerdere exemplaren hebben (quantity, migratie 108), dus
+// Een staal kan meerdere exemplaren hebben (quantity, migratie 109), dus
 // meerdere openstaande uitleningen. Te laat gaat voor: die moet terug, ook
 // als er nog een exemplaar ligt. Anders beschikbaar zolang er één over is.
 export function sampleAvailability(openLoans: SampleLoan[], quantity = 1): SampleAvailability {
