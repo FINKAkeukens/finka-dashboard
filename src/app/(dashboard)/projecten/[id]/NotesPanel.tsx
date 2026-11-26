@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Pencil, Trash2 } from 'lucide-react'
+import { AlertCircle, Pencil, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { ProjectNote } from '@/lib/types'
 
 function formatTimestamp(iso: string) {
@@ -20,11 +21,24 @@ function formatTimestamp(iso: string) {
 // het zwevende snel-openen-paneel (ProjectNotesButton) gebruikt kan worden,
 // zonder dat elke pagina van het project de notities server-side hoeft op
 // te halen.
-export default function NotesPanel({ projectId }: { projectId: string }) {
+// Prio-notities eerst, daarbinnen nieuwste bovenaan.
+function sortNotes(notes: ProjectNote[]) {
+  return [...notes].sort((a, b) => Number(!!b.priority) - Number(!!a.priority) || b.created_at.localeCompare(a.created_at))
+}
+
+export default function NotesPanel({
+  projectId,
+  onPriorityCount,
+}: {
+  projectId: string
+  // Aantal prio-notities, voor het bolletje op de knop "Notities".
+  onPriorityCount?: (count: number) => void
+}) {
   const supabase = createClient()
   const [notes, setNotes] = useState<ProjectNote[]>([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
+  const [newPriority, setNewPriority] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -39,7 +53,7 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
         .eq('project_id', projectId)
         .order('created_at', { ascending: false })
       if (!cancelled) {
-        setNotes((data ?? []) as ProjectNote[])
+        setNotes(sortNotes((data ?? []) as ProjectNote[]))
         setLoading(false)
       }
     }
@@ -49,6 +63,11 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
     }
   }, [projectId, supabase])
 
+  const priorityCount = notes.filter((n) => n.priority).length
+  useEffect(() => {
+    if (!loading) onPriorityCount?.(priorityCount)
+  }, [priorityCount, loading, onPriorityCount])
+
   async function handleAdd() {
     if (!text.trim()) return
     setSaving(true)
@@ -56,15 +75,16 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error: insError } = await supabase
       .from('finka_project_notes')
-      .insert({ project_id: projectId, body: text.trim(), created_by: user?.email ?? null })
+      .insert({ project_id: projectId, body: text.trim(), priority: newPriority, created_by: user?.email ?? null })
       .select()
       .single()
 
     if (insError) {
       setError(insError.message)
     } else {
-      setNotes((prev) => [data as ProjectNote, ...prev])
+      setNotes((prev) => sortNotes([data as ProjectNote, ...prev]))
       setText('')
+      setNewPriority(false)
     }
     setSaving(false)
   }
@@ -82,6 +102,14 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
     if (trimmed === original) return
     setNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, body: trimmed } : n)))
     const { error: updError } = await supabase.from('finka_project_notes').update({ body: trimmed }).eq('id', noteId)
+    if (updError) setError(updError.message)
+  }
+
+  async function togglePriority(note: ProjectNote) {
+    setError('')
+    const priority = !note.priority
+    setNotes((prev) => sortNotes(prev.map((n) => (n.id === note.id ? { ...n, priority } : n))))
+    const { error: updError } = await supabase.from('finka_project_notes').update({ priority }).eq('id', note.id)
     if (updError) setError(updError.message)
   }
 
@@ -109,6 +137,17 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
           <Button onClick={handleAdd} disabled={saving || !text.trim()}>
             {saving ? 'Toevoegen...' : 'Toevoegen'}
           </Button>
+          <button
+            type="button"
+            aria-pressed={newPriority}
+            onClick={() => setNewPriority(!newPriority)}
+            className={cn(
+              'inline-flex items-center gap-1.5 h-9 px-3 text-sm rounded-lg border transition-colors',
+              newPriority ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-[#DDD8D2] hover:border-red-300'
+            )}
+          >
+            <AlertCircle size={14} /> Prio
+          </button>
           {error && <span className="text-sm text-red-600">{error}</span>}
         </div>
       </div>
@@ -122,7 +161,7 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
       ) : (
         <div className="bg-white rounded-xl border border-[#DDD8D2] divide-y divide-[#DDD8D2]">
           {notes.map((note) => (
-            <div key={note.id} className="px-5 py-4 flex items-start justify-between gap-4">
+            <div key={note.id} className={cn('px-5 py-4 flex items-start justify-between gap-4', note.priority && 'bg-red-50 border-l-4 border-l-red-600')}>
               <div className="min-w-0 flex-1">
                 {editingId === note.id ? (
                   <textarea
@@ -135,7 +174,7 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
                     className="w-full text-sm px-2 py-1.5 border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19] resize-none"
                   />
                 ) : (
-                  <p className="text-sm text-[#1C1B19] whitespace-pre-wrap">{note.body}</p>
+                  <p className={cn('text-sm text-[#1C1B19] whitespace-pre-wrap', note.priority && 'font-medium')}>{note.body}</p>
                 )}
                 <p className="text-xs text-[#9A948D] mt-1.5">
                   {formatTimestamp(note.created_at)}
@@ -144,6 +183,13 @@ export default function NotesPanel({ projectId }: { projectId: string }) {
               </div>
               {editingId !== note.id && (
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => togglePriority(note)}
+                    title={note.priority ? 'Prio weghalen' : 'Prio: belangrijk vóór het bestellen'}
+                    aria-pressed={!!note.priority}
+                  >
+                    <AlertCircle size={15} className={note.priority ? 'text-red-600' : 'text-[#9A948D] hover:text-red-600'} />
+                  </button>
                   <button onClick={() => startEdit(note)} title="Aantekening bewerken">
                     <Pencil size={14} className="text-[#9A948D] hover:text-[#1C1B19]" />
                   </button>

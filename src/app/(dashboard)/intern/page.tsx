@@ -23,7 +23,7 @@ export default async function InternPage() {
         <p className="text-sm text-[#6B6560] mt-1">To do&apos;s, aantekeningen en inspiratie voor het bedrijf zelf.</p>
       </div>
       <InternView
-        initialTodos={(todos ?? []) as ProjectMilestone[]}
+        initialTodos={((todos ?? []) as ProjectMilestone[]).filter((t) => !t.is_afspraak)}
         initialNotes={(notes ?? []) as InternalNote[]}
         initialInspiration={(inspiration ?? []) as InternalInspiration[]}
         assignees={(assignees ?? []) as Assignee[]}

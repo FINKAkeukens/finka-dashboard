@@ -170,7 +170,9 @@ export function buildPlanningEntries({
   return entries.sort(compareEntries)
 }
 
+// Zonder project: een to do van FINKA intern, of een algemene afspraak.
 export function milestoneEntry(m: ProjectMilestone, project: PlanningProjectInfo | null): PlanningEntry {
+  const isAfspraak = !!project || !!m.is_afspraak
   return {
     key: `ms:${m.id}`,
     itemId: null,
@@ -182,9 +184,9 @@ export function milestoneEntry(m: ProjectMilestone, project: PlanningProjectInfo
     assignee: m.assigned_to,
     priority: m.priority,
     notes: m.notes,
-    isAfspraak: !!project,
+    isAfspraak,
     milestoneStatus: m.status,
-    agenda: project ? afspraakAgenda(m) : null,
+    agenda: isAfspraak ? afspraakAgenda(m) : null,
   }
 }
 

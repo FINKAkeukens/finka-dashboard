@@ -54,6 +54,7 @@ export function readSampleForm(form: FormData, settings: SampleSettings) {
     material,
     veneer_execution: material && material === settings.veneer_material ? (form.get('veneer_execution') as string) || null : null,
     notes: (form.get('notes') as string) || null,
+    quantity: Math.max(1, parseInt((form.get('quantity') as string) || '1', 10) || 1),
   }
 }
 
@@ -117,9 +118,15 @@ export default function SampleFields({
 
   return (
     <>
-      <div className="space-y-1.5">
-        <Label htmlFor="name">{label('name')} *</Label>
-        <Input id="name" name="name" required defaultValue={sample?.name} placeholder={placeholder('name')} />
+      <div className="grid grid-cols-[1fr_6rem] gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="name">{label('name')} *</Label>
+          <Input id="name" name="name" required defaultValue={sample?.name} placeholder={placeholder('name')} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="quantity">Aantal</Label>
+          <Input id="quantity" name="quantity" type="number" min={1} step={1} defaultValue={sample?.quantity ?? 1} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -23,6 +23,8 @@ export interface AfspraakValues {
 }
 
 const OTHER = 'custom'
+// "Project" van een algemene afspraak: hoort bij geen enkel project.
+export const ALGEMEEN = '__algemeen__'
 const fieldClass = 'h-9 px-2 text-sm text-[#1C1B19] bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]'
 
 // Nieuwe afspraak (entry = null) of een bestaande bewerken. Opslaan,
@@ -51,7 +53,7 @@ export default function AfspraakEditor({
 }) {
   const a = entry?.agenda
   const [v, setV] = useState<AfspraakValues>({
-    projectId: entry?.project?.id ?? '',
+    projectId: entry ? entry.project?.id ?? ALGEMEEN : '',
     milestoneKey: OTHER,
     label: entry?.label ?? '',
     date: entry?.date ?? '',
@@ -67,16 +69,18 @@ export default function AfspraakEditor({
   const [copied, setCopied] = useState(false)
   const set = (patch: Partial<AfspraakValues>) => setV((prev) => ({ ...prev, ...patch }))
 
+  const algemeen = v.projectId === ALGEMEEN
   const project = projects.find((p) => p.id === v.projectId)
   const customerEmail = project?.customerEmail ?? null
-  const label = v.milestoneKey === OTHER ? v.label.trim() : MILESTONE_LABELS[v.milestoneKey as Exclude<MilestoneKey, 'custom'>]
+  // Vaste afspraken (Meting, Levering, …) horen bij een project.
+  const label = algemeen || v.milestoneKey === OTHER ? v.label.trim() : MILESTONE_LABELS[v.milestoneKey as Exclude<MilestoneKey, 'custom'>]
   const canSave = !!v.projectId && !!label && (!v.inGoogle || !!v.date)
 
   return (
     <form
       onSubmit={(ev) => {
         ev.preventDefault()
-        if (canSave) onSave({ ...v, label, inviteCustomer: v.inviteCustomer && !!customerEmail })
+        if (canSave) onSave({ ...v, milestoneKey: algemeen ? OTHER : v.milestoneKey, label, inviteCustomer: v.inviteCustomer && !!customerEmail })
       }}
       className="bg-white rounded-xl border border-[#C9A96E] p-4 space-y-3"
     >
@@ -99,24 +103,27 @@ export default function AfspraakEditor({
               Project
               <select required value={v.projectId} onChange={(e) => set({ projectId: e.target.value })} className={fieldClass}>
                 <option value="">— Kies —</option>
+                <option value={ALGEMEEN}>Algemeen (geen project)</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.referenceNumber} · {p.customerName}</option>
                 ))}
               </select>
             </label>
-            <label className="flex-[1_1_190px] flex flex-col gap-1 text-xs text-[#6B6560]">
-              Soort afspraak
-              <select value={v.milestoneKey} onChange={(e) => set({ milestoneKey: e.target.value as MilestoneKey })} className={fieldClass}>
-                {MILESTONE_ORDER.map((k) => (
-                  <option key={k} value={k}>{MILESTONE_LABELS[k]}</option>
-                ))}
-                <option value={OTHER}>Anders…</option>
-              </select>
-            </label>
-            {v.milestoneKey === OTHER && (
+            {!algemeen && (
+              <label className="flex-[1_1_190px] flex flex-col gap-1 text-xs text-[#6B6560]">
+                Soort afspraak
+                <select value={v.milestoneKey} onChange={(e) => set({ milestoneKey: e.target.value as MilestoneKey })} className={fieldClass}>
+                  {MILESTONE_ORDER.map((k) => (
+                    <option key={k} value={k}>{MILESTONE_LABELS[k]}</option>
+                  ))}
+                  <option value={OTHER}>Anders…</option>
+                </select>
+              </label>
+            )}
+            {(algemeen || v.milestoneKey === OTHER) && (
               <label className="flex-[2_1_200px] flex flex-col gap-1 text-xs text-[#6B6560]">
                 Naam
-                <Input autoFocus value={v.label} onChange={(e) => set({ label: e.target.value })} placeholder="Bijv. Showroombezoek" className="h-9" required />
+                <Input autoFocus value={v.label} onChange={(e) => set({ label: e.target.value })} placeholder={algemeen ? 'Bijv. Overleg leverancier' : 'Bijv. Showroombezoek'} className="h-9" required />
               </label>
             )}
           </>
@@ -184,7 +191,7 @@ export default function AfspraakEditor({
               />
               Uitnodiging naar de klant sturen
               <span className="text-xs text-[#6B6560]">
-                {customerEmail ? `(${customerEmail})` : project ? '(geen e-mailadres bij deze klant)' : ''}
+                {customerEmail ? `(${customerEmail})` : project ? '(geen e-mailadres bij deze klant)' : algemeen ? '(geen klant bij een algemene afspraak)' : ''}
               </span>
             </label>
           </div>

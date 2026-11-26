@@ -28,6 +28,7 @@ import {
   SlidersHorizontal,
   NotebookPen,
   Building2,
+  Package,
   Timer,
   Menu,
   X,
@@ -97,6 +98,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/gereedschap/werkblad', label: 'Werkblad-rekentool', icon: Calculator },
       { href: '/gereedschap/samples', label: 'Samples', icon: SwatchBook },
+      { href: '/gereedschap/restvoorraad', label: 'Restvoorraad', icon: Package },
     ],
   },
   {

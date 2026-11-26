@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sample, SampleModel, Supplier } from '@/lib/types'
-import { AVAILABILITY_COLORS, AVAILABILITY_LABELS, normalizeSampleSettings, sampleAvailability, sampleCategoryLabel, sampleFieldLabel } from '@/lib/samples'
+import { AVAILABILITY_COLORS, AVAILABILITY_LABELS, normalizeSampleSettings, sampleAvailability, sampleCategoryLabel, sampleFieldLabel, sampleStockText } from '@/lib/samples'
 import { LOAN_SELECT, LoanWithProject } from '../loan-borrower'
 import EditSampleForm from './EditSampleForm'
 import CopySampleButton from './CopySampleButton'
@@ -49,7 +49,10 @@ export default async function SampleDetailPage({
   const settings = normalizeSampleSettings(settingsRow)
   const label = (key: Parameters<typeof sampleFieldLabel>[1]) => sampleFieldLabel(settings, key)
   const loanList = (loans ?? []) as LoanWithProject[]
-  const availability = sampleAvailability(loanList.find((l) => !l.returned_at))
+  const quantity = sample.quantity ?? 1
+  const openLoans = loanList.filter((l) => !l.returned_at)
+  const availability = sampleAvailability(openLoans, quantity)
+  const stockText = sampleStockText(openLoans, quantity)
 
   return (
     <div className="p-4 md:p-8 max-w-3xl">
@@ -71,8 +74,11 @@ export default async function SampleDetailPage({
             <span className={cn('text-xs px-2 py-0.5 rounded-full', AVAILABILITY_COLORS[availability])}>
               {AVAILABILITY_LABELS[availability]}
             </span>
+            {stockText && <span className="text-xs text-[#6B6560]">{stockText}</span>}
           </div>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm mt-3">
+            <dt className="text-[#6B6560]">Aantal</dt>
+            <dd className="text-[#1C1B19]">{quantity}</dd>
             <dt className="text-[#6B6560]">{label('category')}</dt>
             <dd className="text-[#1C1B19]">{sampleCategoryLabel(settings, sample.category)}</dd>
             <dt className="text-[#6B6560]">{label('supplier_id')}</dt>
@@ -111,7 +117,7 @@ export default async function SampleDetailPage({
       </div>
 
       <h2 className="text-sm font-medium text-[#1C1B19] mb-3">Uitlenen</h2>
-      <SampleLoans sampleId={id} loans={loanList} projects={(projects ?? []) as unknown as ProjectOption[]} />
+      <SampleLoans sampleId={id} quantity={quantity} loans={loanList} projects={(projects ?? []) as unknown as ProjectOption[]} />
     </div>
   )
 }

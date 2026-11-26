@@ -161,7 +161,7 @@ function AfspraakCard({ entry: e, selected, onOpen }: { entry: PlanningEntry; se
           {a?.googleError && <span title={`Google Agenda: ${a.googleError}`}><TriangleAlert size={11} className="text-red-600" /></span>}
         </span>
         <span className="block text-[13px] font-semibold text-[#1C1B19] leading-snug">{e.label}</span>
-        <span className="block text-xs text-[#6B6560] leading-snug">{e.project?.customerName}</span>
+        <span className="block text-xs text-[#6B6560] leading-snug">{e.project?.customerName ?? 'Algemeen'}</span>
         {e.assignee && <span className="block text-[11px] text-[#8A6A2E] mt-0.5">{e.assignee}</span>}
       </button>
       {a?.meetLink && (
@@ -255,7 +255,7 @@ function ChipRow({
           className="h-7 px-2.5 text-xs bg-white border border-[#E6D6B5] rounded-full hover:border-[#C9A96E]"
         >
           {showDate && e.date && <span className="text-red-600 mr-1">{format(new Date(`${e.date}T00:00:00`), 'd MMM', { locale: nl })}</span>}
-          {e.label} · {e.project?.customerName}
+          {e.label} · {e.project?.customerName ?? 'Algemeen'}
         </button>
       ))}
     </div>

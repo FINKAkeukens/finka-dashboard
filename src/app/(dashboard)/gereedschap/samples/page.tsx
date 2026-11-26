@@ -12,11 +12,23 @@ import {
   formatDate,
   normalizeSampleSettings,
   sampleAvailability,
+  sampleStockText,
   sampleCategoryLabel,
   sampleFieldLabel,
 } from '@/lib/samples'
 import { LOAN_SELECT, LoanWithProject, loanBorrower } from './loan-borrower'
 import ProjectLoanDeadlines, { ProjectLoanGroup } from './ProjectLoanDeadlines'
+
+// "2× Carlijn & Noah (terug 1 dec), Jan" — meerdere exemplaren bij
+// dezelfde lener met dezelfde datum samen.
+function loanSummary(loans: LoanWithProject[]): string {
+  const groups = new Map<string, number>()
+  for (const l of loans) {
+    const text = `${loanBorrower(l)}${l.due_date ? ` (terug ${formatDate(l.due_date)})` : ''}`
+    groups.set(text, (groups.get(text) ?? 0) + 1)
+  }
+  return [...groups].map(([text, n]) => (n > 1 ? `${n}× ${text}` : text)).join(', ')
+}
 
 type SampleRow = Sample & { supplier: { name: string } | null; loans: LoanWithProject[] }
 
@@ -45,23 +57,28 @@ export default async function SamplesPage({
   const settings = normalizeSampleSettings(settingsRow)
 
   const rows = ((data ?? []) as SampleRow[]).map((s) => {
-    const openLoan = s.loans.find((l) => !l.returned_at) ?? null
-    return { ...s, openLoan, availability: sampleAvailability(openLoan) }
+    const openLoans = s.loans.filter((l) => !l.returned_at)
+    const quantity = s.quantity ?? 1
+    return { ...s, quantity, openLoans, availability: sampleAvailability(openLoans, quantity), stockText: sampleStockText(openLoans, quantity) }
   })
 
-  const counts = new Map<string, number>([['alle', rows.length]])
-  for (const r of rows) {
-    counts.set(r.availability, (counts.get(r.availability) ?? 0) + 1)
-    // "Te laat terug" ligt ook uit — telt mee bij Uitgeleend.
-    if (r.availability === 'te-laat') counts.set('uitgeleend', (counts.get('uitgeleend') ?? 0) + 1)
-  }
+  // Bij meerdere exemplaren kan een sample tegelijk beschikbaar en (deels)
+  // uitgeleend zijn — dan staat hij onder allebei.
+  const inFilter = (r: (typeof rows)[number], f: string) =>
+    f === 'beschikbaar'
+      ? r.openLoans.length < r.quantity
+      : f === 'uitgeleend'
+        ? r.openLoans.length > 0
+        : f === 'te-laat'
+          ? r.availability === 'te-laat'
+          : true
+  const counts = new Map(FILTERS.map((f) => [f.value, rows.filter((r) => inFilter(r, f.value)).length]))
 
   // Openstaande uitleningen per project, om de terugbrengdatum aan te passen
   // of samples in één keer terug te melden.
   const groupMap = new Map<string, ProjectLoanGroup>()
-  for (const r of rows) {
-    const loan = r.openLoan
-    if (!loan?.project_id) continue
+  for (const loan of rows.flatMap((r) => r.openLoans.map((l) => ({ ...l, sampleName: r.name })))) {
+    if (!loan.project_id) continue
     const g = groupMap.get(loan.project_id) ?? {
       projectId: loan.project_id,
       name: loanBorrower(loan),
@@ -70,7 +87,7 @@ export default async function SamplesPage({
       mixedDates: false,
     }
     if (g.loans.length && g.dueDate !== loan.due_date) g.mixedDates = true
-    g.loans.push({ id: loan.id, sampleName: r.name, dueDate: loan.due_date })
+    g.loans.push({ id: loan.id, sampleName: loan.sampleName, dueDate: loan.due_date })
     groupMap.set(loan.project_id, g)
   }
   const projectGroups = [...groupMap.values()]
@@ -79,8 +96,7 @@ export default async function SamplesPage({
 
   const search = q?.toLowerCase()
   const filtered = rows.filter((r) => {
-    if (status === 'uitgeleend' && r.availability === 'beschikbaar') return false
-    if (status !== 'alle' && status !== 'uitgeleend' && r.availability !== status) return false
+    if (!inFilter(r, status)) return false
     if (!search) return true
     return (
       r.name.toLowerCase().includes(search) ||
@@ -89,7 +105,7 @@ export default async function SamplesPage({
       r.color?.toLowerCase().includes(search) ||
       r.finish?.toLowerCase().includes(search) ||
       r.supplier?.name.toLowerCase().includes(search) ||
-      (r.openLoan && loanBorrower(r.openLoan).toLowerCase().includes(search))
+      r.openLoans.some((l) => loanBorrower(l).toLowerCase().includes(search))
     )
   })
 
@@ -161,19 +177,24 @@ export default async function SamplesPage({
                     <div className="w-12 h-12 rounded-md bg-[#F0EDE9] shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[#1C1B19] truncate">{r.name}</p>
+                    <p className="text-sm font-medium text-[#1C1B19] truncate">
+                      {r.quantity > 1 && <span className="text-[#6B6560] font-normal">{r.quantity} × </span>}
+                      {r.name}
+                    </p>
                     <p className="text-xs text-[#6B6560] truncate">
                       {[sampleCategoryLabel(settings, r.category), r.model, r.size && `${sampleFieldLabel(settings, 'size')} ${r.size}`, r.price_group && `PG ${r.price_group}`, r.material, r.veneer_execution, r.supplier?.name, r.code, r.color, r.finish].filter(Boolean).join(' · ')}
                     </p>
-                    {r.openLoan && (
+                    {r.openLoans.length > 0 && (
                       <p className="text-xs text-[#6B6560] truncate mt-0.5">
-                        Bij {loanBorrower(r.openLoan)}
-                        {r.openLoan.due_date && ` · terug ${formatDate(r.openLoan.due_date)}`}
+                        Bij {loanSummary(r.openLoans)}
                       </p>
                     )}
                   </div>
-                  <span className={cn('text-xs px-2 py-0.5 rounded-full shrink-0', AVAILABILITY_COLORS[r.availability])}>
-                    {AVAILABILITY_LABELS[r.availability]}
+                  <span className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className={cn('text-xs px-2 py-0.5 rounded-full', AVAILABILITY_COLORS[r.availability])}>
+                      {AVAILABILITY_LABELS[r.availability]}
+                    </span>
+                    {r.stockText && <span className="text-[11px] text-[#6B6560]">{r.stockText}</span>}
                   </span>
                 </Link>
               </li>

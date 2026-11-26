@@ -2972,3 +2972,45 @@ ALTER TABLE finka_project_keuzes ADD COLUMN IF NOT EXISTS multiple BOOLEAN NOT N
 -- 105. WhatsApp-berichten (Instellingen → Standaardteksten): meervoudige
 -- versie naast de enkelvoudige (body).
 ALTER TABLE finka_quote_text_snippets ADD COLUMN IF NOT EXISTS body_plural TEXT NOT NULL DEFAULT '';
+
+-- 106. Algemene afspraken op /planning: mijlpaal zonder project die in de
+-- weekagenda staat (en eventueel in Google Agenda), niet bij de to do's van
+-- FINKA intern. Ook project_id NULL, maar is_afspraak = true.
+ALTER TABLE finka_project_milestones ADD COLUMN IF NOT EXISTS is_afspraak BOOLEAN NOT NULL DEFAULT false;
+
+-- 107. Restvoorraad (Gereedschap → Restvoorraad): spullen die over zijn,
+-- bijv. van montages van andere keukens. Waar het ligt, waar het vandaan
+-- komt en of het al gereserveerd/gebruikt is (target_project_id = voor/bij
+-- welk project).
+CREATE TABLE IF NOT EXISTS finka_stock_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT,
+  quantity TEXT,
+  dimensions TEXT,
+  location TEXT,
+  photo_url TEXT,
+  notes TEXT,
+  source_project_id UUID REFERENCES finka_projects(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'beschikbaar' CHECK (status IN ('beschikbaar', 'gereserveerd', 'gebruikt')),
+  target_project_id UUID REFERENCES finka_projects(id) ON DELETE SET NULL,
+  created_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE finka_stock_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Staff only" ON finka_stock_items;
+CREATE POLICY "Staff only" ON finka_stock_items FOR ALL TO authenticated USING (is_staff()) WITH CHECK (is_staff());
+GRANT ALL ON TABLE finka_stock_items TO authenticated, service_role;
+
+-- 108. Samples: aantal exemplaren van hetzelfde sample, zodat een staal die
+-- meerdere keren in huis is één regel blijft. Dan kan hij ook meerdere keren
+-- tegelijk uitgeleend zijn — de index "hooguit één open uitlening" (91)
+-- vervalt; het dashboard bewaakt dat er niet meer uitstaan dan het aantal.
+ALTER TABLE finka_samples ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1);
+DROP INDEX IF EXISTS finka_sample_loans_one_open;
+
+-- 109. Projectnotities: prio-uitroepteken voor wat belangrijk is (bijv. vóór
+-- het bestellen). Prio-notities staan bovenaan en tellen mee op de knop
+-- "Notities".
+ALTER TABLE finka_project_notes ADD COLUMN IF NOT EXISTS priority BOOLEAN NOT NULL DEFAULT false;

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StickyNote, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import NotesPanel from './NotesPanel'
 
 // Overal beschikbaar terwijl je aan een project werkt — ongeacht welke tab
@@ -13,6 +14,24 @@ import NotesPanel from './NotesPanel'
 // blijft staan terwijl je in de rest van de pagina scrolt en werkt.
 export default function ProjectNotesButton({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false)
+  // Rood bolletje op de knop: aantal prio-notities. Bij open paneel houdt
+  // NotesPanel het bij.
+  const [priorityCount, setPriorityCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    createClient()
+      .from('finka_project_notes')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .eq('priority', true)
+      .then(({ count }) => {
+        if (!cancelled) setPriorityCount(count ?? 0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
 
   if (!open) {
     return (
@@ -22,6 +41,14 @@ export default function ProjectNotesButton({ projectId }: { projectId: string })
       >
         <StickyNote size={16} />
         Notities
+        {priorityCount > 0 && (
+          <span
+            title={`${priorityCount} prio-notitie${priorityCount === 1 ? '' : 's'}`}
+            className="ml-0.5 min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-semibold flex items-center justify-center"
+          >
+            !{priorityCount > 1 ? ` ${priorityCount}` : ''}
+          </span>
+        )}
       </button>
     )
   }
@@ -38,7 +65,7 @@ export default function ProjectNotesButton({ projectId }: { projectId: string })
         </button>
       </div>
       <div className="overflow-y-auto p-4">
-        <NotesPanel projectId={projectId} />
+        <NotesPanel projectId={projectId} onPriorityCount={setPriorityCount} />
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { format } from 'date-fns'
+import { addDays, format, parseISO } from 'date-fns'
 import { SampleLoan, SampleSize } from '@/lib/types'
 
 // Standaardwaarden; alles is aan te passen onder Instellingen → Sample
@@ -96,12 +96,26 @@ export function todayIso(): string {
   return format(new Date(), 'yyyy-MM-dd')
 }
 
-// Een staal heeft hooguit één openstaande uitlening (unieke index in
-// migratie-sectie 91) — die bepaalt of hij beschikbaar is.
-export function sampleAvailability(openLoan: SampleLoan | null | undefined): SampleAvailability {
-  if (!openLoan) return 'beschikbaar'
-  if (openLoan.due_date && openLoan.due_date < todayIso()) return 'te-laat'
-  return 'uitgeleend'
+// Standaard terugbrengdatum bij uitlenen: 3 weken na de uitleendatum.
+export const LOAN_DAYS = 21
+
+export function defaultDueDate(lentAt: string): string {
+  return format(addDays(parseISO(lentAt), LOAN_DAYS), 'yyyy-MM-dd')
+}
+
+// Een staal kan meerdere exemplaren hebben (quantity, migratie 108), dus
+// meerdere openstaande uitleningen. Te laat gaat voor: die moet terug, ook
+// als er nog een exemplaar ligt. Anders beschikbaar zolang er één over is.
+export function sampleAvailability(openLoans: SampleLoan[], quantity = 1): SampleAvailability {
+  const today = todayIso()
+  if (openLoans.some((l) => l.due_date && l.due_date < today)) return 'te-laat'
+  return openLoans.length < quantity ? 'beschikbaar' : 'uitgeleend'
+}
+
+// "2 van 3 beschikbaar" — alleen bij meer dan één exemplaar.
+export function sampleStockText(openLoans: SampleLoan[], quantity = 1): string | null {
+  if (quantity <= 1) return null
+  return `${Math.max(0, quantity - openLoans.length)} van ${quantity} beschikbaar`
 }
 
 export const AVAILABILITY_LABELS: Record<SampleAvailability, string> = {

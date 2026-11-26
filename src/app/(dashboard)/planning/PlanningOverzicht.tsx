@@ -24,7 +24,7 @@ import {
 } from '@/lib/planning-overzicht'
 import { syncAgenda } from '@/lib/google-calendar-client'
 import AfsprakenAgenda from './AfsprakenAgenda'
-import AfspraakEditor, { AfspraakValues } from './AfspraakEditor'
+import AfspraakEditor, { ALGEMEEN, AfspraakValues } from './AfspraakEditor'
 
 // /planning — één lijst over alle lopende projecten: prio bovenaan, dan op
 // urgentie. Alles slaat direct op, net als de Planning-tab per project;
@@ -103,7 +103,8 @@ export default function PlanningOverzicht({
     (person === PERSON_ALL || (person === PERSON_NONE ? !e.assignee : e.assignee === person))
   const inProjectFilter = (e: PlanningEntry) => !!e.project && matchesPerson(e) && (!projectFilter || e.project.id === projectFilter)
   // Afspraken staan in de weekagenda, de rest in de takenlijst.
-  const afspraken = allEntries.filter((e) => e.isAfspraak && inProjectFilter(e))
+  // Algemene afspraken (zonder project) alleen als er niet op project gefilterd wordt.
+  const afspraken = allEntries.filter((e) => e.isAfspraak && (e.project ? inProjectFilter(e) : !projectFilter && matchesPerson(e)))
   const entries = allEntries.filter((e) => !e.isAfspraak && inProjectFilter(e))
   const editingAfspraak = afspraakKey && afspraakKey !== 'new' ? allEntries.find((e) => e.key === afspraakKey) ?? null : null
   const byBucket = new Map<PlanningBucket, PlanningEntry[]>()
@@ -313,18 +314,31 @@ export default function PlanningOverzicht({
 
   // Na opslaan: naar Google Agenda (de server kijkt zelf of dat moet) en
   // het project opnieuw opbouwen, zodat Meet-link en fouten zichtbaar zijn.
-  async function pushToAgenda(milestoneId: string, project: PlanningProjectInfo, wasInGoogle: boolean, inGoogle: boolean) {
+  async function pushToAgenda(milestoneId: string, project: PlanningProjectInfo | null, wasInGoogle: boolean, inGoogle: boolean) {
     if (inGoogle || wasInGoogle) {
       const result = await syncAgenda(milestoneId)
       if (!result.ok) setError(`Google Agenda: ${result.error ?? 'onbekende fout'}`)
       else if (inGoogle) flash(result.meet_link ? 'In Google Agenda gezet, met Meet-link.' : 'In Google Agenda gezet.')
     }
-    await reloadProject(project)
+    if (project) await reloadProject(project)
+    else await reloadGeneralAfspraak(milestoneId)
+  }
+
+  // Algemene afspraak (geen project) opnieuw ophalen en in de lijst zetten.
+  async function reloadGeneralAfspraak(milestoneId: string) {
+    const { data, error: loadError } = await supabase.from('finka_project_milestones').select('*').eq('id', milestoneId).maybeSingle()
+    if (loadError) setError(loadError.message)
+    const key = `ms:${milestoneId}`
+    setAllEntries((prev) => {
+      const rest = prev.filter((e) => e.key !== key)
+      return data && data.status !== 'klaar' ? [...rest, milestoneEntry(data as ProjectMilestone, null)].sort(compareEntries) : rest
+    })
   }
 
   async function saveAfspraak(v: AfspraakValues) {
-    const project = projects.find((p) => p.id === v.projectId)
-    if (!project) return
+    const algemeen = v.projectId === ALGEMEEN
+    const project = algemeen ? null : projects.find((p) => p.id === v.projectId)
+    if (!algemeen && !project) return
     setSavingAfspraak(true)
     setError('')
     const nowIso = new Date().toISOString()
@@ -362,7 +376,7 @@ export default function PlanningOverzicht({
     } else {
       // Een vaste afspraak (Meting, Levering, …) bestaat al per project:
       // die rij krijgt de datum. "Anders" wordt een eigen afspraak.
-      if (v.milestoneKey !== 'custom') {
+      if (project && v.milestoneKey !== 'custom') {
         const { data: existing } = await supabase
           .from('finka_project_milestones')
           .select('id, status, in_google_calendar')
@@ -384,17 +398,16 @@ export default function PlanningOverzicht({
         }
       }
       if (!milestoneId) {
-        const { data: last } = await supabase
-          .from('finka_project_milestones')
-          .select('sort_order')
-          .eq('project_id', project.id)
+        const lastQuery = supabase.from('finka_project_milestones').select('sort_order')
+        const { data: last } = await (project ? lastQuery.eq('project_id', project.id) : lastQuery.is('project_id', null))
           .order('sort_order', { ascending: false })
           .limit(1)
         const { data, error: insError } = await supabase
           .from('finka_project_milestones')
           .insert({
             ...fields,
-            project_id: project.id,
+            project_id: project?.id ?? null,
+            ...(project ? {} : { is_afspraak: true }),
             milestone_key: v.milestoneKey,
             label: v.milestoneKey === 'custom' ? v.label.trim() : null,
             status: 'gepland',
@@ -412,7 +425,7 @@ export default function PlanningOverzicht({
       }
     }
 
-    await pushToAgenda(milestoneId!, project, wasInGoogle, v.inGoogle)
+    await pushToAgenda(milestoneId!, project ?? null, wasInGoogle, v.inGoogle)
     setSavingAfspraak(false)
     setAfspraakKey(null)
   }
@@ -425,7 +438,7 @@ export default function PlanningOverzicht({
   // Alleen eigen afspraken ("Anders") kunnen weg; vaste afspraken horen bij
   // elk project. Eerst het event uit Google Agenda halen.
   async function deleteAfspraak(e: PlanningEntry) {
-    if (!e.milestoneId || !e.project || !confirm(`Afspraak "${e.label}" verwijderen?${e.agenda?.inGoogle ? ' Hij gaat ook uit Google Agenda.' : ''}`)) return
+    if (!e.milestoneId || !confirm(`Afspraak "${e.label}" verwijderen?${e.agenda?.inGoogle ? ' Hij gaat ook uit Google Agenda.' : ''}`)) return
     setSavingAfspraak(true)
     if (e.agenda?.inGoogle) {
       const result = await syncAgenda(e.milestoneId, 'remove')
@@ -437,7 +450,8 @@ export default function PlanningOverzicht({
     }
     const { error: delError } = await supabase.from('finka_project_milestones').delete().eq('id', e.milestoneId)
     if (delError) setError(`Verwijderen mislukt: ${delError.message}`)
-    await reloadProject(e.project)
+    if (e.project) await reloadProject(e.project)
+    else setAllEntries((prev) => prev.filter((x) => x.key !== e.key))
     setSavingAfspraak(false)
     setAfspraakKey(null)
   }

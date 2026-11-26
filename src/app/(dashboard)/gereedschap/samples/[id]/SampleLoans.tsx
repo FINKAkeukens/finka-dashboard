@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { formatDate, todayIso } from '@/lib/samples'
+import { defaultDueDate, formatDate, todayIso } from '@/lib/samples'
 import { LoanWithProject, loanBorrower } from '../loan-borrower'
 
 export interface ProjectOption {
@@ -19,12 +19,17 @@ export interface ProjectOption {
 const selectClass =
   'w-full h-9 px-3 text-sm bg-white border border-[#DDD8D2] rounded-lg focus:outline-none focus:border-[#1C1B19]'
 
+// Uitlenen en terugmelden. Bij meerdere exemplaren (quantity) kunnen er
+// meerdere uitleningen tegelijk openstaan; het formulier blijft zichtbaar
+// zolang er nog een exemplaar ligt.
 export default function SampleLoans({
   sampleId,
+  quantity,
   loans,
   projects,
 }: {
   sampleId: string
+  quantity: number
   loans: LoanWithProject[]
   projects: ProjectOption[]
 }) {
@@ -33,8 +38,11 @@ export default function SampleLoans({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [projectId, setProjectId] = useState('')
+  const [lentAt, setLentAt] = useState(todayIso)
+  const [dueDate, setDueDate] = useState(() => defaultDueDate(todayIso()))
 
-  const openLoan = loans.find((l) => !l.returned_at) ?? null
+  const openLoans = loans.filter((l) => !l.returned_at)
+  const left = quantity - openLoans.length
   const history = loans.filter((l) => l.returned_at)
 
   async function handleLend(e: React.FormEvent<HTMLFormElement>) {
@@ -48,7 +56,10 @@ export default function SampleLoans({
     setLoading(true)
     setError('')
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('finka_sample_loans').insert({
+    // Meerdere exemplaren aan dezelfde lener = één uitlening per exemplaar,
+    // zodat ze ook los teruggemeld kunnen worden.
+    const count = Math.min(left, Math.max(1, parseInt((form.get('count') as string) || '1', 10) || 1))
+    const row = {
       sample_id: sampleId,
       project_id: projectId || null,
       borrower_name: projectId ? null : borrowerName,
@@ -56,43 +67,49 @@ export default function SampleLoans({
       due_date: (form.get('due_date') as string) || null,
       notes: (form.get('notes') as string) || null,
       created_by: user?.email ?? null,
-    })
+    }
+    const { error } = await supabase.from('finka_sample_loans').insert(Array.from({ length: count }, () => row))
     setLoading(false)
     if (error) { setError('Er ging iets mis: ' + error.message); return }
     setProjectId('')
+    setLentAt(todayIso())
+    setDueDate(defaultDueDate(todayIso()))
     router.refresh()
   }
 
-  async function handleReturn() {
-    if (!openLoan) return
+  async function handleReturn(loan: LoanWithProject) {
     setLoading(true)
     setError('')
     const { error } = await supabase
       .from('finka_sample_loans')
       .update({ returned_at: todayIso() })
-      .eq('id', openLoan.id)
+      .eq('id', loan.id)
     setLoading(false)
     if (error) { setError('Er ging iets mis: ' + error.message); return }
     router.refresh()
   }
 
-  const overdue = openLoan?.due_date && openLoan.due_date < todayIso()
+  const today = todayIso()
 
   return (
     <div className="space-y-6">
-      {openLoan ? (
-        <div className={cn('rounded-xl border p-5', overdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100')}>
-          <p className="text-sm font-medium text-[#1C1B19]">Ligt bij {loanBorrower(openLoan)}</p>
-          <p className="text-sm text-[#6B6560] mt-1">
-            Uitgeleend op {formatDate(openLoan.lent_at)}
-            {openLoan.due_date && <> · {overdue ? 'had terug moeten zijn op' : 'terug uiterlijk'} {formatDate(openLoan.due_date)}</>}
-          </p>
-          {openLoan.notes && <p className="text-sm text-[#6B6560] mt-1 whitespace-pre-wrap">{openLoan.notes}</p>}
-          <Button size="sm" className="mt-4" onClick={handleReturn} disabled={loading}>
-            {loading ? 'Opslaan...' : 'Teruggebracht'}
-          </Button>
-        </div>
-      ) : (
+      {openLoans.map((loan) => {
+        const overdue = !!loan.due_date && loan.due_date < today
+        return (
+          <div key={loan.id} className={cn('rounded-xl border p-5', overdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100')}>
+            <p className="text-sm font-medium text-[#1C1B19]">Ligt bij {loanBorrower(loan)}</p>
+            <p className="text-sm text-[#6B6560] mt-1">
+              Uitgeleend op {formatDate(loan.lent_at)}
+              {loan.due_date && <> · {overdue ? 'had terug moeten zijn op' : 'terug uiterlijk'} {formatDate(loan.due_date)}</>}
+            </p>
+            {loan.notes && <p className="text-sm text-[#6B6560] mt-1 whitespace-pre-wrap">{loan.notes}</p>}
+            <Button size="sm" className="mt-4" onClick={() => handleReturn(loan)} disabled={loading}>
+              {loading ? 'Opslaan...' : 'Teruggebracht'}
+            </Button>
+          </div>
+        )
+      })}
+      {left > 0 && (
         <form onSubmit={handleLend} className="bg-white rounded-xl border border-[#DDD8D2] p-5 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="project_id">Project</Label>
@@ -111,21 +128,40 @@ export default function SampleLoans({
               <Input id="borrower_name" name="borrower_name" placeholder="Bijv. naam van een prospect" />
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={cn('grid grid-cols-1 gap-4', left > 1 ? 'sm:grid-cols-[6rem_1fr_1fr]' : 'sm:grid-cols-2')}>
+            {left > 1 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="count">Aantal</Label>
+                <Input id="count" name="count" type="number" min={1} max={left} step={1} defaultValue={1} />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="lent_at">Uitgeleend op</Label>
-              <Input id="lent_at" name="lent_at" type="date" defaultValue={todayIso()} />
+              <Input
+                id="lent_at"
+                name="lent_at"
+                type="date"
+                value={lentAt}
+                onChange={(e) => {
+                  setLentAt(e.target.value)
+                  // Terugbrengdatum schuift mee: 3 weken na de uitleendatum.
+                  if (e.target.value) setDueDate(defaultDueDate(e.target.value))
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="due_date">Terug uiterlijk</Label>
-              <Input id="due_date" name="due_date" type="date" />
+              <Input id="due_date" name="due_date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="loan_notes">Aantekeningen</Label>
             <Input id="loan_notes" name="notes" />
           </div>
-          <Button type="submit" size="sm" disabled={loading}>{loading ? 'Opslaan...' : 'Uitlenen'}</Button>
+          <div className="flex items-center gap-3">
+            <Button type="submit" size="sm" disabled={loading}>{loading ? 'Opslaan...' : 'Uitlenen'}</Button>
+            {quantity > 1 && <span className="text-xs text-[#6B6560]">Nog {left} van {quantity} beschikbaar</span>}
+          </div>
         </form>
       )}
 
