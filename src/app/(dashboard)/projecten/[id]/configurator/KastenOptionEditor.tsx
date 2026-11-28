@@ -23,6 +23,20 @@ function readData(option: ConfiguratorOption): KastenOptionData {
   }
 }
 
+// Wanneer een uitdraai geüpload is. Oudere bijlagen hebben geen
+// uploaded_at, maar het tijdstip staat ook in het pad (winnerflex-<ms>-…).
+function uploadedAt(att: OfferAttachment): Date | null {
+  if (att.uploaded_at) return new Date(att.uploaded_at)
+  const ms = att.url.match(/winnerflex-(\d{13})-/)?.[1]
+  return ms ? new Date(Number(ms)) : null
+}
+
+function formatUploadedAt(date: Date) {
+  const day = date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
+  const time = date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })
+  return `${day} om ${time}`
+}
+
 // Leest de JSON-body van een upload-response — gooit een leesbare fout
 // i.p.v. een kale SyntaxError als de server geen geldige JSON teruggaf
 // (bv. een 413/HTML-foutpagina omdat het bestand te groot is). Zelfde
@@ -91,7 +105,7 @@ export default function KastenOptionEditor({
         const grossCostTotal = typeof body.totaalExclBtw === 'number' ? body.totaalExclBtw : data.gross_cost_total
         const patch: { data: KastenOptionData; cost_total?: number } = {
           data: {
-            attachments: [body.attachment as OfferAttachment],
+            attachments: [{ ...(body.attachment as OfferAttachment), uploaded_at: new Date().toISOString() }],
             summary_lines: body.summary?.length ? (body.summary as string[]) : data.summary_lines,
             gross_cost_total: grossCostTotal,
             discount_keys: data.discount_keys,
@@ -197,17 +211,28 @@ export default function KastenOptionEditor({
 
       {data.attachments.length > 0 && (
         <div className="space-y-1.5">
-          {data.attachments.map((att) => (
-            <div key={att.url} className="flex items-center justify-between gap-2 bg-[#F7F5F2] rounded-lg px-3 py-2">
-              <a href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-[#1C1B19] hover:underline min-w-0">
-                <FileText size={14} className="shrink-0 text-[#6B6560]" />
-                <span className="truncate">{att.name}</span>
-              </a>
-              <button onClick={() => removeAttachment(att.url)} title="Bijlage verwijderen">
-                <X size={13} className="text-[#9A948D] hover:text-red-600" />
-              </button>
-            </div>
-          ))}
+          {data.attachments.map((att) => {
+            const when = uploadedAt(att)
+            return (
+              <div key={att.url} className="flex items-center justify-between gap-2 bg-[#F7F5F2] rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <a
+                    href={att.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 text-sm text-[#1C1B19] hover:underline min-w-0"
+                  >
+                    <FileText size={14} className="shrink-0 text-[#6B6560]" />
+                    <span className="truncate">{att.name}</span>
+                  </a>
+                  {when && <span className="text-xs text-[#6B6560] whitespace-nowrap">Laatst geüpload: {formatUploadedAt(when)}</span>}
+                </div>
+                <button onClick={() => removeAttachment(att.url)} title="Bijlage verwijderen">
+                  <X size={13} className="text-[#9A948D] hover:text-red-600" />
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
 

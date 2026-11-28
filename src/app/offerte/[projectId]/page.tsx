@@ -41,6 +41,38 @@ const SECTION_IMAGE_SIZES: Record<'klein' | 'medium' | 'groot', number> = {
 // vaste paginahoogte en wordt het einde onzichtbaar afgesneden (overflow: hidden).
 const SECTION_COLUMN_THRESHOLD = 8
 
+// Hoeveel tekens er ongeveer op één regel passen (13px DM Sans): in de
+// 2-koloms lay-out is een kolom ~300px breed, in één kolom ~650px. Een
+// langere regel loopt door op een 2e regel en neemt dus 2× de hoogte in —
+// zonder die correctie werd een sectie met veel lange regels te licht
+// ingeschat, liep de pagina over en kwam er een lege pagina in de PDF.
+const CHARS_PER_ROW = { columns: 48, single: 95 }
+
+function lineRows(text: string, columns: boolean) {
+  return Math.max(1, Math.ceil(text.length / (columns ? CHARS_PER_ROW.columns : CHARS_PER_ROW.single)))
+}
+
+// Gewicht van de tekstregels van een sectie in "regels van ~25px". Lange
+// lijsten staan in 2 kolommen naast elkaar en wegen dus half.
+function linesWeight(lines: { text: string }[]) {
+  const columns = lines.length > SECTION_COLUMN_THRESHOLD
+  const rows = lines.reduce((sum, l) => sum + lineRows(l.text, columns), 0)
+  return columns ? Math.ceil(rows / 2) : rows
+}
+
+// Foto's wegen ongeveer als N tekstregels, afhankelijk van het gekozen
+// formaat — geen exacte meting, maar voorkomt dat een fotosectie het
+// regelbudget te optimistisch inschat. Meerdere foto's naast elkaar
+// (imagePosition 'onder'/'boven') wegen zwaarder naarmate er meer zijn.
+// Foto-only secties (geen tekst) renderen groot en krijgen vrijwel altijd
+// hun eigen pagina.
+function imagesWeight(section: QuoteCustomerSection, lineCount: number) {
+  if (!section.images?.length) return 0
+  if (lineCount === 0) return 10
+  const imageCountFactor = Math.max(1, Math.ceil(section.images.length / 3))
+  return { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium'] * imageCountFactor
+}
+
 // Beschikbare hoogte (px) voor een foto-only sectie ("Impressie" e.d.) — zie
 // renderSectionGroup(). Twee vaste waarden i.p.v. steeds 420: de pagina met
 // de "§ 02 · Specificaties"-kop erboven heeft merkbaar minder ruimte over
@@ -253,32 +285,11 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
   // passen (18 regels in 2 kolommen ≈ 9 rijen). Passen twee stukken samen op
   // één pagina, dan worden ze verderop weer samengevoegd tot één blok.
   function renderSectionGroup(groupSections: QuoteCustomerSection[], anchorKey: string) {
-    const MAX_LINES_PER_SECTION_PAGE = 18
     // sourceKey/chunkIndex houden bij welke stukken bij dezelfde sectie horen.
     // Het "(vervolg)"-label wordt pas ná de paginaverdeling bepaald: stukken
     // die op één pagina eindigen worden weer samengevoegd, dus dan is er geen
     // vervolg (zie mergedPages hieronder).
     type ChunkedSection = QuoteCustomerSection & { sourceKey: number; chunkIndex: number }
-    const visibleSections: ChunkedSection[] = groupSections
-      .map((s) => ({ ...s, lines: s.lines.filter((l) => l.included && l.text.trim()) }))
-      .filter((s) => s.lines.length > 0 || (s.images && s.images.length > 0))
-      .flatMap((s, sourceKey) => {
-        if (s.lines.length <= MAX_LINES_PER_SECTION_PAGE) return [{ ...s, sourceKey, chunkIndex: 0 }]
-        const chunks: ChunkedSection[] = []
-        for (let i = 0; i < s.lines.length; i += MAX_LINES_PER_SECTION_PAGE) {
-          chunks.push({
-            ...s,
-            lines: s.lines.slice(i, i + MAX_LINES_PER_SECTION_PAGE),
-            images: i === 0 ? s.images : [],
-            sourceKey,
-            chunkIndex: chunks.length,
-          })
-        }
-        return chunks
-      })
-
-    if (!visibleSections.length) return null
-
     // Budget in "regels" van ~25px: een tekstregel is 13px × lineHeight 1.5
     // plus 3px padding boven/onder. De pagina is 167mm ≈ 631px hoog; op een
     // vervolgpagina blijft na de padding (32+32) ~567px over ≈ 22 regels, en
@@ -293,6 +304,39 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
     // Alleen de eerste pagina van de eerste groep krijgt de kop (en dus minder
     // ruimte) — zie headingState / showHeading verderop.
     const firstPageHasHeading = !headingState.shown
+
+    // Knipt de regels van een lange sectie in stukken die elk op één pagina
+    // passen. Op gewicht (lange regels tellen dubbel) i.p.v. een vast aantal
+    // regels, en het eerste stuk houdt ruimte over voor de foto's van de
+    // sectie — die staan alleen bij dat eerste stuk.
+    function chunkLines(s: QuoteCustomerSection) {
+      const chunks: QuoteCustomerSection['lines'][] = []
+      let current: QuoteCustomerSection['lines'] = []
+      for (const line of s.lines) {
+        const budget = chunks.length === 0
+          ? LINE_BUDGET_WITH_HEADING - imagesWeight(s, s.lines.length) - 1
+          : LINE_BUDGET - 1
+        if (current.length && linesWeight([...current, line]) > Math.max(2, budget)) {
+          chunks.push(current)
+          current = []
+        }
+        current.push(line)
+      }
+      if (current.length) chunks.push(current)
+      return chunks
+    }
+
+    const visibleSections: ChunkedSection[] = groupSections
+      .map((s) => ({ ...s, lines: s.lines.filter((l) => l.included && l.text.trim()) }))
+      .filter((s) => s.lines.length > 0 || (s.images && s.images.length > 0))
+      .flatMap((s, sourceKey) => {
+        const lineChunks = chunkLines(s)
+        if (lineChunks.length <= 1) return [{ ...s, sourceKey, chunkIndex: 0 }]
+        return lineChunks.map((lines, chunkIndex) => ({ ...s, lines, images: chunkIndex === 0 ? s.images : [], sourceKey, chunkIndex }))
+      })
+
+    if (!visibleSections.length) return null
+
     const sectionPages: typeof visibleSections[] = []
     let current: typeof visibleSections = []
     let weight = 0
@@ -302,25 +346,10 @@ export default async function OffertePreviewPage({ params }: { params: Promise<{
     // hierboven gaat dat niet meer op, dus zetten we dat nu expliciet.
     let lastWasPhotoOnly = false
     for (const section of visibleSections) {
-      // Thumbnails wegen ongeveer als N tekstregels, afhankelijk van het
-      // gekozen formaat — geen exacte meting, maar voorkomt dat een
-      // fotosectie het regelbudget te optimistisch inschat. Lange
-      // lijsten komen in 2 kolommen (zie SECTION_COLUMN_THRESHOLD) en
-      // wegen dus maar half zo zwaar.
-      const lineWeight = section.lines.length > SECTION_COLUMN_THRESHOLD
-        ? Math.ceil(section.lines.length / 2)
-        : section.lines.length
-      // Foto-only secties (geen tekst) renderen groot en gecentreerd —
-      // die wegen zwaar genoeg om vrijwel altijd hun eigen pagina te krijgen.
-      // Meerdere foto's naast elkaar (imagePosition 'onder'/'boven') wegen
-      // zwaarder naarmate er meer zijn — anders werd een sectie met 6 foto's
-      // net zo licht ingeschat als eentje met 1 foto, en paste hij in
-      // werkelijkheid niet op de pagina (zie ook scaledImageHeight hieronder,
-      // die dit ook al deels voorkomt door de foto's kleiner te maken).
-      const imageCountFactor = Math.max(1, Math.ceil((section.images?.length ?? 1) / 3))
-      const imageWeight = !section.images?.length ? 0
-        : section.lines.length === 0 ? 10
-        : { klein: 5, medium: 7, groot: 10 }[section.imageSize ?? 'medium'] * imageCountFactor
+      // Zie linesWeight/imagesWeight bovenaan: lange regels tellen dubbel,
+      // lijsten in 2 kolommen half, foto's naar formaat en aantal.
+      const lineWeight = linesWeight(section.lines)
+      const imageWeight = imagesWeight(section, section.lines.length)
       const sectionWeight = lineWeight + imageWeight + 1
       const budget = sectionPages.length === 0 && firstPageHasHeading ? LINE_BUDGET_WITH_HEADING : LINE_BUDGET
       const isPhotoOnly = section.lines.length === 0 && !!section.images?.length

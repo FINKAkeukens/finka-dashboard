@@ -241,6 +241,9 @@ export interface OfferAttachment {
   name: string
   url: string
   size?: number
+  // Moment van uploaden (ISO) — o.a. bij de Winner Flex-uitdraai in de
+  // configurator. Ontbreekt bij oudere bijlagen.
+  uploaded_at?: string
 }
 
 export interface Offer {
